@@ -1,0 +1,34 @@
+@if (campaign$ | async; as campaign) {
+  <section class="introduction-page">
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">Módulo de campaña 1.0 · Introducción</p>
+        <h1>{{ campaign.name }}</h1>
+        <p>{{ campaign.premise }}</p>
+      </div>
+
+      <nav class="header-actions" aria-label="Accesos de campaña">
+        <a class="action-button" [routerLink]="campaignPath('actos')">Actos</a>
+        <a class="action-button" [routerLink]="campaignPath('escenas')">Escenas</a>
+        <a class="action-button secondary" [routerLink]="campaignPath('personajes')">PNJ</a>
+      </nav>
+    </header>
+
+    <article class="introduction-copy">
+      <header>
+        <span>La Costa de la Espada</span>
+        <h2>Introducción</h2>
+      </header>
+
+      @for (block of introductionBlocks; track $index) {
+        <p
+          [class.lead]="block.lead"
+          [class.stanza]="block.stanza"
+          [class.closing]="block.closing"
+        >{{ block.text }}</p>
+      }
+    </article>
+  </section>
+} @else {
+  <p class="loading">Cargando campaña...</p>
+}

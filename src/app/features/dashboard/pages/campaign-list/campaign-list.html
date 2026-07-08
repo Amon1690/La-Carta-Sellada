@@ -1,0 +1,62 @@
+@if (campaigns$ | async; as campaigns) {
+  <section class="campaigns-page">
+    <header>
+      <p>Biblioteca local</p>
+      <h1>Campañas</h1>
+      <span>Selecciona una campaña para abrir su introducción y herramientas de dirección.</span>
+    </header>
+
+    @if (campaigns.length) {
+      <div class="campaign-grid">
+        @for (campaign of campaigns; track campaign.id) {
+          <a class="campaign-card" [routerLink]="['/campanas', campaign.id, 'introduccion']">
+            <div
+              class="campaign-cover"
+              role="img"
+              [attr.aria-label]="'Portada de ' + campaign.name"
+              [style.background-image]="'url(' + campaign.coverImage + ')'"
+              [style.background-position]="campaign.coverPosition"
+              [style.background-size]="campaign.coverSize"
+            ></div>
+
+            <div class="campaign-content">
+              <div class="campaign-heading">
+                <div>
+                  <span>{{ campaign.system }}</span>
+                  <h2>{{ campaign.name }}</h2>
+                </div>
+                <strong>{{ campaign.status }}</strong>
+              </div>
+
+              <p>{{ campaign.premise }}</p>
+
+              <dl>
+                <div>
+                  <dt>Acto actual</dt>
+                  <dd>{{ campaign.currentAct }}</dd>
+                </div>
+                <div>
+                  <dt>Nivel</dt>
+                  <dd>{{ campaign.startingLevel }}</dd>
+                </div>
+                <div>
+                  <dt>Grupo</dt>
+                  <dd>{{ campaign.partySize }} PJs</dd>
+                </div>
+              </dl>
+
+              <span class="open-label">Abrir campaña <span aria-hidden="true">→</span></span>
+            </div>
+          </a>
+        }
+      </div>
+    } @else {
+      <section class="empty">
+        <h2>No hay campañas</h2>
+        <p>Añade una entrada al índice local para comenzar.</p>
+      </section>
+    }
+  </section>
+} @else {
+  <p class="loading">Cargando campañas...</p>
+}

@@ -1,0 +1,51 @@
+@if (class$ | async; as characterClass) {
+  <section class="class-detail">
+    <a class="back-link" routerLink="/rasgos-clase">← Todas las clases</a>
+
+    <header>
+      <div>
+        <p>Reglas 2024 · {{ characterClass.primaryAbility }}</p>
+        <h1>{{ characterClass.name }}</h1>
+        <span>{{ characterClass.summary }}</span>
+      </div>
+      <dl>
+        <div>
+          <dt>Dado de golpe</dt>
+          <dd>{{ characterClass.hitDie }}</dd>
+        </div>
+        <div>
+          <dt>Rasgos</dt>
+          <dd>{{ characterClass.features.length }}</dd>
+        </div>
+      </dl>
+    </header>
+
+    <div class="level-list">
+      @for (group of levels(characterClass); track group.level) {
+        <section class="level-group">
+          <div class="level-marker" [attr.aria-label]="'Nivel ' + group.level">
+            <span>Nivel</span>
+            <strong>{{ group.level }}</strong>
+          </div>
+
+          <div class="feature-list">
+            @for (feature of group.features; track feature.id) {
+              <article>
+                <div class="feature-heading">
+                  <h2>{{ feature.name }}</h2>
+                  <span>Pág. {{ feature.sourcePage }}</span>
+                </div>
+                <p>{{ feature.description }}</p>
+              </article>
+            }
+          </div>
+        </section>
+      }
+    </div>
+  </section>
+} @else {
+  <section class="missing">
+    <h1>Clase no encontrada</h1>
+    <a routerLink="/rasgos-clase">Volver a las clases</a>
+  </section>
+}

@@ -1,0 +1,146 @@
+@if (creatures$ | async; as creatures) {
+  <section class="creatures-page">
+    <header>
+      <div>
+        <p>Reglas 2024 · Apéndice B</p>
+        <h1>Criaturas</h1>
+        <span>Perfiles completos de las criaturas incluidas en el Manual del Jugador.</span>
+      </div>
+      <strong>{{ creatures.length }} perfiles</strong>
+    </header>
+
+    <label class="search-control">
+      <span>Buscar criatura</span>
+      <input
+        [value]="query()"
+        (input)="updateQuery($any($event.target).value)"
+        placeholder="Nombre, tipo o valor de desafío"
+      />
+    </label>
+
+    <div class="result-count">
+      {{ filteredCreatures(creatures).length }} criaturas
+    </div>
+
+    <div class="creature-list">
+      @for (creature of filteredCreatures(creatures); track creature.id) {
+        <details class="creature-card">
+          <summary>
+            <div class="identity">
+              <span>{{ creature.type }}</span>
+              <h2>{{ creature.name }}</h2>
+            </div>
+            <dl class="summary-stats">
+              <div>
+                <dt>CA</dt>
+                <dd>{{ creature.armorClass }}</dd>
+              </div>
+              <div>
+                <dt>PG</dt>
+                <dd>{{ creature.hitPoints }}</dd>
+              </div>
+              <div>
+                <dt>VD</dt>
+                <dd>{{ creature.challenge }}</dd>
+              </div>
+            </dl>
+            <span class="disclosure" aria-hidden="true">⌄</span>
+          </summary>
+
+          <div class="creature-body">
+            <dl class="combat-stats">
+              <div>
+                <dt>Clase de armadura</dt>
+                <dd>{{ creature.armorClass }}</dd>
+              </div>
+              <div>
+                <dt>Iniciativa</dt>
+                <dd>{{ creature.initiative }}</dd>
+              </div>
+              <div>
+                <dt>Puntos de golpe</dt>
+                <dd>{{ creature.hitPoints }}</dd>
+              </div>
+              <div>
+                <dt>Velocidad</dt>
+                <dd>{{ creature.speed }}</dd>
+              </div>
+            </dl>
+
+            <dl class="abilities" aria-label="Características">
+              @for (ability of creature.abilityScores; track ability.label) {
+                <div>
+                  <dt>{{ ability.label }}</dt>
+                  <dd>{{ ability.score }}</dd>
+                </div>
+              }
+            </dl>
+
+            <dl class="profile-facts">
+              @if (creature.skills) {
+                <div><dt>Habilidades</dt><dd>{{ creature.skills }}</dd></div>
+              }
+              @if (creature.resistances) {
+                <div><dt>Resistencias</dt><dd>{{ creature.resistances }}</dd></div>
+              }
+              @if (creature.immunities) {
+                <div><dt>Inmunidades</dt><dd>{{ creature.immunities }}</dd></div>
+              }
+              @if (creature.equipment) {
+                <div><dt>Equipo</dt><dd>{{ creature.equipment }}</dd></div>
+              }
+              <div><dt>Sentidos</dt><dd>{{ creature.senses }}</dd></div>
+              <div><dt>Idiomas</dt><dd>{{ creature.languages }}</dd></div>
+              <div><dt>Valor de desafío</dt><dd>{{ creature.challenge }}</dd></div>
+            </dl>
+
+            @if (creature.traits.length) {
+              <section class="profile-section">
+                <h3>Atributos</h3>
+                @for (trait of creature.traits; track trait) {
+                  <p>{{ trait }}</p>
+                }
+              </section>
+            }
+
+            <section class="profile-section">
+              <h3>Acciones</h3>
+              @for (action of creature.actions; track action) {
+                <p>{{ action }}</p>
+              }
+            </section>
+
+            @if (creature.bonusActions.length) {
+              <section class="profile-section">
+                <h3>Acciones adicionales</h3>
+                @for (action of creature.bonusActions; track action) {
+                  <p>{{ action }}</p>
+                }
+              </section>
+            }
+
+            @if (creature.reactions.length) {
+              <section class="profile-section">
+                <h3>Reacciones</h3>
+                @for (reaction of creature.reactions; track reaction) {
+                  <p>{{ reaction }}</p>
+                }
+              </section>
+            }
+
+            <footer>Manual del Jugador · pág. {{ creature.sourcePage }}</footer>
+          </div>
+        </details>
+      }
+    </div>
+
+    @if (!filteredCreatures(creatures).length) {
+      <section class="empty">
+        <h2>Sin resultados</h2>
+        <p>No hay criaturas que coincidan con la búsqueda.</p>
+      </section>
+    }
+  </section>
+} @else {
+  <p class="loading">Cargando criaturas...</p>
+}

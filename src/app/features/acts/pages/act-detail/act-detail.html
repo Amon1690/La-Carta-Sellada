@@ -1,0 +1,183 @@
+@if (vm$ | async; as vm) {
+  <article class="act-detail">
+    <a class="back-link" [routerLink]="campaignPath('actos')"><span aria-hidden="true">←</span> Todos los actos</a>
+
+    <header class="act-header">
+      <div>
+        <p>{{ vm.act.label }} · {{ vm.act.status }}</p>
+        <h1>{{ vm.act.name }}</h1>
+        <span>{{ vm.act.objective }}</span>
+      </div>
+
+      <dl>
+        <div>
+          <dt>Escenas</dt>
+          <dd>{{ vm.scenes.length }}</dd>
+        </div>
+        <div>
+          <dt>Encuentros</dt>
+          <dd>{{ vm.encounters.length }}</dd>
+        </div>
+      </dl>
+    </header>
+
+    <nav class="panel-nav" aria-label="Paneles del acto">
+      <a [routerLink]="campaignPath('escenas')" [queryParams]="{ tag: vm.act.label }">Escenas</a>
+      <a [routerLink]="campaignPath('encuentros')" [queryParams]="{ tag: vm.act.label }">Encuentros</a>
+    </nav>
+
+    <section class="act-panel summary-panel" id="resumen">
+      <header>
+        <span>01</span>
+        <div>
+          <p>Visión general</p>
+          <h2>Resumen</h2>
+        </div>
+      </header>
+
+      <div class="summary-content">
+        <p>{{ vm.act.summary }}</p>
+        <div>
+          <strong>Objetivo del acto</strong>
+          <span>{{ vm.act.objective }}</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="act-panel" id="escenas">
+      <header>
+        <span>02</span>
+        <div>
+          <p>Secuencia de dirección</p>
+          <h2>Escenas</h2>
+        </div>
+      </header>
+
+      @if (vm.scenes.length) {
+        <ol class="scene-list">
+          @for (scene of vm.scenes; track scene.id) {
+            <li>
+              <div class="scene-order">{{ scene.order }}</div>
+              <div class="scene-content">
+                <div class="scene-heading">
+                  <div>
+                    <p>{{ scene.tags.join(' · ') }}</p>
+                    <h3>{{ scene.name }}</h3>
+                  </div>
+                  <div class="heading-actions">
+                    <span>{{ scene.checks.length }} pruebas</span>
+                    <a [href]="scene.mapUrl" target="_blank" rel="noopener">
+                      <span aria-hidden="true">▦</span> Mapa
+                    </a>
+                    <a [href]="vttPath('scene', scene.id)" target="_blank" rel="noopener">
+                      <span aria-hidden="true">▣</span> VTT
+                    </a>
+                  </div>
+                </div>
+
+                <p>{{ scene.objective }}</p>
+
+                @if (scene.readAloud) {
+                  <blockquote>{{ scene.readAloud }}</blockquote>
+                }
+
+                @if (scene.checks.length) {
+                  <div class="check-grid">
+                    @for (check of scene.checks; track check.skill + check.dc) {
+                      <div>
+                        <strong>{{ check.skill }} · CD {{ check.dc }}</strong>
+                        <span>{{ check.result }}</span>
+                      </div>
+                    }
+                  </div>
+                }
+
+                @if (scene.clues.length) {
+                  <div class="note-line">
+                    <strong>Pistas</strong>
+                    <span>{{ scene.clues.join(' · ') }}</span>
+                  </div>
+                }
+              </div>
+            </li>
+          }
+        </ol>
+      } @else {
+        <p class="empty-panel">Este acto todavía no tiene escenas preparadas.</p>
+      }
+    </section>
+
+    <section class="act-panel" id="encuentros">
+      <header>
+        <span>03</span>
+        <div>
+          <p>Conflictos preparados</p>
+          <h2>Encuentros</h2>
+        </div>
+      </header>
+
+      @if (vm.encounters.length) {
+        <div class="encounter-list">
+          @for (encounter of vm.encounters; track encounter.id) {
+            <article>
+              <div class="encounter-heading">
+                <div>
+                  <p>{{ encounter.location }}</p>
+                  <h3>{{ encounter.name }}</h3>
+                </div>
+                <div class="heading-actions">
+                  <span>{{ encounter.difficulty }}</span>
+                  <a [href]="encounter.mapUrl" target="_blank" rel="noopener">
+                    <span aria-hidden="true">▦</span> Mapa
+                  </a>
+                  <a [href]="vttPath('encounter', encounter.id)" target="_blank" rel="noopener">
+                    <span aria-hidden="true">▣</span> VTT
+                  </a>
+                </div>
+              </div>
+
+              <p>{{ encounter.summary }}</p>
+
+              <dl class="encounter-data">
+                <div>
+                  <dt>Objetivo</dt>
+                  <dd>{{ encounter.objective }}</dd>
+                </div>
+                <div>
+                  <dt>Participantes</dt>
+                  <dd>{{ encounter.combatants.join(' · ') }}</dd>
+                </div>
+              </dl>
+
+              <div class="encounter-columns">
+                <div>
+                  <h4>Escala</h4>
+                  <ul>
+                    @for (entry of encounter.scaling; track entry) {
+                      <li>{{ entry }}</li>
+                    }
+                  </ul>
+                </div>
+                <div>
+                  <h4>Tácticas</h4>
+                  <ul>
+                    @for (entry of encounter.tactics; track entry) {
+                      <li>{{ entry }}</li>
+                    }
+                  </ul>
+                </div>
+              </div>
+            </article>
+          }
+        </div>
+      } @else {
+        <p class="empty-panel">Este acto se resuelve mediante interpretación y exploración; no tiene encuentros definidos.</p>
+      }
+    </section>
+  </article>
+} @else {
+  <section class="not-found">
+    <h1>Acto no encontrado</h1>
+    <a [routerLink]="campaignPath('actos')">Volver a la lista de actos</a>
+  </section>
+}

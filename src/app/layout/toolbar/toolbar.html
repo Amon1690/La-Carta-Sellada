@@ -1,0 +1,23 @@
+<header>
+  <a class="logo" routerLink="/" aria-label="Ir a campañas">
+    <span class="logo-mark">LC</span>
+    <span>La Carta Sellada</span>
+  </a>
+
+  <form class="search" (submit)="submitSearch($event)">
+    <label>
+      <span>Buscar</span>
+      <input
+        [disabled]="!campaignId()"
+        [value]="term()"
+        (input)="updateTerm($any($event.target).value)"
+        [placeholder]="campaignId() ? 'Buscar en la campaña...' : 'Selecciona una campaña para buscar'"
+      />
+    </label>
+  </form>
+
+  <div class="actions" aria-label="Acciones principales">
+    <button type="button" title="Nuevo documento" [disabled]="!campaignId()">+</button>
+    <button type="button" title="Ajustes" [disabled]="!campaignId()">...</button>
+  </div>
+</header>

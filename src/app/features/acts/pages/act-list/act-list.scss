@@ -1,0 +1,157 @@
+.acts-page {
+  display: grid;
+  gap: var(--space-lg);
+  max-width: 1080px;
+  margin: 0 auto;
+}
+
+.page-header {
+  display: grid;
+  gap: var(--space-xs);
+  padding-bottom: var(--space-md);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.page-header p,
+.page-header h1,
+.page-header span,
+h2,
+dl,
+dd {
+  margin: 0;
+}
+
+.page-header p,
+.act-heading span {
+  color: var(--accent-gold);
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.page-header h1 {
+  color: var(--text-strong);
+  font-size: 32px;
+}
+
+.page-header > span,
+.act-content > p {
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+.act-list {
+  display: grid;
+  gap: var(--space-md);
+}
+
+.act-card {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-lg);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  color: inherit;
+  padding: var(--space-lg);
+  text-decoration: none;
+}
+
+.act-card:hover {
+  border-color: rgba(224, 201, 147, 0.55);
+  background: #2d3035;
+}
+
+.act-number {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  aspect-ratio: 1;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--accent-gold);
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.act-content {
+  display: grid;
+  gap: var(--space-md);
+}
+
+.act-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+h2 {
+  margin-top: 4px;
+  color: var(--text-strong);
+  font-size: 22px;
+}
+
+.act-heading strong {
+  align-self: start;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  color: var(--text-muted);
+  padding: 5px 9px;
+  font-size: 12px;
+}
+
+.act-heading strong.current {
+  border-color: rgba(86, 156, 214, 0.5);
+  color: #9dcbef;
+}
+
+dl {
+  display: flex;
+  gap: var(--space-lg);
+}
+
+dl div {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+dt {
+  color: var(--text-muted);
+}
+
+dd {
+  color: var(--text-strong);
+  font-weight: 700;
+}
+
+.open-label {
+  color: var(--text-strong);
+  white-space: nowrap;
+}
+
+.loading {
+  color: var(--text-muted);
+}
+
+@media (max-width: 720px) {
+  .act-card {
+    grid-template-columns: 52px minmax(0, 1fr);
+    align-items: start;
+    gap: var(--space-md);
+    padding: var(--space-md);
+  }
+
+  .act-number {
+    width: 48px;
+    font-size: 22px;
+  }
+
+  .act-heading {
+    display: grid;
+  }
+
+  .open-label {
+    grid-column: 2;
+  }
+}

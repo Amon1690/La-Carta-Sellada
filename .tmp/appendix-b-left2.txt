@@ -1,0 +1,1026 @@
+                                        APÉNDICE B
+
+            PERFILES DE CRIA
+
+                                                                                         a  ALEA
+
+     Este apéndice contiene los perfiles de las criaturas                                       Los siguientes
+     mencionadas en el libro, principalmente en los capítulos                                Cuando tu Dung
+     de las clases, el equipo y los conjuros. Consulta el glosario                           cambie algunos
+     de reglas para saber cómo se lee el perfil de una criatura
+     y el Manual de monstruos para ver muchas más criaturas.
+
+     AÁLCE
+
+     Bestia Grande, sin alineamiento
+
+     CA: 10                         Iniciativa: +0 (10)
+
+     PG: 11 (2d10)                  MOD. SALV.                           MOD. SALV.
+
+     Velocidad: 15 m                Des10+0 +0 Con1l +0 +0
+
+                   MOD. SALV.
+
+      Fue 16 +3 +3
+
+     InTr 2-4 -4 Sap 10+0 +0 Car 6 -2 -2
+
+       Habilidades: Percepción +2
+       Sentidos: visión en la oscuridad 18 m, Percepción pasiva 12
+
+       Idiomas: ninguno
+
+     | VD: 1/4 (50 PX; BC +2)
+
+     ACCIONES                                                                               ARAÑA GI
+
+     Embestir. Tirada de ataque cuerpo a cuerpo: +5, alcance 1,5 m.                         Bestia Grande, s
+     Acierto: 6 (1d6 + 3) de daño contundente. Si el objetivo es una
+     criatura Grande o más pequeña y el alce recorre al menos                               CA: 14
+     6 m en línea recta hacia el objetivo justo antes de acertarle,
+     este recibe 3 (1d6) de daño contundente adicional y tendrá                             PG: 26 (4d10 + 4
+     el estado de derribado.
+                                                                                            Velocidad: 9 m,
+     ARAÑA
+                                                                                                          MOD. S
+     Bestia Diminuta, sin alineamiento
+                                                                                             Fue 14 +2 +
+     CA: 12                         Iniciativa: +2 (12)
+                                                                                             Inr 2-4 -
+     PG: 1 (1d4 - 1)
+                                                                                            Habilidades: Per
+     Velocidad: 6 m, trepar 6 m
+                                                                                            Sentidos: visión
+                        MOD. SALV.                     MOD, SALV.  Con8  MOD. SALV.
+                                                                                            Idiomas: ningun
+     Fue 2 -4 -4                    Des 14 +2 +2                         -1 -1
+                                                                                            VD: 1 (200 PX; B
+     Ir 1-5 -5 SaB 10 +0 +0 Car 2                                        -4 -4
+                                                                                            ATRIBUTOS
+     Habilidades: Sigilo +4
+                                                                                            Caminar por tel
+     Sentidos: visión en la oscuridad 9 m, Percepción pasiva 10                             restricciones de
+                                                                                            y conoce la ubic
+     Idiomas: ninguno                                                                       en contacto con
+
+     VD: 0 (10 PX; BC +2)                                                                   Trepar cual arác
+
+     ATRIBUTOS                                                                              difíciles e inclus
+                                                                                            pruebas de carac
+     Caminar por telarañas. La araña ignora todas las restricciones
+     de movimiento causadas por las telarañas y conoce la                                   ACCIONES
+     ubicación de cualquier otra criatura que esté en contacto
+     con la misma telaraña.                                                                 Mordisco. Tirad
+                                                                                            1,5 m. Acierto: 7
+     Trepar cual arácnido. La araña puede trepar por superficies                            de daño de vene
+     difíciles e incluso recorrer techos sin tener que realizar                             Telaraña (recarg
+     pruebas de característica.
+                                                                                            una criatura que
+     ACCIONES
+                                                                                            Fallo: el objetivo
+     Mordisco. Tirada de ataque cuerpo a cuerpo: +4, alcance 1,5 m.
+     Acierto: 1 de daño perforante más 2 (1d4) de daño de veneno.                           destruya la telar
+
+                                                                                            de fuego e inmu
+
+346  APÉNDICE B | PERFILES DE CRIATURAS
+y                                                                                            CABALLO DE
+
+ BÚHO                                                                                        Bestia Grande, sin a
+                                                                                             CA: 11
+Bestia Diminuta, sin alineamiento
+                                                                                             PG: 19 (3d10 + 3)
+CA: 11                         Iniciativa: +1 (11)
+                                                                                             Velocidad: 18 m
+PG: 1 (1d4 - 1)
+                                                                                                                  MOD. SALV.
+Velocidad: 1,5 m, volar 18 m
+                                                                                              Fue 18 +4 +4
+                   MOD. SALV.                     MOD. SALV.                     MOD. SALV.   INT 2-4 -4
+
+Fue 3 -4 -4                    Des 13 +1 +1                   Con8 -1 -1                     Sentidos: Percepci
+                                                                                             Idiomas: ninguno
+   Inr 2-4 -4 Sab 12 +1 +1                                    Car 7 -2 -2
+l                                                                                            VD: 1/2 (100 PX; B
+| Habilidades: Percepción +5, Sigilo +5
+                                                                                             ACCIONES
+Sentidos: visión en la oscuridad 36 m, Percepción pasiva 15
+                                                                                             Cascos. Tirada de a
+Idiomas: ninguno                                                                             Acierto: 9 (2d4 + 4)
+                                                                                             una criatura Grand
+VD: 0 (10 PX; BC +2)                                                                         menos 6 m en líne
+                                                                                             acertarle, este reci
+ATRIBUTOS                                                                                    y tendrá el estado d
+
+Pasar volando. El búho no provoca ataques de oportunidad                                     CABALLO DE
+cuando vuela para ponerse fuera del alcance de un enemigo.
+                                                                                             Bestia Grande, sin a
+ACCIONES
+                                                                                             CA: 11
+Garras. Tirada de ataque cuerpo a cuerpo: +3, alcance 1,5 m.
+                                                                                             PG: 13 (2d10 + 2)
+Acierto: 1 de daño cortante.
+                                                                                             Velocidad: 18 m
+CABALLITO DE MAR GIGANTE
+                                                                                                                  MOD. SALV.
+Bestia Grande, sin alineamiento
+                                                                                              Fue 16 +3 +3
+CA: 14                         Iniciativa: +1 (11)                                            InTr 2-4 -4
+
+PG: 16 (310)                                                                                 Sentidos: Percepci
+                                                                                             Idiomas: ninguno
+Velocidad: 1,5 m, nadar 12 m                                                                 VD: 1/4 (50 PX; BC
+
+                   MOD. SALV.                     MOD. SALV.                     MOD. SALY.  ACCIONES
+
+Fue 15 +2 +2                   Des 12 +1 +l.                  Con1l +0 +0                    Cascos. Tirada de a
+                                                                                             Acierto: 7 (1d8 + 3)
+Inr 2-4 -4 Sam 12 +1 +1. Car 5-3 -3
+                                                                                             CABALLO DE
+Sentidos: Percepción pasiva 11
+Idiomas: ninguno                                                                             Bestia Grande, sin a
+                                                                                             CA: 10
+VD: 1/2 (100 PX; BC +2)                                                                      PG: 15 (2d10 + 4)
+                                                                                             Velocidad: 12 m
+ATRIBUTOS
+                                                                                                                  MOD. SALV.
+Respirar en el agua. El caballito de mar solo puede respirar
+bajo el agua.                                                                                 Fue 18 +4 +4
+                                                                                              InTr 2-4 -4
+ACCIONES
+                                                                                             Sentidos: Percepci
+Embestir. Tirada de ataque cuerpo a cuerpo: +4, alcance 1,5 m.                               Idiomas: ninguno
+Acierto: 9 (2d6 + 2) de daño contundente u 11 (2d8 + 2)
+de daño contundente si el caballito de mar recorrió al menos                                 VD: 1/4 (50 PX; BC
+6 m en línea recta hacia el objetivo justo antes de acertarle.
+                                                                                             ACCIONES
+ACCIONES ADICIONALES
+                                                                                             Cascos. Tirada de a
+Carrera burbujeante. Mientras está bajo el agua, el caballito                                Acierto: 6 (1d4 + 4)
+de mar se mueve hasta la mitad de su velocidad nadando
+sin provocar ataques de oportunidad.                                                                          APÉND
+   CABRA
+
+   Bestia Mediana, sin alineamiento
+
+| CA: 10                          Iniciativa: +0 (10)
+
+ | PG:4 (1d8)
+
+| Velocidad: 12 m, trepar 9 m
+
+   MOD. SALV.                     MOD. SALV.                     MOD. SALV.
+
+| FUE 11 +0 +2 Des10 +0 +0 Conll +0 +0
+
+| INT 2-4 -4 Sam 10 +0 +0 Car 5 -3 -3
+
+| Habilidades: Percepción +2                                                                     CANGREJO
+| Sentidos: visión en la oscuridad 18 m, Percepción pasiva 12
+                                                                                                  Bestia Diminuta
+  Idiomas: ninguno                                                                                CA: 11
+ VD: 0 (10 PX; BC +2)                                                                             PG: 3 (1d4 +1)
+                                                                                                  Velocidad: 6 m,
+ ACCIONES
+                                                                                                                         MOD. S
+  Embestir. Tirada de ataque cuerpo a cuerpo: +2, alcance 1,5 m.
+ Acierto: 1 de daño contundente o 2 (1d4) de daño contundente                                      Fue 6 =2.=2
+  si la cabra recorrió al menos 6 m en línea recta hacia el                                        Int 1-5 -
+| objetivo justo antes de acertarle.
+                                                                                                  Habilidades: Sig
+| CABRA GIGANTE                                                                                   Sentidos: visión
+                                                                                                || Idiomas: ningu
+   Bestia Grande, sin alineamiento
+                                                                                                 VD: 0 (10 PX; B
+  CA: 11                          Iniciativa: +1 (11)
+                                                                                                | ATRIBUTOS
+| PG: 19 (3d10 + 3)
+                                                                                                | Anfibio. El cangr
+| Velocidad: 12 m, trepar 9 m                                                                     fuera del agua.
+
+                      MOD. SALV.                     MOD. SALV.                     MOD. SALV.    ACCIONES
+
+   Fue 17 +3 +5                   Des 13 +l +l                   Con12 +1 +l                      Pinza. Tirada de
+                                                                                                  Acierto: 1 de da
+   INT 3-4 -4 Sab 12 +1 +1 Car 6-2 -2
+                                                                                                  CANGREJO
+   Habilidades: Percepción +3
+   Sentidos: visión en la oscuridad 18 m, Percepción pasiva 13                                     Bestia Mediana,
+   Idiomas: ninguno
+                                                                                                  CA: 15
+   VD: 1/2 (100 PX; BC +2)
+                                                                                                 PG: 13 (3d8)
+   ACCIONES
+                                                                                                  Velocidad: 9 m,
+   Embestir. Tirada de ataque cuerpo a cuerpo: +5, alcance 1,5 m.
+   Acierto: 6 (1d6 + 3) de daño contundente. Si el objetivo es                                                          MOD. S
+   una criatura Grande o más pequeña y la cabra recorre al
+   menos 6 m en línea recta hacia el objetivo justo antes de                                       Fue 13 +1 +
+   acertarle, este recibe 5 (2d4) de daño contundente adicional                                    Inr 1-5 -
+   y tendrá el estado de derribado.
+                                                                                                  Habilidades: Sig
+   CAMELLO                                                                                        Sentidos: visión
+                                                                                                  Idiomas: ningun
+   Bestia Grande, sin alineamiento
+                                                                                                 VD: 1/8 (25 PX;
+| CA: 10                          Iniciativa: -1 (9)
+                                                                                                 ATRIBUTOS
+| PG: 17 (2010 + 6)
+                                                                                                  Anfibio. El cangr
+  Velocidad: 15 m                                                                                 fuera del agua.
+
+|  MOD. SALV.                                        MOD. SALV.                     MOD. SALV.   ACCIONES
+
+| Fue 15 +2 +2                    Des 8 -1 -1.                   CoN17 +3 +5                      Pinza. Tirada de
+                                  Sam 11 +0 +0                   Car 5 -3 -3                      Acierto: 4 (146 +
+   Inr 2-4 -4                                                                                     es una criatura
+                                                                                                  de agarrada (CD
+  Sentidos: visión en la oscuridad 18 m, Percepción pasiva 10                                     dos pinzas.
+| Idiomas: ninguno
+
+| VD: 1/8 (25 PX; BC+2)
+
+l
+
+| ACCIONES
+
+| Mordisco. Tirada de ataque cuerpo a cuerpo: +4, alcance 1,5 m.
+  Acierto: 4 (1d4 + 2) de daño contundente.
+
+   APÉNDICE B | PERFILES DE CRIATURAS
+                                                  Cocoorito
+
+     | COCODRILO
+
+     | Bestia Grande, sin alineamiento
+
+     | cas12                            Iniciativa: +0 (10)                          Bestia Mediana, sin
+
+      PG: 13 (2410 +2)                                                              CA: 13
+
+     Velocidad: 6 m, nadar 9 m                                                     PG: 9 (2d8)
+
+     MOL                                MOD. SAL                      MOD. SALV.    Velocidad: 12 m, tr
+
+     Fue 15 +2 +2 Des10 +0 +0 Con13 +1 +3                                                                  MOD. SALV.
+
+     Int 2 =4 -4 Sam 10 +0 +0 Car 5 -3 -—3                                           Fue 11 +0 +0.
+                                                                                     INT 4-3 3.
+       Habilidades: Sigilo +2
+     || Sentidos: Percepción pasiva 10                                            | Habilidades: Acroba
+                                                                                    Sentidos: visión en
+     || Idiomas: ninguno                                                            Idiomas: ninguno
+
+     | VD: 1/2 (100 PX; BC+2)                                                       VD: 1/3 (25 PX; BC
+
+     ll|ll ATRIBUTOS                                                                ACCIONES
+
+       Aguantar la respiración. El cocodrilo puede aguantar la                       Mordisco. Tirada de
+       respiración durante 1 hora.
+                                                                                             : 5 (1d4 + 3)
+     | ACCIONES
+                                                                                    Bestia Diminuta, si
+     | Mordisco. Tirada de ataque cuerpo a cuerpo: +4, alcance                      CA: 12
+       1,5 m. Acierto: 6 (1d8 + 2) de daño perforante. Si el objetivo |
+       es Mediano o más pequeño, tendrá el estado de agarrado                     | PG: 2 (1d4)
+       (CD 12 para escapar). Mientras esté agarrado, tendrá el
+       estado de apresado.                                                          Velocidad: 3 m, vol
+
+     COMADREJA                                                                                             MOD. SALV.
+
+     Bestia Diminuta, sin alineamiento                                               Fue 2 -4 -4
+                                                                                     INT 5:3335=30
+     | CA: 13                           Iniciativa: +3 (13)
+                                                                                    Habilidades: Perce
+     [| PG:1 (1d4-1)                                                                Sentidos: Percepci
+                                                                                  | Idiomas: ninguno
+     || Velocidad: 9 m, trepar9 m
+                                                                                   VD: 0 (10 PX; BC +2
+                                     A                     MOD. SALV  MOD. SALV.
+                                                                                  | ATRIBUTOS
+     Fue 3 -4 -4.                       Des16 +3 +3 Con8              -1 -1
+                                                                                    Imitación. El cuerv
+     INT 2-4 -4 Sab 12 +1 +1 Car 3                                    -4 -4         haya escuchado, co
+                                                                                    lo escuche podrá d
+     || Habilidades: Acrobacias +5, Percepción +3, Sigilo +5                        supera una prueba
+     || Sentidos: visión en la oscuridad 18 m, Percepción pasiva 13
+     || Idiomas: ninguno                                                            ACCIONES
+
+     | VD:0 (10 PX; BC +2)                                                        || Pico. Tirada de ataq
+                                                                                    Acierto: 1 de daño
+     | ACCIONES
+
+     | Mordisco. Tirada de ataque cuerpo a cuerpo: +5, alcance 1,5 m.
+     [| Acierto: 1 de daño perforante.
+
+                                                                                  APÉND
+
+por
+                                                                                          | DUENDE
+
+                                                                                          || Feérico Diminuto
+
+                                                                                          Ñ
+
+                                                                                          l CA: 15
+
+                                                                                          | PG: 10 (4d4)
+
+                                                                                            Velocidad: 3 m,
+
+                                                                                          Fue 3 -4 -
+                                                                                          InT 14 +2 +
+
+                                                         DiasLiLiO                          Habilidades: Pe
+                                                                                            Sentidos: Perce
+                                                                                            Idiomas: común
+
+                                                                                           VD: 1/4 (50 PX;
+
+                                                                                          ll
+
+                                                                                          l ACCIONES
+
+                                                                                          | Espada aguja. T
+                                                                                          ll alcance 1,5 m. A
+
+        DIABLILLO                                                                               Arco encantador
+                                                                                                 12/48 m. Acierto
+     | Infernal Diminuto (diablo), legal malvado                                                el estado de he
+                                                                                              | turno del duend
+     | CA: 13                       Iniciativa: +3 (13)                                       | Invisibilidad. El
+                                                                                              | sin necesidad d
+     | PG: 21 (6d4+ 6)                                                                          aptitud mágica.
+
+     || Velocidad: 6 m, volar 12 m                                                               Visión del coraz
+                                                                                           | [| una criatura qu
+                                                                                          ll (los celestiales,
+                                                                                           | [| automáticamen
+
+                                                                                                 las emociones
+
+     |  MOD. SALV.                           MOD. SALV.                       MOD. SALV.
+
+        l Fue 6 -2 -2   Des 17 +3 +3                     Con13 +1 +l
+
+        l Inv 1140 +0   Sam 12 +1 +.                     Car 1432 +2                      | ELEFANTE
+                                                                                          | Bestia Enorme,
+          Habilidades: Engaño +4, Perspicacia +3, Sigilo +5                               || -CA:12
+
+        | Resistencias: frío                                                              | PG: 76 (8d12 +
+        | Inmunidades: fuego, veneno; envenenado
+        | Sentidos: visión en la oscuridad 36 m (no afectada por la                       | Velocidad: 12 m
+        | oscuridad mágica), Percepción pasiva 11
+        | Idiomas: común, infernal                                                                                    MOD.
+
+        | VD: 1 (200 PX; BC +2)                                                           l Fue 22 +6
+
+     | ATRIBUTOS                                                                          [Int 3-4
+
+     || Resistencia mágica. El diablillo tiene ventaja en las tiradas                       Sentidos: Perce
+                                                                                          l Idiomas: ningu
+       de salvación contra conjuros y otros efectos mágicos.
+                                                                                          | VD: 4 (1100 PX;
+
+        ACCIONES                                                                          [ACCIONES
+
+        Aguijón. Tirada de ataque cuerpo a cuerpo: +5, alcance 1,5 m.                           Ataque múltiple
+        Acierto: 6 (1d6 + 3) de daño perforante más 7 (2d6) de daño                       | colmillos.
+        de veneno.
+                                                                                                Colmillos. Tirad
+        Cambio de forma. El diablillo cambia de forma para parecerse                      | Acierto: 15 (2d8
+        a una araña (6 m, trepar 6 m), un cuervo (6 m, volar 18 m)                        [| [ una criatura En
+        o una rata (velocidad 6 m), o recupera su auténtica forma.                        IE [al menos 6 m e
+        Su perfil es el mismo en todas las formas, excepto por
+        su velocidad. Cualquier equipo que vista o lleve no se                            | de acertarle, el
+        transformará.                                                                     ll
+                                                                                          | | ACCIONES A
+
+        Invisibilidad. El diablillo lanza invisibilidad sobre sí mismo                    Il Arrollar. Tirada
+        sin necesidad de componentes y utiliza el Carisma como
+        aptitud mágica.                                                                   l | a1,5 mo meno
+                                                                                          | | 17 (2d10 + 6) d
+
+                                                                                          y)
+
+350     APÉNDICE B | PERFILES DE CRIATURAS
+                                                                  || Celestial Diminuto,
+
+                                                                  | CA: 13
+
+                                                                  | PG: 24 (7d4 +7)
+                                                                  l Velocidad: 6 m, vol
+
+                                                                                  MOD. SAL.
+
+                                                                  | ¿FUE 6 20228
+
+                                                                  | Int 15 +2 +2
+
+                                                                  l Habilidades: Conoc
+
+(                                                                      Resistencias: necró
+
+AO                                                                      Sentidos: visión en
+
+| ESCORPIÓN                                               |[| | VD: 1 (200 PX; BC Idiomas: celestial,
+[| Bestia Diminuta, sin alineamiento
+                                                            | | ATRIBUTOS
+[can                  Iniciativa: +0 (10)
+                                                                 | Resistencia mágica
+| PG:1 (1d4-1)                                     MOD. SALY. [ |l de salvación contr
+
+ | Fue 2 -4 -4  SALV                  SALV.
+
+| l Int 1-5 -5
+                      Des 11 +0 +0           Con8 -1 -—1            | ACCIONES
+                      Sab 8 -1 -1            Car 2 -4 -4          | l Desgarro. Tirada de
+
+| Sentidos: visión ciega 3 m, Percepción pasiva 9                 | | daño radiante. | Acierto: 5 (1d4 + 3)
+|| Idiomas: ninguno
+                                                                       REACCIONES
+| VD: 0 (10 PX; BC +2)
+
+| l ACCIONES                                                        Arranque de ingeni
+l| Aguijón. Tirada de ataque cuerpo a cuerpo: +2, alcance 1,5 m.    criatura a 9 m o men
+                                                                    tirada de salvación
+Il Acierto: 1 de daño perforante más 3 (1d6) de daño de veneno.
+                                                                  l K
+
+                                                                  APÉND
+                                                        Gato
+
+|          ESQUELETO
+
+|          Muerto viviente Mediano, ise) eo                                        HALCÓN
+
+           CA: 14                        Iniciativa: +3 (13)                l      z
+
+           PG: 13 (2d8 +4)                                                  l      Bestia Diminuta,
+
+           Velocidad: 9 m                                                   | CA: 13
+
+        |            MOD. SALV.           MOD. SAL               moo. sais  Bl PG: 1 (1d4- 1)
+                                   Des16 +3 +3          CoN15+2 +2               Velocidad: 3 m,
+          Fue 10 +0 +0
+                                                                                             MOD. S
+        l
+
+|       pa A                                                                       Fu5e-3 -
+
+|       l Vulnerabilidades: contundente                                            inv 2 E
+
+        || Inmunidades: veneno; cansancio, envenenado
+
+           | Equipo: arco corto, espada corta                                      Habilidades: Pe
+
+           | Sentidos: visión en la oscuridad 18 m, Percepción pasiva 9            Sentidos: Perce
+
+           Idiomas: entiende los idiomas que conocía en vida, pero no              Idiomas: ningun
+
+             puede hablar                                                          VD: 0 (10 PX; B
+
+           VD: 1/4 (50 PX; BC +2)                                                  ACCIONES
+
+           ACCIONES                                                            | Garras. Tirada d
+           Espada corta. Tirada de ataque cuerpo a cuerpo: +5, alcance         [| | Acierto: 1 de da
+           1,5 m. Acierto: 6 (1d6 + 3) de daño perforante.
+
+           Arco corto. Tirada de ataque a distancia: +5, alcance 24/96 m. | ¿===
+
+           [| Acierto: 6 (1d6 + 3) de daño perforante.                         Fl JABALÍ
+
+                                                                                   | Bestia Mediana,
+
+           FE                                  s              Y                    | can
+           GaTo                                                                    | PG: 13 (2d+84
+           Bestia Diminuta, sin alineamiento
+                                                                                   | Velocidad: 12 m
+
+           | CA: 12                      Iniciativa+:2 (12)                                  Aca
+                                                                                   Fue 13 +1 +
+           l PG: 2 (1d4)
+
+           || Velocidad: 12 m, trepar 12 m                                         nr 2     E
+
+           Ú Fue 3-4 -4 Des15 +2 +4 CoN10 +0 +0                                     paces: Perce
+
+           || InT 3 -4 -4 Sa 12 +1 +1 CAR 7 -2 -2 |                                  Idiomas: ningun
+                                                                                    VD: 1/4 (50 PX;
+           Habilidades: Percepción +3, Sigilo +4
+                                                                                    ATRIBUTOS
+           | Sentidos: visión en la oscuridad 18 m, Percepción pasiva 13
+                                                                                     Furia maltrecha
+           Idiomas: ninguno                                                    Il
+                                                                                    ventaja en las t
+           | VD: 0 (10 PX; BC +2)                                              |
+                                                                                    ACCIONES
+           ATRIBUTOS                                                           [|
+                                                                                     Colmillos. Tirada
+           Saltador. La distancia de salto del gato se determina usando ||          Acierto: 4 (1d6 +
+           su Destreza en vez de su Fuerza. |                                        criatura Median
+           ACCIONES                                                            |     6 m en línea rec
+                                                                                   | este recibe 3 (1
+           Arañazo. Tirada de ataque cuerpo a cuerpo: +4, alcance 1,5m. |            estado de derri
+
+           Acierto: 1 de daño cortante.                                        |
+
+   352     APÉNDICE B | PERFILES DE CRIATURAS
+| LAGARTO
+
+|| Bestia Diminuta, sin alineamiento                                                         Loño
+
+| CA: 10                       Iniciativa: +0 (10)                                           ll Bestia Mediana, s
+
+[| PG: 2 (1d4)                                                                                 CA: 12
+
+| Velocidad: 6 m, trepar 6 m                                                                   PG: 11 (2d8 + 2)
+
+                   MOD. SALV.                     MOD. SALV.                     MOD, SALV.    Velocidad: 12 m
+
+Fue 2 -4 -4                    Des 11 +0 +0                   CoNl0 +0 +0                                             MOD. SAL
+
+Int 1-5 -5 Sab 8 -1 -1 Car 3 -4 -4                                                              Fue 14 +2 +2
+
+  Sentidos: visión en la oscuridad 9 m, Percepción pasiva 9                                     InT 3 -4 -4
+| Idiomas: ninguno
+                                                                                               Habilidades: Perc
+| VD: 0 (10 PX; BC +2)                                                                         Sentidos: visión e
+                                                                                             || Idiomas: ninguno
+| ATRIBUTOS
+                                                                                             | VD: 1/4 (50 PX; B
+[| Trepar cual arácnido. El lagarto puede trepar por superficies
+[| difíciles e incluso recorrer techos sin tener que realizar                                  ATRIBUTOS
+|| pruebas de característica.
+                                                                                             | Atacar en manada
+  ACCIONES                                                                                   || ataque contra una
+
+|| Mordisco. Tirada de ataque cuerpo a cuerpo: +2, alcance 1,5 m.                            l del lobo se encuen
+| Acierto: 1 de daño perforante.
+                                                                                             || tiene el estado de
+| Bestia Grande, sin alineamiento
+                                                                                             IÑ| ACCIONES
+| CA: 12                       Iniciativa: +2 (12)
+                                                                                               Mordisco. Tirada d
+| PG: 22 (4d10)                                                                                Acierto: 5 (1d6 + 2
+                                                                                               una criatura Medi
+ Velocidad: 15 m                                                                               de derribada.
+
+                   MOD. SALV.                     MOD. SALV.                     MOD. SALV.  2%
+
+Fue 17 +3 +3                   Des15+2 +2                     Con1l +0 +0                    | LOBO TERRI
+
+Int 3 -4 -4 Sab 12 +1 +1 Car 8-1 -—1                                                           Bestia Grande, sin
+
+Habilidades: Percepción +3, Sigilo +4                                                          CA: 14
+
+Sentidos: visión en la oscuridad 183 m, Percepción pasiva 13                                 | PG: 22 (3d10+ 6)
+
+Idiomas: ninguno                       7                                                     | Velocidad: 15 m
+VD: 1 (200 PX; BC +2)                                                                                      MOD. SAL
+
+| ATRIBUTOS                                                                                     FUE 17 SON
+
+  Atacar en manada. El león tiene ventaja en una tirada de                                      Int 3 -4 -4
+  ataque contra una criatura si al menos uno de los aliados
+  del león se encuentra a 1,5 m o menos de la criatura y no                                  Habilidades: Perc
+  tiene el estado de incapacitado.                                                           Sentidos: visión e
+                                                                                             Idiomas: ninguno
+  Saltar con carrera. Si se ha movido al menos 3 m justo antes,
+                                                                                             VD: 1 (200 PX; BC
+  el león puede realizar un salto de longitud de hasta 7,5 m.
+                                                                                             ATRIBUTOS
+ ACCIONES
+                                                                                             Atacar en manada
+ Ataque múltiple. El león hace dos ataques de desgarro.                                      ataque contra una
+  Puede sustituir uno de los ataques por un rugido.                                          del lobo se encuen
+                                                                                             tiene el estado de
+| Desgarro. Tirada de ataque cuerpo a cuerpo: +5, alcance 1,5 m.
+ Acierto: 7 (1d3 + 3) de daño cortante.                                                      ACCIONES
+
+  Rugido. Tirada de salvación de Sabiduría: CD 11, una criatura                              Mordisco. Tirada d
+
+  a 4,5 m o menos. Fallo: el objetivo tiene el estado de asustado                            Acierto: 3 (1d10 +
+
+  hasta el principio del siguiente turno del león.                                           es una criatura Gr
+
+                                                                                             de derribada.
+
+                                                                                             GS  ES
+
+                                                                                                 APÉN
+                        Mastín
+
+        Bestia Mediana, sin alineamiento
+
+     | CA: 12                    Iniciativa: +2 (12)
+
+     | Velocidad: 12 m                                                          || MURCIÉLA
+
+     l         MOD. SALV.                   MOD. SALV.             Mo. saw.     l|| Bestia Diminuta,
+                                 Des14 +2 +2                                    | A: 12
+        Fue 13 +1 +1.                                   Con12 +l +1
+                                 sa 12 ES                                       | SPG:1 (1d4- 1)
+     |                                                  ca TI
+
+     || Habilidades: Percepción +5                                           | Velocidad: 1,5 m
+                                                                                      MOD. S
+     || Sentidos: visión en la oscuridad 18 m, Percepción pasiva 15          l
+                                                                              [l | Fue 2-4 -
+     || Idiomas: ninguno                                                        || |
+
+      VD: 1/8 (25 PX; BC +2)
+
+       ACCIONES                                                                 Sentidos: visión
+       Mordisco. Tirada de ataque cuerpo a cuerpo: +3, alcance 1,5m.
+     | Acierto: 4 (1d6 + 1) de daño perforante. Si el objetivo es             | | Idiomas: ningun
+     | una criatura Mediana o más pequeña, tendrá el estado                   [| VD:0 (10 PX; BC
+     [| de derribada.
+                                                                                ACCIONES
+
+                                                                                || Mordisco. Tirada
+                                                                                [| _Acierto: 1 de dañ
+
+     | MULA
+
+        Bestia Mediana, sin alineamiento                                          [Oso NEGR
+
+     | CA: 10                    Iniciativa: +0 (10)                              l|| Bestia Mediana,
+
+     | PG: 11 (208+ 2)           MOD. SALV.             MOD. SALY.                 [| CA: 1
+
+     | Velocidad: 12 m           Des10 +0 +0 Con13 +1 +l                        || PG: 19 (3d+ 86)
+
+                     MOD. SALV.                                                    ll Velocidad: 9 m,
+
+        Fue 14 +2 +4                                                                                           MOD. S
+
+        InTr 2-4 -4 Sam 10 +0 +0 Car 5-3 -3                                           Fue 15 +2 +
+
+     || Sentidos: Percepción pasiva 10                                                 InTr 2-4 -
+     || Idiomas: ninguno
+                                                                                      Habilidades: Per
+     [ VD: 1/8 (25 PX; BC +2)                                                         Sentidos: visión
+                                                                                   || Idiomas: ningun
+     | ATRIBUTOS
+                                                                                    VD: 1/2 (100 PX;
+     |
+     || Bestia de carga. La mula se considera de un tamaño mayor                     ACCIONES
+     ||| para determinar su capacidad de carga.
+     |                                                                               Ataque múltiple
+
+     | ACCIONES                                                                    | Desgarro. Tirada
+                                                                                   | Acierto: 5 (1d6 +
+     || Cascos. Tirada de ataque cuerpo a cuerpo: +4, alcance 1,5 m.
+     [| Acieri (1d4 + 2) de daño contundente.
+
+354     APÉNDICE B | PERFILES DE CRIATURAS
+pa                                                                                                                 n=
+ Oso PARDO
+                                                                                                                    PoNI
+Bestia Grande, sin alineamiento
+                                                                                                                      Bestia Mediana, sin
+CA:11                          Iniciativa: +1 (11)
+                                                                                                                     CA: 10
+PG: 22 (3d1+ 06)
+                                                                                                                     PG: 11 (2d8 + 2)
+Velocidad: 12 m, trepar 9 m                                                                  |
+                                                                                                                     Velocidad: 12 m
+MOD. SALV                        MOD. SALV.                   MOD, SALY.
+                                                                                                                                   MOD. SALV.
+Fue 17 +3 +3 Des12+l +1 CoN15 +2 +2
+                                                                                                                      Fue 15 +2 +4
+INT 2-4 -4 Sab 13 +1 +1 Car 7 -2 -2                                                                                   InTr 2-4 -4
+
+  Habilidades: Percepción +3                                                                                         Sentidos: Percepci
+  Sentidos: visión en la oscuridad 18 m, Percepción pasiva 13                                                        Idiomas: ninguno
+  Idiomas: ninguno                                                                                                   VD: 1/8 (25 PX; BC
+| VD: 1 (200 PX; BC +2)
+                                                                                                                     ACCIONES
+
+                                                                                                                     Cascos. Tirada de a
+                                                                                                                   [| Acierto: 4 (1d4 + 2)
+
+ACCIONES                                                                                                           PSEUDODRA
+
+Ataque múltiple. El oso realiza un ataque de mordisco y uno [|                                                     Dragón Diminuto,
+
+con sus garras.                                                                                                    CA: 14
+
+Garra. Tirada de ataque cuerpo a cuerpo: +5, alcance 1,5 m.                                                        PG: 10 (3d4 + 3)
+
+Acierto: 5 (1d4 + 3) de daño cortante. Si el objetivo es una criatura Grande o más pequeña, tendrá el estado de |  Velocidad: 4,5 m, v
+derribada.
+                                                                                                                          MOD, SALV.
+Mordisco. Tirada de ataque cuerpo a cuerpo: +5, alcance 1,5 m. ll
+Acierto: 7 (143 + 3) de daño perforante. )                                                                         Fue 0  a
+
+                                                                                                                   Int 10 +0 +0
+
+Bestia Mediana, sin alineamiento                                                                                     Habilidades: Perce
+                                                                                                                     Sentidos: visión ci
+CA: 13                         Iniciativa: +3 (13)                                                                 | Percepción pasiv
+                                                                                                                   | Idiomas: entiende
+PG: 13 (3d8)
+                                                                                                                   | VD: 1/4 (50 PX; BC
+[| Velocidad: 15 m, trepar 12 m
+                                                                                                                   | ATRIBUTOS
+                   MOD. SALV.                     MOD. SALV.                     MOD. SALV.
+                                                                                                                     Resistencia mágica
+Fue 14 +2 +2                   Des16 +3 +3                    Conl0 +0 +0                                            tiradas de salvación
+
+InT 3 -4 -4 Sab 14 +2 +2 CAR 7 -2 -2                                                                                 ACCIONES
+
+Habilidades: Percepción +4, Sigilo +7                                                                                Ataque múltiple. El
+Sentidos: visión en la oscuridad 18 m, Percepción pasiva 14                                                          de mordisco.
+Idiomas: ninguno
+                                                                                                                     Mordisco. Tirada de
+VD: 1/4 (50 PX; BC +2)                                                                                               Acierto: 4 (1d4 + 2)
+
+ACCIONES                                                                                                             Aguijón. Tirada de
+                                                                                                                     criatura que el pse
+Desgarro. Tirada de ataque cuerpo a cuerpo: +5, alcance 1,5 m.                                                       Fallo: 5 (244) de da
+Acierto: 6 (1d6 + 3) de daño cortante.                                                                               estado de envenen
+                                                                                                                     el objetivo envenen
+ACCIONES ADICIONALES                                                                                                 inconsciente hasta
+                                                                                                                     a 1,5 mo menos d
+Huida veloz. La pantera realiza las acciones de destrabarse                                                        a
+o esconderse.
+
+                                                                                                                          APÉND
+                                                                              QUASIT
+
+                                                                              Infernal Diminut
+
+                                                                              CA: 13
+
+                                                                              PG: 25 (10d4)
+
+                                                                              Velocidad: 12 m
+
+                                                                                                 MOD. S
+
+                                                                              Fue 5-3 -
+
+       | PULPO                                                            yl Inr 7-2 -
+
+          Bestia Pequeña, sin alineamiento                                    || Habilidades: Sig
+                                                                                Resistencias: frí
+         CA: 12                       Iniciativa: +2 (12)
+       | PG:3 (1d6)                                                           || Inmunidades: v
+
+                                                                                Sentidos: visión
+
+       | Velocidad: 1,5 m, nadar 9 m                                          Idiomas: abisal,
+
+       |  MOD. SALV.                  MOD. SALV.           MOD. SALV | VD: 1 (200 PX;
+
+       | Fue 4-3 -—3 Des15+2 +2 CoNnll +0 +0 l                                ATRIBUTOS
+       | nr 3 ANA sas O LONOS Car 4 RUS |
+                                                                              Resistencia mági
+
+       || Habilidades: Percepción +2, Sigilo +6                               de salvación con
+
+          Sentidos: visión en la oscuridad 9 m, Percepción pasiva 12          ACCIONES
+
+          Idiomas: ninguno                                                ll  Desgarro. Tirada
+          VD: 0 (10 PX; BC +2)                                            l
+
+          ATRIBUTOS                                                             Acierto: 5 (1d4 +
+                                                                                estado de enven
+          Compresión. El pulpo puede moverse a través de un espacio |           del quasit.
+
+          de solo 2,5 cm de ancho sin gastar movimiento adicional               Asustar (1/día).
+                                                                              || criatura a 6 m o
+          para hacerlo.                                                       || de asustado. Al
+          Respirar en el agua. El pulpo solo puede respirar bajo el agua. ||
+
+          ACCIONES                                                            || repetirá la tirad
+
+     || Tentáculos. Tirada de ataque cuerpo a cuerpo: +4, alcance 1,5 m.      Il efecto. Tras 1 mi
+
+          Acierto: 1 de daño contundente.                                 | ||| Cambio de form
+                                                                              parecerse a un c
+
+          REACCIONES                                                          ll (velocidad 3 m,
+
+     ll| Nube de tinta (1/día). Detonante: una criatura termina su.zaa    ¡e  o recupera su au
+
+                                                                          l
+     || turno a 1,5 mo menos del pulpo mientras está bajo el agua. | las formas, exce
+     l Respuesta: el pulpo suelta tinta que llena un cubo de 1,5 m de | vista o lleve no
+
+       | lado centrado en él y se mueve hasta su velocidad nadando. | Invisibilidad. El
+
+     || El cubo está muy oscuro durante 1 minuto o hasta que una || sin necesidad d
+
+     | corriente fuerte o un efecto similar disperse la tinta.                  aptitud mágica.
+     e                                                                    ]
+
+356       APÉNDICE B | PERFILES DE CRIATURAS
+RENACUAJO SLAAD
+
+lÚF RANA                                                                       Bestia Diminuta, si
+
+Bestia Diminuta, sin alineamiento                                             CA: 10
+
+CA: 11                        Iniciativa: +1 (11)                            PG: 1 (1d4 - 1)
+
+PG:1 (1d4 - 1)                                                                Velocidad: 6 m, tre
+
+Velocidad: 6 m, nadar 6 m                                                                            MOD. SALV.
+
+                   MOD. SALV                     MOD. SALW:  MOD. SALV.        Fue 2 -4 -4
+
+Fue 1-5 -5                    Des 13 +l +1 Con8              -1 -1            Inr 2-4 -4
+                                                             -4 -4
+Int 1-5 -5 Sab 8 -1 -1 Car 3                                                        os:
+                                                                            | Habtidli:dades:ióPnerce
+Habilidades: Percepción +1, Sigilo +3
+Sentidos: visión en la oscuridad 9 m, Percepción pasiva 11                    Sen mas visguno en
+Idiomas: ninguno
+                                                                              Idio nSin
+VD: 0 (10 PX; BC +2)
+                                                                             VD: 0 U(1T0OPX; BC +2
+| ATRIBUTOS
+                                                                               TRIB
+Anfibia. La rana puede respirar tanto dentro como                        l   A
+
+fuera del agua.                                                               Ágil. La rata no pro
+                                                                              se mueve para pon
+  Saltar sin carrera. La rana puede hacer un salto de longitud
+|| de hasta 3 m o un salto de altura de hasta 1,5 m, tanto si ha            | ACCIONES
+
+  cogido carrerilla como si no.                                               Mordisco. Tirada de
+                                                                              Aciert 1 de daño
+| ACCIONES
+                                                                            | RENACUAJO
+|| Mordisco. Tirada de ataque cuerpo a cuerpo: +3, alcance 1,5 m.
+[| Acierto: 1 de daño perforante.                                           [| Aberración Diminut
+                                                                              CA: 12
+
+                                                                            | PG:7 (3d4)
+                                                                            | Velocidad: 9 m, exc
+
+                                                                            llIl
+
+                                                                                                     MOD. SALV.
+
+                                                                               Fue 7 -2 -2
+                                                                               InT 3-4 -4
+
+                                                                              Habilidades: Sigilo
+                                                                              Resistencias: ácido
+
+                                                                              Sentidos: visión en
+
+                                                                              Idiomas: entiende
+
+                                                                             VD: 1/3 (25 PX; BC
+
+                                                                              ATRIBUTOS
+
+                                                                              Resistencia mágica.
+                                                                              de salvación contra
+
+                                                                              ACCIONES
+
+                                                                              Mordisco. Tirada de
+                                                                              Acierto: 5 (1d6 + 2)
+
+                                                                            APÉND
+        SERPIENTE CONSTRICTORA
+
+        Bestia Grande, sin alineamiento                                   Bestia Mediana,
+
+        CA: 13                     Iniciativa: +2 (12)                    CA: 12
+
+        PG: 13 (210+ 2)                                                  PG: 19 (3d3 + 6)
+
+        Velocidad: 9 m, nadar 9 m                                         Velocidad: 9 m,
+
+                                                         MOD. SALV                    MOD. S
+                                                                           Fue 16 +3 +
+        FuE 15 +2 +2 Des 14 +2 +2 CoN12 +1 +l                              InTr 6-2 -
+
+        Int 1-5 -5 SAB 10 +0 +0 Car 3 -4 -4                               Habilidades: Atl
+                                                                          Sentidos: Percep
+     || Habilidades: Percepción +2, Sigilo +4                             Idiomas: ningun
+
+     | Sentidos: visión ciega 3 m, Percepción pasiva 12                  VD: 1/2 (100 PX
+
+       Idiomas: ninguno                                                  ACCIONES
+
+      VD: 1/4 (50 PX; BC +2)                                            || Ataque múltiple
+                                                                        || Puñetazo. Tirada
+      ACCIONES
+                                                                          Acierto: 5 (1d4 +
+       Mordisco. Tirada de ataque cuerpo a cuerpo: +4, alcance 1,5 m.     Piedra (recarga
+     | Acierto: 6 (1d8 + 2) de daño perforante.                           alcance 7,5/15 m
+
+       Constreñir. Tirada de salvación de Fuerza: CD 12, una criatura   ( TEJÓN
+       Mediana o más pequeña que la serpiente pueda ver a 1,5 m
+                                                                        | Bestia Diminuta,
+       o menos. Fallo: 7 (344) de daño contundente y el objetivo
+       tendrá el estado de agarrado (CD 12 para escapar).                 CA: 11
+
+     | SERPIENTE VENENOSA                                                 PG: 5 (1d4 + 3)
+
+     Il Bestia Diminuta, sin alineamiento                                 Velocidad: 6 m,
+
+     [y CA: 12                     Iniciativa: +2 (12)                                MOD. S
+                                                                           Fue 10 +0 +
+       PG: 5 (2d4)                                                         INT 2-4 -
+
+     [| Velocidad: 9 m, nadar 9 m                                         Habilidades: Pe
+                                                                          Resistencias: ve
+     l  MOD. SALV.                 ñ       SALV          MOD. SALV.       Sentidos: visión
+                                                                          Idiomas: ningun
+        Fue 2 -4 -4 Des15+2 +2 Con1l +0 +0
+                                                                          VD: 0 (10 PX; BC
+        Int 1-5 -5 Sab 10 +0 +0 Car 3 -4 -4
+                                                                         ACCIONES
+     | Sentidos: visión ciega 3 m, Percepción pasiva 10
+     [| Idiomas: ninguno                                                  Mordisco. Tirada
+                                                                          Acierto: 1 de dañ
+      VD: 1/8 (25 PX; BC +2)
+
+        ACCIONES
+
+        Mordisco. Tirada de ataque cuerpo a cuerpo: +4, alcance 1,5 m.
+         cierto: 4 (1d4 + 2) de daño perforante más 3 (146) de daño
+         le veneno.
+
+358     APÉNDICE B | PERFILES DE CRIATURAS
+al                                 dt                                                            TIGRE.
+
+ TEJÓN GIGANTE                                                                                   Bestia Grande, sin
+
+Bestia Mediana, sin alineamiento                                                                 CA: 13
+
+CA: 13                             Iniciativa: +0 (10)                                           PG: 30 (4d10 + 8)
+
+PG: 15 (2d8 + 6)                                                                                 Velocidad: 12 m
+
+Velocidad: 9 m, excavar 3 m                                                                                           MOD. SAL
+
+                       MOD. SALV                      MOD. SALV.                     MOD. SALV.   Fue 17 +3 +3
+                                                                                                  Inr 3 -4 -4
+    Fue 13 +1 +1                   Des10+0 +0                     Con17 +3 +3
+                                                                                                 Habilidades: Perc
+    InT 2-4 -4 Sab 12 +1 +1 Car 5-3 -3
+                                                                                                 Sentidos: visión e
+Habilidades: Percepción +3                                                                       Idiomas: ninguno
+Resistencias: veneno
+Sentidos: visión en la oscuridad 18 m, Percepción pasiva 13                                      VD: 1 (200 PX; BC
+Idiomas: ninguno
+                                                                                                 ACCIONES
+VD: 1/4 (50 PX; BC +2)
+                                                                                                 Desgarro. Tirada d
+ACCIONES                                                                                         Acierto: 10 (2d6 +
+                                                                                                 una criatura Gran
+Mordisco. Tirada de ataque cuerpo a cuerpo: +3, alcance 1,5 m.                                   derribada.
+Acierto: 6 (2d4 + 1) de daño perforante.
+                                                                                                 ACCIONES AD
+pa
+                                                                                                 Huida veloz. El ti
+| TIBURÓN DE ARRECIFE                                                                            o esconderse.
+
+Bestia Mediana, sin alineamiento                                                                 ZOMBI
+
+CA: 12                             Iniciativa: +2 (12)                                           Muerto viviente M
+                                                                                                 CA: 3
+PG: 22 (4d38 + 4)
+                                                                                                 PG: 15 (2d8 + 6)
+| Velocidad: 1,5 m, nadar9 m
+                                                                                                 Velocidad: 6 m
+                       MOD. SALV.  MOD. SALV.                     MOD. SALV.
+                                                                                                                      MOD. SAL
+    Fue 14 +2 +2                   Des15+2 +2 Con13 +1 +l
+                                                                                                  Fue 13 +1 +1.
+    InTr 1-5 -5 Sa 10b +0 +0 Car4 -3 -3                                                           InT 3-4 -4
+
+Habilidades: Percepción +2                                                                       Inmunidades: ven
+Sentidos: visión ciega 9 m, Percepción pasiva 12                                                 Sentidos: visión e
+Idiomas: ninguno                                                                                 Idiomas: entiende
+
+VD: 1/2 (100 PX; BC +2)                                                                            puede hablar
+
+ATRIBUTOS                                                                                        VD: 1/4 (50 PX; B
+
+Atacar en manada. El tiburón tiene ventaja en una tirada                                         ATRIBUTOS
+de ataque contra una criatura si al menos uno de los aliados
+del tiburón se encuentra a 1,5 m o menos de la criatura                                          Fortaleza de muer
+y no tiene el estado de incapacitado.                                                            puntos de golpe d
+                                                                                                 Constitución (CD
+Respirar en el agua. El tiburón solo puede respirar bajo el agua.                                sea radiante o pr
+                                                                                                 se queda con 1 p
+ ACCIONES
+                                                                                                 ACCIONES
+| Mordisco. Tirada de ataque cuerpo a cuerpo: +4, alcance 1,5 m.
+ Acierto: 7 (2d4 + 2) de daño perforante.                                                        Golpe. Tirada de a
+                                                                                                 Acierto: 5 (1d8 +
+
+=>                                                                                               APÉN
+

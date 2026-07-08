@@ -1,0 +1,1788 @@
+{
+  "id": "la-carta-sellada",
+  "name": "La Carta Sellada",
+  "system": "Dragones y Mazmorras 5.5 (2024)",
+  "startingLevel": 5,
+  "partySize": "3-5",
+  "premise": "Un noble de la Costa de la Espada recibe una carta del Templo de Helm de Aguas Profundas. El clérigo que debía recogerla no aparece, y los héroes deben encontrarlo sin romper el sello.",
+  "playerCharacters": [
+    {
+      "id": "valian-foregon",
+      "name": "Valian Foregon",
+      "ancestry": "Humano",
+      "className": "Paladín",
+      "subclass": "Juramento de la Entrega",
+      "background": "Noble",
+      "affiliation": "Liga de los Lores",
+      "summary": "Valian Foregon es un paladín humano que ha consagrado su vida a servir a Helm, el Vigilante, y a proteger a los inocentes. Nacido en una familia noble menor de tradición militar, aprendió desde joven que el honor no se proclama: se demuestra con actos. Tras servir como escudero en un templo de Helm de Aguas Profundas, juró dedicar su fuerza a salvaguardar vidas y a mediar en los conflictos antes de que la sangre corra. Cuando Lord Edric Hawkwinter recibió una carta sellada del Templo de Helm y el clérigo encargado de recogerla desapareció, Valian fue enviado para proteger el mensaje y garantizar que llegue a su destino.",
+      "tags": ["PJ", "Paladín", "Helm", "Liga de los Lores"],
+      "tokenUrl": "assets/tokens/players/valian-foregon.png",
+      "gridTokenUrl": "assets/tokens-grid/players/valian-foregon.png"
+    },
+    {
+      "id": "erwan-valae",
+      "name": "Erwan Valae",
+      "ancestry": "Elfa",
+      "className": "Maga",
+      "subclass": "Adivina",
+      "background": "Erudita",
+      "affiliation": "Lunaplateada",
+      "summary": "Erwan Valae es una elfa investigadora de Lunaplateada, entregada al estudio de las artes arcanas y divinas. Su mente brillante y su intuición afinada la han convertido en una de las eruditas más prometedoras bajo la tutela del Alto Mago Taern Hornblade. Al percibir una sombra inusual en el entramado de la magia que rodea la Costa de la Espada, insistió en que la desaparición del clérigo y la carta sellada ocultaban un peligro mayor. Aunque sirve bajo la autoridad de la Alta Dama Alustriel, Taern aceptó enviarla como representante experta para auxiliar a Lord Edric Hawkwinter.",
+      "tags": ["PJ", "Maga", "Elfa", "Erudita"],
+      "tokenUrl": "assets/tokens/players/erwan-valae.png",
+      "gridTokenUrl": "assets/tokens-grid/players/erwan-valae.png"
+    },
+    {
+      "id": "megara-bell",
+      "name": "Megara Bell",
+      "ancestry": "Humana",
+      "className": "Pícara",
+      "subclass": "Asesina",
+      "background": "Criminal",
+      "affiliation": "Arpistas",
+      "summary": "Megara Bell es una mujer tan esbelta como letal. Creció entre callejones donde la corrupción se extiende como una plaga: jueces comprados, guardias vendidos y nobles que comercian con el sufrimiento ajeno. Dedicada a purgar la ciudad de la podredumbre que la ahoga, trabaja para los Arpistas haciendo el trabajo que nadie más quiere hacer: infiltraciones, interrogatorios, robos de información y ejecuciones silenciosas. Cuando supo que un clérigo de Helm había desaparecido y que una carta sellada había llegado a manos de un noble aliado, fue enviada para vigilar, investigar y asegurar que la misión llegue a buen término.",
+      "tags": ["PJ", "Pícara", "Humana", "Arpistas"],
+      "tokenUrl": "assets/tokens/players/megara-bell.png",
+      "gridTokenUrl": "assets/tokens-grid/players/megara-bell.png"
+    },
+    {
+      "id": "durgan-piedrafirme",
+      "name": "Durgan Piedrafirme",
+      "ancestry": "Enano",
+      "className": "Bárbaro",
+      "subclass": "Senda del Berserker",
+      "background": "Soldado",
+      "affiliation": "Liga de los Lores",
+      "summary": "Durgan Piedrafirme nació bajo la montaña, en un viejo asentamiento enano donde el honor se medía por la firmeza de la palabra dada. Más ancho que prudente y mucho más cómodo con un hacha que con una pluma, jamás terminó de encajar en la vida ordenada de los salones de su clan. Tras sobrevivir a la emboscada que destruyó una caravana minera protegida por su gente, juró que no permitiría que los cobardes que trafican con secretos y vidas inocentes quedaran impunes. La Liga de los Lores vio en él a un agente de campo ideal y lo envió para proteger caminos, caravanas y aliados amenazados.",
+      "tags": ["PJ", "Guerrero", "Enano", "Liga de los Lores"],
+      "tokenUrl": "assets/tokens/players/durgan-piedrafirme.png",
+      "gridTokenUrl": "assets/tokens-grid/players/durgan-piedrafirme.png"
+    }
+  ],
+  "npcs": [
+    {
+      "id": "lord-edric-hawkwinter",
+      "name": "Lord Edric Hawkwinter",
+      "role": "Miembro menor de la Liga de los Lores",
+      "faction": "Liga de los Lores",
+      "motivation": "Cumplir la promesa que hizo al Templo de Helm y proteger la carta.",
+      "age": "58 años",
+      "ancestry": "Humano",
+      "description": "Cabello gris perfectamente peinado, barba corta y ropa de viaje de gran calidad. Lleva un bastón de roble con empuñadura de plata aunque no lo necesita para caminar.",
+      "personality": ["Honorable y prudente.", "Muy educado; siempre mantiene la calma.", "Detesta la mentira."],
+      "knowledge": ["Alaric debía llegar hace tres días desde Aguas Profundas.", "El clérigo nunca incumplía una cita.", "El sello solo puede abrirlo el destinatario."],
+      "summary": "Noble sereno de la Liga de los Lores que ha jurado proteger la carta hasta la llegada de Alaric.",
+      "secret": "Hace años el Templo de Helm salvo la vida de su hijo; desde entonces mantiene una deuda de honor.",
+      "tags": ["Acto I", "Aliado", "Noble", "Gancho"],
+      "statBlock": {
+        "armorClass": 18, "hitPoints": 52, "speed": "9 m", "initiative": "+1", "proficiencyBonus": 3, "challenge": "3",
+        "abilities": { "strength": 16, "dexterity": 12, "constitution": 16, "intelligence": 13, "wisdom": 14, "charisma": 15 },
+        "saves": ["Fue +6", "Sab +5"],
+        "skills": ["Historia +4", "Perspicacia +5", "Persuasión +5", "Religión +4"],
+        "attacks": ["Ataque múltiple: 2 ataques", "Bastón de roble +6, 1d6+3 contundente", "Ballesta ligera +4, 1d8+1 perforante"],
+        "features": ["Veterano de campaña", "Autoridad de la Liga", "Tomar aliento: recupera 1d10+3 PG una vez"],
+        "spells": [],
+        "equipment": ["Protección discreta bajo la ropa", "Bastón de roble con empuñadura de plata", "Ballesta ligera", "Sello de la Liga"]
+      }
+    },
+    {
+      "id": "hermano-alaric",
+      "name": "Hermano Alaric",
+      "role": "Clérigo de Helm desaparecido",
+      "faction": "Templo de Helm",
+      "motivation": "Custodiar una verdad que no puede caer en manos equivocadas.",
+      "age": "39 años",
+      "ancestry": "Humano",
+      "description": "Cabello oscuro, barba corta y cota de malla impecable. Siempre lleva un símbolo de Helm al cuello.",
+      "personality": ["Valiente e inteligente.", "Muy sereno; nunca pierde la calma."],
+      "knowledge": ["Comprendió durante la emboscada que el verdadero objetivo era el.", "Escondió la brújula y la carta de auxilio en el doble fondo del carro."],
+      "summary": "Un clérigo fiable que nunca falta a su palabra. Su desaparición convierte el encargo en una búsqueda.",
+      "secret": "Sigue vivo al inicio de la aventura, retenido por quienes buscan el significado del sello.",
+      "tags": ["Acto II", "Clérigo", "Desaparecido", "Helm"],
+      "statBlock": {
+        "armorClass": 18, "hitPoints": 38, "speed": "9 m", "initiative": "+0", "proficiencyBonus": 3, "challenge": "3",
+        "abilities": { "strength": 14, "dexterity": 10, "constitution": 14, "intelligence": 12, "wisdom": 18, "charisma": 13 },
+        "saves": ["Sab +7", "Car +4"],
+        "skills": ["Medicina +7", "Perspicacia +7", "Religión +4"],
+        "attacks": ["Maza +5, 1d6+2 contundente", "Llama sagrada, salvación Des CD 15, 2d8 radiante"],
+        "features": ["Canalizar divinidad: 2 usos", "Preservar vida", "Disciplina del protector"],
+        "spells": ["CD 15, ataque +7", "Nivel 1: bendición, curar heridas, santuario", "Nivel 2: auxilio, restauración menor, zona de la verdad", "Nivel 3: disipar magia, revivir, señal de esperanza"],
+        "equipment": ["Cota de malla", "Escudo de Helm", "Maza", "Brújula de Helm"]
+      }
+    },
+    {
+      "id": "priora-mara-veldan",
+      "name": "Priora Mara Veldan",
+      "role": "Autoridad del Templo de Helm",
+      "faction": "Templo de Helm de Aguas Profundas",
+      "motivation": "Evitar que el Ojo Durmiente sea localizado por cultos rivales.",
+      "summary": "La persona que envió la carta a Lord Edric y marcó el límite de tres días.",
+      "secret": "Sabe más de la llave que lo escrito en la carta, pero no puede confiarlo a mensajeros comunes.",
+      "tags": ["Helm", "Autoridad", "Misterio"],
+      "statBlock": {
+        "armorClass": 19, "hitPoints": 72, "speed": "9 m", "initiative": "+1", "proficiencyBonus": 4, "challenge": "6",
+        "abilities": { "strength": 14, "dexterity": 12, "constitution": 16, "intelligence": 14, "wisdom": 20, "charisma": 16 },
+        "saves": ["Sab +9", "Car +7"],
+        "skills": ["Historia +6", "Medicina +9", "Perspicacia +9", "Religión +6"],
+        "attacks": ["Maza +6, 1d6+2 contundente", "Llama sagrada, salvación Des CD 17, 2d8 radiante"],
+        "features": ["Canalizar divinidad: 3 usos", "Intervención protectora", "Aura de vigilancia"],
+        "spells": ["CD 17, ataque +9", "Hasta nivel 5; prioriza guardianes espirituales, disipar magia, comunión y golpe flamígero"],
+        "equipment": ["Armadura de placas", "Escudo de Helm", "Maza ceremonial", "Llaves del archivo"]
+      }
+    },
+    {
+      "id": "doran-mieloscura",
+      "name": "Doran Mieloscura",
+      "role": "Tabernero de La Última Guardia",
+      "faction": "Independiente",
+      "motivation": "Mantener la paz y proteger la reputación de su posada.",
+      "age": "118 años",
+      "ancestry": "Enano",
+      "description": "Enorme barba rojiza. Siempre limpia una jarra mientras habla.",
+      "personality": ["Honesto y cascarrabias.", "Protector con sus clientes."],
+      "reactions": ["Si hay violencia grita: ¡Fuera de mi maldita taberna!", "Negará alojamiento futuro a quienes inicien una pelea."],
+      "summary": "Tabernero veterano que tolera a cuatro bandidos ebrios mientras paguen y no alteren la paz.",
+      "secret": "Ha oído que el prisionero fue entregado a un mago y que el carro permanece en la cantera.",
+      "tags": ["Acto II", "Aliada", "Posada"],
+      "statBlock": {
+        "armorClass": 13, "hitPoints": 22, "speed": "9 m", "initiative": "+2", "proficiencyBonus": 2, "challenge": "1/2",
+        "abilities": { "strength": 11, "dexterity": 14, "constitution": 14, "intelligence": 12, "wisdom": 16, "charisma": 15 },
+        "saves": ["Sab +5"],
+        "skills": ["Perspicacia +5", "Percepción +5", "Persuasión +4"],
+        "attacks": ["Garrote +2, 1d4 contundente", "Ballesta ligera +4, 1d8+2 perforante"],
+        "features": ["Ojo para los problemas: ventaja para detectar mentiras dentro de su posada", "Red de rumores"],
+        "spells": [],
+        "equipment": ["Llaves de la posada", "Ballesta ligera", "Garrote bajo la barra"]
+      }
+    },
+    {
+      "id": "garrick-mano-de-hierro",
+      "name": "Garrick «Mano de Hierro»",
+      "role": "Jefe de los bandidos de la cantera",
+      "faction": "Banda de Mano de Hierro",
+      "motivation": "Hacerse rico trabajando para quien pague mejor.",
+      "age": "46 años",
+      "ancestry": "Humano",
+      "description": "Muy corpulento, nariz rota, cuero reforzado y un enorme martillo de guerra.",
+      "personality": ["Pragmático, ambicioso y cruel.", "No mata por placer; todo es trabajo y dinero."],
+      "knowledge": ["El cliente era un mago encapuchado que pagó por adelantado.", "Solo quería capturar vivo a Alaric.", "Nunca vio el rostro del cliente ni sabe qué eran sus guerreros."],
+      "reactions": ["Habla tras una Intimidación CD 14.", "Confiesa que uno de los monstruos recibió un hachazo en el cuello y ni siquiera se detuvo."],
+      "summary": "Jefe pragmático que aceptó capturar vivo a Alaric para un cliente encapuchado.",
+      "secret": "Vio a uno de los guerreros del cliente recibir un hachazo en el cuello y seguir caminando sin reaccionar.",
+      "tags": ["Acto II", "Bandido", "Interrogatorio"],
+      "statBlock": {
+        "armorClass": 15, "hitPoints": 65, "speed": "9 m", "initiative": "+3", "proficiencyBonus": 2, "challenge": "2",
+        "abilities": { "strength": 15, "dexterity": 16, "constitution": 14, "intelligence": 12, "wisdom": 11, "charisma": 14 },
+        "saves": ["Fue +4", "Des +5"],
+        "skills": ["Atletismo +4", "Engaño +4", "Intimidación +4"],
+        "attacks": ["Ataque múltiple: 2 ataques", "Martillo de guerra +5, 1d8+3 contundente", "Ballesta ligera +5, 1d8+3 perforante"],
+        "features": ["Parada: reacción para ganar +2 CA contra un ataque cuerpo a cuerpo", "Mando brutal: un aliado mueve 4,5 m como reacción"],
+        "spells": [],
+        "equipment": ["Cuero tachonado reforzado", "Martillo de guerra", "Ballesta ligera", "Llave del cofre del botín"]
+      }
+    },
+    {
+      "id": "hombre-encapuchado",
+      "name": "El Hombre Encapuchado",
+      "role": "Nigromante encapuchado",
+      "faction": "Desconocida",
+      "motivation": "Llevarse vivo a Alaric para hallar el secreto del Ojo Durmiente.",
+      "ancestry": "Desconocida",
+      "description": "Túnica negra, capucha profunda y guantes de cuero. Habla con voz tranquila y nunca levanta el tono.",
+      "personality": ["Nunca amenaza ni negocia dos veces.", "Habla muy poco.", "Trata a los muertos vivientes como soldados disciplinados."],
+      "knowledge": ["Sabía exactamente cuándo llegaría el clérigo.", "No comió ni durmió ante los bandidos y pagó en oro auténtico."],
+      "summary": "Un lanzador de conjuros que contrató bandidos como fuerza desechable y viaja con guerreros de armaduras antiguas.",
+      "secret": "Sus escoltas son muertos vivientes y ya ha abandonado la cantera con el clérigo.",
+      "tags": ["Acto II", "Nigromante", "Misterio"],
+      "statBlock": {
+        "armorClass": 15, "hitPoints": 88, "speed": "9 m", "initiative": "+2", "proficiencyBonus": 4, "challenge": "6",
+        "abilities": { "strength": 9, "dexterity": 14, "constitution": 16, "intelligence": 19, "wisdom": 14, "charisma": 13 },
+        "saves": ["Int +8", "Sab +6"],
+        "skills": ["Conocimiento arcano +8", "Historia +8", "Investigación +8", "Religión +8"],
+        "attacks": ["Rayo necrótico +8, 3d8 necrótico, alcance 18 m", "Daga +6, 1d4+2 perforante"],
+        "features": ["Cosecha macabra: gana PG temporales cuando una criatura cae", "Comandar muerto viviente: acción adicional", "Resistencia a daño necrótico"],
+        "spells": ["CD 16, ataque +8", "Trucos: toque helado, mano de mago", "Nivel 1: escudo, rayo nauseabundo", "Nivel 2: ceguera/sordera, pasó brumoso", "Nivel 3: contrahechizo, animar a los muertos, toque vampírico", "Nivel 4: marchitar"],
+        "equipment": ["Grimorio negro", "Foco de hueso", "Daga ritual", "Llave sin identificar"]
+      }
+    },
+    {
+      "id": "hermana-elen",
+      "name": "Hermana Elen",
+      "role": "Administradora de la mansión Hawkwinter",
+      "faction": "Casa Hawkwinter",
+      "motivation": "Mantener la casa en orden y preparar al grupo para el viaje.",
+      "age": "45 años",
+      "ancestry": "Humana",
+      "description": "Viste siempre de gris y lleva un manojo de llaves perfectamente ordenado.",
+      "personality": ["Organizada y maternal.", "Muy observadora."],
+      "knowledge": ["Conoce todo lo que ocurre dentro de la mansión.", "Puede responder preguntas sobre Edric y reunir equipo común."],
+      "summary": "La administradora que convierte las peticiones de los aventureros en provisiones reales.",
+      "tags": ["Acto I", "Aliada", "Servicio"],
+      "statBlock": {
+        "armorClass": 11, "hitPoints": 18, "speed": "9 m", "initiative": "+1", "proficiencyBonus": 2, "challenge": "1/4",
+        "abilities": { "strength": 10, "dexterity": 12, "constitution": 12, "intelligence": 15, "wisdom": 16, "charisma": 14 },
+        "saves": ["Sab +5"], "skills": ["Investigación +4", "Percepción +5", "Perspicacia +5", "Persuasión +4"],
+        "attacks": ["Daga +3, 1d4+1 perforante"], "features": ["Administradora: localiza equipo común en 10 minutos", "Memoria de la casa"], "spells": [],
+        "equipment": ["Manojo de llaves", "Libro de cuentas", "Daga"]
+      }
+    },
+    {
+      "id": "sir-cedric-stone",
+      "name": "Sir Cedric Stone",
+      "role": "Capitán de la guardia Hawkwinter",
+      "faction": "Casa Hawkwinter",
+      "motivation": "Proteger a Edric y descubrir cómo fue interceptado Alaric.",
+      "age": "42 años",
+      "ancestry": "Humano",
+      "description": "Veterano de guerra con tabardo azul oscuro y halcón plateado.",
+      "personality": ["Desconfiado y profesional.", "Poco hablador."],
+      "knowledge": ["Explica la ruta prevista de Alaric.", "Puede prestar mapas y describir los puntos vulnerables del camino."],
+      "summary": "Capitán sobrio que evalúa al grupo antes de confiarle mapas de la finca.",
+      "tags": ["Acto I", "Guardia", "Veterano"],
+      "statBlock": {
+        "armorClass": 18, "hitPoints": 58, "speed": "9 m", "initiative": "+1", "proficiencyBonus": 3, "challenge": "3",
+        "abilities": { "strength": 16, "dexterity": 12, "constitution": 16, "intelligence": 12, "wisdom": 14, "charisma": 13 },
+        "saves": ["Fue +6", "Con +6"], "skills": ["Atletismo +6", "Intimidación +4", "Percepción +5", "Supervivencia +5"],
+        "attacks": ["Ataque múltiple: 2 ataques", "Espada larga +6, 1d8+3 cortante", "Ballesta pesada +4, 1d10+1 perforante"],
+        "features": ["Mando: un guardia aliado puede moverse 4,5 m como reacción", "Parada: +2 CA contra un ataque cuerpo a cuerpo"], "spells": [],
+        "equipment": ["Cota de malla", "Escudo", "Espada larga", "Mapa de patrullas"]
+      }
+    },
+    {
+      "id": "owen-harrow",
+      "name": "Owen Harrow",
+      "role": "Guardia de la puerta",
+      "faction": "Casa Hawkwinter",
+      "motivation": "Recibir a los viajeros sin comprometer la seguridad de la mansión.",
+      "age": "31 años", "ancestry": "Humano",
+      "description": "Tabardo azul oscuro con el halcón plateado; postura relajada y mirada atenta.",
+      "personality": ["Simpatico, profesional y muy observador."],
+      "knowledge": ["Es el primer rostro que ven los personajes.", "Recuerda entradas y salidas de los últimos tres días."],
+      "summary": "Veterano amable que disfruta conversando con viajeros mientras toma nota de cada detalle.",
+      "tags": ["Acto I", "Guardia", "Puerta"],
+      "statBlock": {
+        "armorClass": 16, "hitPoints": 18, "speed": "9 m", "initiative": "+1", "proficiencyBonus": 2, "challenge": "1/2",
+        "abilities": { "strength": 14, "dexterity": 12, "constitution": 14, "intelligence": 10, "wisdom": 15, "charisma": 13 },
+        "saves": ["Con +4"], "skills": ["Percepción +4", "Perspicacia +4"],
+        "attacks": ["Lanza +4, 1d6+2 perforante", "Ballesta ligera +3, 1d8+1 perforante"], "features": ["Vigilante: Percepción pasiva 14"], "spells": [],
+        "equipment": ["Cota de malla", "Escudo", "Lanza", "Silbato"]
+      }
+    },
+    {
+      "id": "marcus-flint",
+      "name": "Marcus Flint",
+      "role": "Guardia de la puerta",
+      "faction": "Casa Hawkwinter",
+      "motivation": "Cumplir el protocolo sin cometer errores delante de Cedric.",
+      "age": "26 años", "ancestry": "Humano",
+      "description": "Joven guardia muy erguido con el uniforme impecable.",
+      "personality": ["Muy serio.", "Habla solo lo necesario y teme equivocarse."],
+      "summary": "Guardia disciplinado que revisa credenciales dos veces antes de dejar pasar a nadie.",
+      "tags": ["Acto I", "Guardia", "Puerta"],
+      "statBlock": {
+        "armorClass": 16, "hitPoints": 14, "speed": "9 m", "initiative": "+1", "proficiencyBonus": 2, "challenge": "1/4",
+        "abilities": { "strength": 14, "dexterity": 12, "constitution": 13, "intelligence": 10, "wisdom": 12, "charisma": 9 },
+        "saves": [], "skills": ["Percepción +3"], "attacks": ["Lanza +4, 1d6+2 perforante", "Ballesta ligera +3, 1d8+1 perforante"],
+        "features": ["Protocolo estricto: ventaja para detectar credenciales falsas"], "spells": [], "equipment": ["Cota de malla", "Escudo", "Lanza"]
+      }
+    },
+    {
+      "id": "hugo-tanner",
+      "name": "Hugo Tanner",
+      "role": "Escolta personal de Lord Edric",
+      "faction": "Casa Hawkwinter",
+      "motivation": "Mantener a Edric fuera de peligro.",
+      "age": "43 años", "ancestry": "Humano",
+      "description": "Antiguo mercenario que permanece siempre un pasó detrás del noble.",
+      "personality": ["Silencioso y alerta.", "Solo interviene si percibe una amenaza."],
+      "summary": "Una presencia inmóvil tras Edric que reacciona antes de que el noble tenga que hacerlo.",
+      "tags": ["Acto I", "Escolta", "Veterano"],
+      "statBlock": {
+        "armorClass": 17, "hitPoints": 45, "speed": "9 m", "initiative": "+2", "proficiencyBonus": 3, "challenge": "2",
+        "abilities": { "strength": 16, "dexterity": 14, "constitution": 15, "intelligence": 10, "wisdom": 14, "charisma": 9 },
+        "saves": ["Fue +6", "Con +5"], "skills": ["Atletismo +6", "Percepción +5"],
+        "attacks": ["Ataque múltiple: 2 ataques", "Espada larga +6, 1d8+3 cortante", "Ballesta pesada +5, 1d10+2 perforante"],
+        "features": ["Interponerse: reacción para dar desventaja a un ataque contra Edric"], "spells": [], "equipment": ["Armadura de bandas", "Espada larga", "Ballesta pesada"]
+      }
+    },
+    {
+      "id": "edwin-cole",
+      "name": "Edwin Cole",
+      "role": "Escolta de la casa",
+      "faction": "Casa Hawkwinter",
+      "motivation": "Servir a la casa y honrar a Helm.",
+      "age": "35 años", "ancestry": "Humano",
+      "description": "Guardia de gesto recogido con un pequeño ojo de Helm cosido bajo el tabardo.",
+      "personality": ["Muy creyente y respetuoso con el clero de Helm."],
+      "knowledge": ["Fue el primero en sospechar que algo malo había ocurrido a Alaric."],
+      "summary": "Escolta devoto cuya inquietud ayudo a convencer a Edric de pedir ayuda.",
+      "tags": ["Acto I", "Escolta", "Helm"],
+      "statBlock": {
+        "armorClass": 16, "hitPoints": 24, "speed": "9 m", "initiative": "+1", "proficiencyBonus": 2, "challenge": "1",
+        "abilities": { "strength": 14, "dexterity": 12, "constitution": 14, "intelligence": 10, "wisdom": 15, "charisma": 12 },
+        "saves": ["Sab +4"], "skills": ["Perspicacia +4", "Religión +2"],
+        "attacks": ["Espada larga +4, 1d8+2 cortante", "Ballesta ligera +3, 1d8+1 perforante"], "features": ["Fe vigilante: ventaja contra el estado asustado"],
+        "spells": [], "equipment": ["Cota de malla", "Escudo", "Espada larga", "Símbolo de Helm"]
+      }
+    },
+    {
+      "id": "roland-ashford",
+      "name": "Roland Ashford",
+      "role": "Patrulla de la finca",
+      "faction": "Casa Hawkwinter",
+      "motivation": "Mantener despejado el perímetro y los caminos cercanos.",
+      "age": "28 años", "ancestry": "Humano",
+      "description": "Capa de viaje sobre el tabardo Hawkwinter y botas siempre manchadas de barro.",
+      "personality": ["Activo, practico y conocedor del terreno."],
+      "knowledge": ["Conoce todos los caminos cercanos.", "Indica un atajo si los personajes preguntan."],
+      "summary": "Explorador de la finca capaz de ahorrar horas al grupo con una indicación oportuna.",
+      "tags": ["Acto I", "Guardia", "Explorador"],
+      "statBlock": {
+        "armorClass": 14, "hitPoints": 20, "speed": "9 m", "initiative": "+3", "proficiencyBonus": 2, "challenge": "1/2",
+        "abilities": { "strength": 12, "dexterity": 16, "constitution": 13, "intelligence": 11, "wisdom": 15, "charisma": 10 },
+        "saves": [], "skills": ["Percepción +4", "Sigilo +5", "Supervivencia +6"],
+        "attacks": ["Arco largo +5, 1d8+3 perforante", "Espada corta +5, 1d6+3 perforante"], "features": ["Guía local: el grupo no se pierde en la finca Hawkwinter"],
+        "spells": [], "equipment": ["Cuero tachonado", "Arco largo", "Espada corta", "Mapa local"]
+      }
+    },
+    {
+      "id": "thomas-weaver",
+      "name": "Thomas Weaver",
+      "role": "Mozo de armas",
+      "faction": "Casa Hawkwinter",
+      "motivation": "Demostrar que puede ser util a auténticos aventureros.",
+      "age": "19 años", "ancestry": "Humano",
+      "description": "El más joven de la guardia, con el tabardo algo grande y manos manchadas de aceite.",
+      "personality": ["Entusiasta, curioso y admirador de los aventureros."],
+      "knowledge": ["Conoce el contenido y estado del arsenal de la mansión."],
+      "summary": "Joven encargado del arsenal que hace preguntas mientras entrega armas y pertrechos.",
+      "tags": ["Acto I", "Guardia", "Arsenal"],
+      "statBlock": {
+        "armorClass": 14, "hitPoints": 9, "speed": "9 m", "initiative": "+1", "proficiencyBonus": 2, "challenge": "1/8",
+        "abilities": { "strength": 12, "dexterity": 12, "constitution": 12, "intelligence": 11, "wisdom": 10, "charisma": 13 },
+        "saves": [], "skills": ["Atletismo +3"], "attacks": ["Lanza +3, 1d6+1 perforante"],
+        "features": ["Armero: repara equipo no mágico dañado durante un descanso largo"], "spells": [], "equipment": ["Cota de escamas", "Lanza", "Aceite de armas"]
+      }
+    },
+    {
+      "id": "madre-marta",
+      "name": "Madre Marta",
+      "role": "Cocinera de la mansión",
+      "faction": "Casa Hawkwinter",
+      "motivation": "Que nadie abandone la casa con el estomago vacío.",
+      "age": "57 años", "ancestry": "Humana",
+      "description": "Delantal ancho, brazos fuertes y comida preparada a cualquier hora.",
+      "personality": ["Protectora, directa y hospitalaria."],
+      "summary": "La cocinera a la que toda la casa llama Madre Marta.",
+      "tags": ["Acto I", "Servicio", "Aliada"],
+      "statBlock": {
+        "armorClass": 10, "hitPoints": 12, "speed": "9 m", "initiative": "+0", "proficiencyBonus": 2, "challenge": "0",
+        "abilities": { "strength": 13, "dexterity": 10, "constitution": 14, "intelligence": 11, "wisdom": 14, "charisma": 13 },
+        "saves": [], "skills": ["Perspicacia +4"], "attacks": ["Cuchillo de cocina +3, 1d4+1 perforante"],
+        "features": ["Comida caliente: durante un descanso corto, hasta 6 criaturas ganan 1 PG temporal"], "spells": [], "equipment": ["Cuchillo de cocina", "Raciones para el viaje"]
+      }
+    },
+    {
+      "id": "peter-mozocuadras",
+      "name": "Peter",
+      "role": "Mozo de cuadras",
+      "faction": "Casa Hawkwinter",
+      "motivation": "Cuidar los caballos y emparejar cada montura con el jinete adecuado.",
+      "age": "17 años", "ancestry": "Humano",
+      "description": "Joven de pelo revuelto que siempre lleva una manzana para los caballos.",
+      "personality": ["Timido con las personas y confiado con los animales."],
+      "knowledge": ["Recomienda la mejor montura según la experiencia y tamaño del jinete."],
+      "summary": "Amante de los caballos que prepara las monturas de la expedición.",
+      "tags": ["Acto I", "Servicio", "Establos"],
+      "statBlock": {
+        "armorClass": 11, "hitPoints": 7, "speed": "9 m", "initiative": "+1", "proficiencyBonus": 2, "challenge": "0",
+        "abilities": { "strength": 11, "dexterity": 12, "constitution": 11, "intelligence": 10, "wisdom": 15, "charisma": 10 },
+        "saves": [], "skills": ["Trato con Animales +6"], "attacks": ["Horca +2, 1d6 perforante"],
+        "features": ["Jinete nato: ventaja para calmar o ensillar caballos"], "spells": [], "equipment": ["Equipo de establo", "Manzanas", "Silla de montar"]
+      }
+    },
+    {
+      "id": "agatha-ama-llaves",
+      "name": "Agatha",
+      "role": "Ama de llaves",
+      "faction": "Casa Hawkwinter",
+      "motivation": "Preservar la dignidad y los secretos de la casa.",
+      "age": "61 años", "ancestry": "Humana",
+      "description": "Mujer de porte impecable y modales medidos.",
+      "personality": ["Extremadamente educada y reservada."],
+      "knowledge": ["Conoce todos los secretos domesticos de la mansión."],
+      "summary": "Ama de llaves que ve más de lo que comenta y recuerda cada visita.",
+      "tags": ["Acto I", "Servicio", "Rumores"],
+      "statBlock": {
+        "armorClass": 10, "hitPoints": 9, "speed": "9 m", "initiative": "+0", "proficiencyBonus": 2, "challenge": "0",
+        "abilities": { "strength": 8, "dexterity": 10, "constitution": 11, "intelligence": 14, "wisdom": 16, "charisma": 15 },
+        "saves": ["Sab +5"], "skills": ["Historia +4", "Perspicacia +5", "Percepción +5"], "attacks": ["Daga +2, 1d4 perforante"],
+        "features": ["Discreción absoluta: ventaja para resistir Intimidación"], "spells": [], "equipment": ["Llaves de servicio", "Agenda de visitas"]
+      }
+    },
+    {
+      "id": "elsie-criada",
+      "name": "Elsie",
+      "role": "Criada de la mansión",
+      "faction": "Casa Hawkwinter",
+      "motivation": "Satisfacer su curiosidad sin meterse en problemas.",
+      "age": "22 años", "ancestry": "Humana",
+      "description": "Joven criada que siempre parece estar ordenando algo cerca de una conversación.",
+      "personality": ["Muy curiosa, vivaz y habladora cuando gana confianza."],
+      "knowledge": ["Conoce rumores y pequeñas anecdotas sobre Edric y sus visitantes."],
+      "summary": "Fuente informal de rumores cotidianos dentro de la mansión.",
+      "tags": ["Acto I", "Servicio", "Rumores"],
+      "statBlock": {
+        "armorClass": 12, "hitPoints": 7, "speed": "9 m", "initiative": "+2", "proficiencyBonus": 2, "challenge": "0",
+        "abilities": { "strength": 9, "dexterity": 14, "constitution": 10, "intelligence": 12, "wisdom": 13, "charisma": 14 },
+        "saves": [], "skills": ["Percepción +3", "Sigilo +4", "Persuasión +4"], "attacks": ["Objeto improvisado +4, 1d4+2 contundente"],
+        "features": ["Oídos atentos: ventaja para escuchar conversaciones cercanas"], "spells": [], "equipment": ["Llaves menores", "Paño de limpieza"]
+      }
+    },
+    {
+      "id": "bram-jardinero",
+      "name": "Bram",
+      "role": "Jardinero de la mansión",
+      "faction": "Casa Hawkwinter",
+      "motivation": "Cuidar la finca que le dio un hogar después de la guerra.",
+      "age": "50 años", "ancestry": "Humano",
+      "description": "Exsoldado con una pierna perdida; conserva un viejo cuchillo militar.",
+      "personality": ["Callado, paciente y más atento de lo que aparenta."],
+      "knowledge": ["Reconoce señales de pasó reciente en jardines y lindes."],
+      "summary": "Veterano retirado que ahora protege rosales con la misma atención que una posición defensiva.",
+      "tags": ["Acto I", "Servicio", "Veterano"],
+      "statBlock": {
+        "armorClass": 11, "hitPoints": 20, "speed": "6 m", "initiative": "+1", "proficiencyBonus": 2, "challenge": "1/4",
+        "abilities": { "strength": 13, "dexterity": 12, "constitution": 14, "intelligence": 10, "wisdom": 15, "charisma": 9 },
+        "saves": ["Con +4"], "skills": ["Naturaleza +2", "Percepción +4", "Supervivencia +4"],
+        "attacks": ["Cuchillo militar +3, 1d4+1 perforante"], "features": ["Instinto de veterano: no puede ser sorprendido mientras este consciente"],
+        "spells": [], "equipment": ["Cuchillo militar", "Herramientas de jardinero", "Protesis de madera"]
+      }
+    },
+    {
+      "id": "rusk-bandido",
+      "name": "Rusk",
+      "role": "Bandido de la posada",
+      "faction": "Banda de Mano de Hierro",
+      "motivation": "Celebrar el saqueo y presumir de su participación.",
+      "ancestry": "Humano",
+      "description": "El más borracho de la mesa; gesticula con una jarra en la mano.",
+      "personality": ["Fanfarron y hablador."],
+      "knowledge": ["Participo directamente en el saqueo y sabe llegar a la cantera."],
+      "reactions": ["Con bebida o Persuasión CD 12 cuenta más de lo que debería."],
+      "summary": "El eslabón más facil de la investigación social en la posada.",
+      "tags": ["Acto II", "Bandido", "Posada"],
+      "statBlock": {
+        "armorClass": 12, "hitPoints": 11, "speed": "9 m", "initiative": "+1", "proficiencyBonus": 2, "challenge": "1/8",
+        "abilities": { "strength": 12, "dexterity": 13, "constitution": 12, "intelligence": 9, "wisdom": 9, "charisma": 13 },
+        "saves": [], "skills": ["Engaño +3"], "attacks": ["Cimitarra +3, 1d6+1 cortante", "Daga +3, 1d4+1 perforante"],
+        "features": ["Ebrio: desventaja en Percepción y salvaciones de Destreza"], "spells": [], "equipment": ["Cuero", "Cimitarra", "Jarra", "8 po"]
+      }
+    },
+    {
+      "id": "niles-bandido",
+      "name": "Niles",
+      "role": "Bandido de la posada",
+      "faction": "Banda de Mano de Hierro",
+      "motivation": "Beber lo suficiente para olvidar al hombre encapuchado.",
+      "ancestry": "Humano",
+      "description": "Delgado, ojeroso y pendiente de cualquier sombra que cruza la ventana.",
+      "personality": ["Muy supersticioso y autenticamente asustado."],
+      "knowledge": ["Vio a los guerreros silenciosos y teme que sean muertos que caminan."],
+      "reactions": ["Religión o Intimidación CD 12 rompe su resistencia."],
+      "summary": "Un saqueador cuyo miedo revela que el cliente no era un mago corriente.",
+      "tags": ["Acto II", "Bandido", "Miedo"],
+      "statBlock": {
+        "armorClass": 12, "hitPoints": 10, "speed": "9 m", "initiative": "+2", "proficiencyBonus": 2, "challenge": "1/8",
+        "abilities": { "strength": 10, "dexterity": 14, "constitution": 11, "intelligence": 10, "wisdom": 13, "charisma": 9 },
+        "saves": [], "skills": ["Percepción +3", "Religión +2"], "attacks": ["Espada corta +4, 1d6+2 perforante", "Ballesta ligera +4, 1d8+2 perforante"],
+        "features": ["Nervios rotos: desventaja contra miedo sobrenatural"], "spells": [], "equipment": ["Cuero", "Espada corta", "Amuleto supersticioso"]
+      }
+    },
+    {
+      "id": "bren-bandido",
+      "name": "Bren",
+      "role": "Bandido de la posada",
+      "faction": "Banda de Mano de Hierro",
+      "motivation": "Provocar una pelea que le permita demostrar su fuerza.",
+      "ancestry": "Humano",
+      "description": "Ancho de hombros, nudillos llenos de cicatrices y sonrisa hostil.",
+      "personality": ["Violento e impulsivo."],
+      "reactions": ["Interpreta una provocación o fracaso social grave como invitación a pelear."],
+      "summary": "El bandido que convierte una conversación tensa en una reyerta.",
+      "tags": ["Acto II", "Bandido", "Posada"],
+      "statBlock": {
+        "armorClass": 13, "hitPoints": 22, "speed": "9 m", "initiative": "+1", "proficiencyBonus": 2, "challenge": "1/2",
+        "abilities": { "strength": 16, "dexterity": 12, "constitution": 14, "intelligence": 8, "wisdom": 10, "charisma": 10 },
+        "saves": ["Fue +5"], "skills": ["Atletismo +5", "Intimidación +2"], "attacks": ["Garrote grande +5, 1d8+3 contundente", "Puñetazo +5, 1d4+3 contundente"],
+        "features": ["Pendenciero: ventaja para empujar o agarrar"], "spells": [], "equipment": ["Cuero", "Garrote grande", "Dados cargados"]
+      }
+    },
+    {
+      "id": "oren-bandido",
+      "name": "Oren",
+      "role": "Bandido joven de la posada",
+      "faction": "Banda de Mano de Hierro",
+      "motivation": "Sobrevivir a su primer golpe importante.",
+      "ancestry": "Humano",
+      "description": "Demasiado joven para ocultar que la celebración le pone nervioso.",
+      "personality": ["Inseguro, impresionable y capaz de arrepentirse."],
+      "knowledge": ["Sabe dónde está la cantera y que Alaric ya no se encuentra allí."],
+      "reactions": ["Se rinde cuando cae un aliado o si recibe una oferta de salida."],
+      "summary": "Un recluta que puede convertirse en informante si alguien le ofrece una segunda oportunidad.",
+      "tags": ["Acto II", "Bandido", "Redimible"],
+      "statBlock": {
+        "armorClass": 12, "hitPoints": 8, "speed": "9 m", "initiative": "+2", "proficiencyBonus": 2, "challenge": "1/8",
+        "abilities": { "strength": 10, "dexterity": 14, "constitution": 10, "intelligence": 11, "wisdom": 12, "charisma": 12 },
+        "saves": [], "skills": ["Sigilo +4"], "attacks": ["Daga +4, 1d4+2 perforante", "Ballesta ligera +4, 1d8+2 perforante"],
+        "features": ["Duda: no ataca a una criatura inconsciente"], "spells": [], "equipment": ["Cuero", "Daga", "Ballesta ligera", "Parte del botín"]
+      }
+    },
+    {
+      "id": "kelm-segundo",
+      "name": "Kelm",
+      "role": "Segundo al mando de la banda",
+      "faction": "Banda de Mano de Hierro",
+      "motivation": "Mantener la organización y sobrevivir a los errores de Garrick.",
+      "ancestry": "Humano",
+      "description": "Rostro afilado, ropa discreta y mirada que calcula siempre la salida más cercana.",
+      "personality": ["Inteligente, metodico y poco leal."],
+      "knowledge": ["Organiza patrullas y conoce todas las defensas de la cantera."],
+      "reactions": ["Si Garrick muere, huye con los registros de la banda."],
+      "summary": "El cerebro logistico del campamento y posible heredero de una banda derrotada.",
+      "tags": ["Acto II", "Bandido", "Oficial"],
+      "statBlock": {
+        "armorClass": 15, "hitPoints": 38, "speed": "9 m", "initiative": "+4", "proficiencyBonus": 3, "challenge": "1",
+        "abilities": { "strength": 10, "dexterity": 18, "constitution": 12, "intelligence": 16, "wisdom": 14, "charisma": 13 },
+        "saves": ["Des +7", "Int +6"], "skills": ["Engaño +4", "Investigación +6", "Percepción +5", "Sigilo +7"],
+        "attacks": ["Espada corta +7, 1d6+4 perforante", "Ballesta de mano +7, 1d6+4 perforante", "Ataque furtivo +2d6"],
+        "features": ["Acción astuta", "Plan de retirada: destrabarse como acción adicional"], "spells": [], "equipment": ["Cuero tachonado", "Espada corta", "Ballesta de mano", "Libro de patrullas"]
+      }
+    },
+    {
+      "id": "mira-arquera",
+      "name": "Mira",
+      "role": "Arquera de la banda",
+      "faction": "Banda de Mano de Hierro",
+      "motivation": "Cobrar su parte y marcharse viva.",
+      "ancestry": "Humana",
+      "description": "Arquera de movimientos precisos que nunca deja el carcaj fuera de alcance.",
+      "personality": ["Fría, independiente y sin lealtad por la banda."],
+      "reactions": ["Si el combate se tuerce, escapa desde la posición elevada."],
+      "summary": "Excelente tiradora que no sacrificara la vida por Garrick.",
+      "tags": ["Acto II", "Bandido", "Arquera"],
+      "statBlock": {
+        "armorClass": 15, "hitPoints": 32, "speed": "9 m", "initiative": "+4", "proficiencyBonus": 3, "challenge": "1",
+        "abilities": { "strength": 10, "dexterity": 18, "constitution": 12, "intelligence": 11, "wisdom": 15, "charisma": 10 },
+        "saves": ["Des +7"], "skills": ["Percepción +5", "Sigilo +7"], "attacks": ["Ataque múltiple: 2 con arco", "Arco largo +7, 1d8+4 perforante", "Espada corta +7, 1d6+4 perforante"],
+        "features": ["Tiradora: ignora media cobertura", "Retirada ágil"], "spells": [], "equipment": ["Cuero tachonado", "Arco largo", "40 flechas", "Espada corta"]
+      }
+    },
+    {
+      "id": "tob-vigia",
+      "name": "Tob",
+      "role": "Vigía del campamento",
+      "faction": "Banda de Mano de Hierro",
+      "motivation": "Cumplir su turno sin que nadie note lo mal que ve.",
+      "ancestry": "Humano",
+      "description": "Entrecierra los ojos para reconocer cualquier cosa situada a más de unos pasos.",
+      "personality": ["Distraído y muy miope."],
+      "reactions": ["Puede ser sorprendido con facilidad; Percepción pasiva 8 a larga distancia."],
+      "summary": "Un puesto de guardia vulnerable para grupos que estudien la cantera antes de entrar.",
+      "tags": ["Acto II", "Bandido", "Vigía"],
+      "statBlock": {
+        "armorClass": 12, "hitPoints": 11, "speed": "9 m", "initiative": "+1", "proficiencyBonus": 2, "challenge": "1/8",
+        "abilities": { "strength": 11, "dexterity": 13, "constitution": 12, "intelligence": 9, "wisdom": 8, "charisma": 10 },
+        "saves": [], "skills": ["Percepción +1"], "attacks": ["Lanza +3, 1d6+1 perforante", "Ballesta ligera +3, 1d8+1 perforante"],
+        "features": ["Miopía: desventaja en ataques y Percepción a más de 9 m"], "spells": [], "equipment": ["Cuero", "Lanza", "Ballesta ligera", "Campana de alarma"]
+      }
+    },
+    {
+      "id": "harl-veterano",
+      "name": "Harl",
+      "role": "Bandido veterano",
+      "faction": "Banda de Mano de Hierro",
+      "motivation": "Ganar dinero sin volver a enfrentarse a los guerreros del encapuchado.",
+      "ancestry": "Humano",
+      "description": "Exsoldado de barba entrecana que mantiene su equipo mejor que el resto.",
+      "personality": ["Cauto, curtido y cansado de la banda."],
+      "knowledge": ["Es el único bandido convencido de que los guerreros estaban muertos."],
+      "reactions": ["Acepta rendirse si le garantizan no perseguir al encapuchado solo."],
+      "summary": "Testigo militar capaz de explicar por que los guerreros no eran hombres vivos.",
+      "tags": ["Acto II", "Bandido", "Veterano", "Pista"],
+      "statBlock": {
+        "armorClass": 16, "hitPoints": 42, "speed": "9 m", "initiative": "+1", "proficiencyBonus": 3, "challenge": "2",
+        "abilities": { "strength": 16, "dexterity": 12, "constitution": 15, "intelligence": 11, "wisdom": 14, "charisma": 10 },
+        "saves": ["Fue +6", "Con +5"], "skills": ["Atletismo +6", "Percepción +5"],
+        "attacks": ["Ataque múltiple: 2 ataques", "Espada larga +6, 1d8+3 cortante", "Ballesta pesada +4, 1d10+1 perforante"],
+        "features": ["Tomar aliento: recupera 1d10+2 PG", "Disciplina de soldado"], "spells": [], "equipment": ["Cota de malla", "Espada larga", "Ballesta pesada", "Vieja insignia militar"]
+      }
+    },
+    {
+      "id": "guerrero-extraño",
+      "name": "Guerrero Extraño",
+      "role": "Soldado muerto viviente del Hombre Encapuchado",
+      "faction": "El Hombre Encapuchado",
+      "motivation": "Obedecer gestos y órdenes sin vacilar.",
+      "ancestry": "Muerto viviente",
+      "description": "Armadura antigua cubierta por una capa oscura; no respira, no habla y marcha en perfecta sincronización.",
+      "personality": ["Silencioso, disciplinado e implacable."],
+      "knowledge": ["Su naturaleza no se confirma durante el Acto II; solo se muestran indicios."],
+      "summary": "El perfil oculto de los soldados que escoltan al antagonista, preparado para un encuentro posterior.",
+      "tags": ["Acto II", "Muerto viviente", "Misterio"],
+      "statBlock": {
+        "armorClass": 18, "hitPoints": 45, "speed": "9 m", "initiative": "+0", "proficiencyBonus": 3, "challenge": "2",
+        "abilities": { "strength": 16, "dexterity": 10, "constitution": 16, "intelligence": 6, "wisdom": 10, "charisma": 5 },
+        "saves": ["Con +6", "Sab +3"], "skills": ["Atletismo +6"], "attacks": ["Ataque múltiple: 2 ataques", "Espada antigua +6, 1d8+3 cortante más 1d4 necrótico"],
+        "features": ["Fortaleza no muerta", "Inmune a veneno y agotamiento", "No necesita respirar, comer ni dormir", "Marcha sincronizada: +1 CA junto a otro guerrero"],
+        "spells": [], "equipment": ["Armadura de bandas antigua", "Espada larga", "Capa oscura"]
+      }
+    },
+    {
+      "id": "varek-herrero",
+      "name": "Varek",
+      "role": "Herrero de la banda",
+      "faction": "Banda de Mano de Hierro",
+      "motivation": "Pagar sus deudas y abandonar la vida criminal.",
+      "ancestry": "Humano",
+      "description": "Brazos quemados por la fragua y delantal de cuero sobre la armadura.",
+      "personality": ["Reservado y trabajador; no disfruta robando."],
+      "reactions": ["Se rinde si le ofrecen protección frente a sus acreedores."],
+      "summary": "Artesano endeudado que repara las armas de la banda sin compartir su crueldad.",
+      "tags": ["Acto II", "Bandido", "Herrero", "Redimible"],
+      "statBlock": {
+        "armorClass": 14, "hitPoints": 27, "speed": "9 m", "initiative": "+1", "proficiencyBonus": 2, "challenge": "1/2",
+        "abilities": { "strength": 16, "dexterity": 12, "constitution": 15, "intelligence": 13, "wisdom": 11, "charisma": 9 },
+        "saves": ["Con +4"], "skills": ["Atletismo +5", "Investigación +3"], "attacks": ["Martillo ligero +5, 1d4+3 contundente", "Martillo arrojado +5, 1d4+3 contundente"],
+        "features": ["Herrero: repara un arma o armadura durante un descanso largo"], "spells": [], "equipment": ["Cuero tachonado", "2 martillos ligeros", "Herramientas de herrero"]
+      }
+    },
+    {
+      "id": "silas-rastreador",
+      "name": "Silas",
+      "role": "Rastreador de la banda",
+      "faction": "Banda de Mano de Hierro",
+      "motivation": "Cobrar por sus conocimientos del bosque.",
+      "ancestry": "Humano",
+      "description": "Capa verde apagada, botas blandas y ojos que nunca dejan de estudiar el suelo.",
+      "personality": ["Paciente, autosuficiente y profesional."],
+      "knowledge": ["Siguió el carro durante dos días antes del ataque.", "Conoce los bosques y la ruta de salida del encapuchado."],
+      "summary": "El explorador que hizo posible la emboscada y puede reconstruir la vigilancia previa.",
+      "tags": ["Acto II", "Bandido", "Rastreador", "Pista"],
+      "statBlock": {
+        "armorClass": 14, "hitPoints": 30, "speed": "9 m", "initiative": "+3", "proficiencyBonus": 3, "challenge": "1",
+        "abilities": { "strength": 12, "dexterity": 16, "constitution": 13, "intelligence": 11, "wisdom": 16, "charisma": 9 },
+        "saves": [], "skills": ["Percepción +6", "Sigilo +6", "Supervivencia +9"], "attacks": ["Ataque múltiple: 2 ataques", "Arco largo +6, 1d8+3 perforante", "Espada corta +6, 1d6+3 perforante"],
+        "features": ["Rastreador experto", "Enmascararse en terreno boscoso"], "spells": [], "equipment": ["Cuero tachonado", "Arco largo", "Espada corta", "Kit de rastreo"]
+      }
+    },
+    {
+      "id": "dreg-forzudo",
+      "name": "Dreg",
+      "role": "Forzudo de la banda",
+      "faction": "Banda de Mano de Hierro",
+      "motivation": "Comer bien y obedecer al jefe que le garantice hacerlo.",
+      "ancestry": "Mediorco",
+      "description": "Enorme, cargado de bolsas de comida y con una maza demasiado pesada para la mayoría.",
+      "personality": ["Simple, voraz y obediente."],
+      "reactions": ["Deja de luchar si Garrick y Kelm caen o si le ofrecen comida y una salida."],
+      "summary": "La mayor fuerza física de la banda, peligrosa pero sin iniciativa propia.",
+      "tags": ["Acto II", "Bandido", "Bruto"],
+      "statBlock": {
+        "armorClass": 13, "hitPoints": 45, "speed": "9 m", "initiative": "+0", "proficiencyBonus": 3, "challenge": "1",
+        "abilities": { "strength": 18, "dexterity": 10, "constitution": 16, "intelligence": 7, "wisdom": 9, "charisma": 8 },
+        "saves": ["Fue +7", "Con +6"], "skills": ["Atletismo +7"], "attacks": ["Ataque múltiple: 2 ataques", "Maza a dos manos +7, 2d6+4 contundente"],
+        "features": ["Aguante incansable: queda a 1 PG una vez", "Carga bruta: +1d6 tras moverse 6 m en línea recta"], "spells": [], "equipment": ["Armadura de pieles", "Maza a dos manos", "Tres días de raciones"]
+      }
+    },
+    {
+      "id": "finn-tramposo",
+      "name": "Finn",
+      "role": "Jugador y tramposo",
+      "faction": "Banda de Mano de Hierro",
+      "motivation": "Ganar apuestas y evitar cualquier riesgo real.",
+      "ancestry": "Humano",
+      "description": "Sonrisa rápida, manos inquietas y dados escondidos en cada bolsillo.",
+      "personality": ["Encantador, tramposo y cobarde."],
+      "reactions": ["Intenta apostar con cualquiera.", "Huye en cuanto recibe daño o queda aislado."],
+      "summary": "Cobarde oportunista que puede perder información en una apuesta amañada.",
+      "tags": ["Acto II", "Bandido", "Social"],
+      "statBlock": {
+        "armorClass": 13, "hitPoints": 14, "speed": "9 m", "initiative": "+3", "proficiencyBonus": 2, "challenge": "1/4",
+        "abilities": { "strength": 9, "dexterity": 16, "constitution": 11, "intelligence": 13, "wisdom": 10, "charisma": 15 },
+        "saves": [], "skills": ["Engaño +6", "Juego de Manos +5", "Persuasión +4"], "attacks": ["Daga +5, 1d4+3 perforante", "Ballesta de mano +5, 1d6+3 perforante"],
+        "features": ["Tramposo: ventaja con dados y cartas", "Huida cobarde: correr o destrabarse como acción adicional"], "spells": [], "equipment": ["Cuero", "3 dagas", "Dados cargados", "Baraja marcada"]
+      }
+    },
+    {
+      "id": "jorek-leñador",
+      "name": "Jorek",
+      "role": "Leñador convertido en bandido",
+      "faction": "Banda de Mano de Hierro",
+      "motivation": "Conseguir dinero sin dañar a quien no puede defenderse.",
+      "ancestry": "Humano",
+      "description": "Espalda de leñador, barba desordenada y enorme hacha de trabajo.",
+      "personality": ["Callado y sorprendentemente amable con los prisioneros."],
+      "knowledge": ["Sabe que Tomás conoce un secreto del carro, pero no se lo contó a Garrick."],
+      "reactions": ["No ataca a prisioneros ni personajes caídos y puede cambiar de bando para protegerlos."],
+      "summary": "Bruto de buen fondo cuya conducta contradice la crueldad del campamento.",
+      "tags": ["Acto II", "Bandido", "Redimible"],
+      "statBlock": {
+        "armorClass": 13, "hitPoints": 34, "speed": "9 m", "initiative": "+1", "proficiencyBonus": 2, "challenge": "1/2",
+        "abilities": { "strength": 17, "dexterity": 12, "constitution": 15, "intelligence": 9, "wisdom": 13, "charisma": 10 },
+        "saves": ["Fue +5"], "skills": ["Atletismo +5", "Naturaleza +2"], "attacks": ["Hacha a dos manos +5, 1d12+3 cortante"],
+        "features": ["Leñador: daño doble contra objetos de madera", "Protector reluctante"], "spells": [], "equipment": ["Armadura de pieles", "Hacha a dos manos", "Cuña de leñador"]
+      }
+    },
+    {
+      "id": "lena-exploradora",
+      "name": "Lena",
+      "role": "Exploradora y vigía de la torre",
+      "faction": "Banda de Mano de Hierro",
+      "motivation": "Detectar amenazas antes de que alcancen el campamento.",
+      "ancestry": "Humana",
+      "description": "Silueta inmóvil en la torre improvisada, protegida por redes de camuflaje.",
+      "personality": ["Atenta, reservada y paciente."],
+      "knowledge": ["Es la primera en detectar intrusos si Tob falla."],
+      "reactions": ["Da la alarma y dispara desde cobertura; huye si Mira abandona la cantera."],
+      "summary": "La auténtica vigilancia del campamento, oculta por encima de la entrada.",
+      "tags": ["Acto II", "Bandido", "Exploradora", "Vigía"],
+      "statBlock": {
+        "armorClass": 14, "hitPoints": 26, "speed": "9 m", "initiative": "+3", "proficiencyBonus": 3, "challenge": "1/2",
+        "abilities": { "strength": 10, "dexterity": 16, "constitution": 12, "intelligence": 11, "wisdom": 16, "charisma": 9 },
+        "saves": [], "skills": ["Percepción +6", "Sigilo +6", "Supervivencia +6"], "attacks": ["Arco largo +6, 1d8+3 perforante", "Espada corta +6, 1d6+3 perforante"],
+        "features": ["Vista aguda", "Oculta en la torre: ventaja en Sigilo hasta que ataque"], "spells": [], "equipment": ["Cuero tachonado", "Arco largo", "30 flechas", "Cuerno de alarma"]
+      }
+    },
+    {
+      "id": "oswin-reed",
+      "name": "Oswin Reed",
+      "role": "Cochero prisionero",
+      "faction": "Caravana de Alaric",
+      "motivation": "Sobrevivir y volver a conducir por la Costa de la Espada.",
+      "age": "52 años", "ancestry": "Humano",
+      "description": "Cochero curtido con manos de riendas y ropa de viaje dañada por la emboscada.",
+      "personality": ["Prudente, paciente y muy hablador."],
+      "knowledge": ["Puede reconstruir exactamente la emboscada.", "No vio el rostro del hechicero."],
+      "summary": "Testigo civil con veinte años de experiencia transportando mercancias.",
+      "tags": ["Acto II", "Prisionero", "Testigo"],
+      "statBlock": {
+        "armorClass": 11, "hitPoints": 10, "speed": "9 m", "initiative": "+1", "proficiencyBonus": 2, "challenge": "0",
+        "abilities": { "strength": 11, "dexterity": 12, "constitution": 13, "intelligence": 12, "wisdom": 15, "charisma": 13 },
+        "saves": [], "skills": ["Percepción +4", "Trato con Animales +6", "Supervivencia +4"], "attacks": ["Látigo +3, 1d4+1 cortante"],
+        "features": ["Cochero experto: ventaja para controlar carros y monturas"], "spells": [], "equipment": ["Látigo", "Guantes de cochero"]
+      }
+    },
+    {
+      "id": "hermano-tomas",
+      "name": "Hermano Tomás",
+      "role": "Iniciado de Helm prisionero",
+      "faction": "Templo de Helm",
+      "motivation": "Ayudar a rescatar a su mentor Alaric.",
+      "age": "19 años", "ancestry": "Humano",
+      "description": "Joven iniciado con túnica de viaje rota y el símbolo de Helm escondido bajo la ropa.",
+      "personality": ["Nervioso, bondadoso y muy inteligente."],
+      "knowledge": ["Vio a Alaric esconder algo en el carro.", "Con confianza, señala el doble fondo y elimina la prueba de Percepción CD 14."],
+      "summary": "Aprendiz de Alaric que proporciona la vía más directa hasta la brújula.",
+      "tags": ["Acto II", "Prisionero", "Helm", "Pista clave"],
+      "statBlock": {
+        "armorClass": 11, "hitPoints": 13, "speed": "9 m", "initiative": "+1", "proficiencyBonus": 2, "challenge": "1/4",
+        "abilities": { "strength": 9, "dexterity": 12, "constitution": 12, "intelligence": 15, "wisdom": 16, "charisma": 13 },
+        "saves": ["Sab +5"], "skills": ["Medicina +5", "Religión +4"], "attacks": ["Bastón +1, 1d6-1 contundente", "Llama sagrada, salvación Des CD 13, 1d8 radiante"],
+        "features": ["Iniciado vigilante"], "spells": ["CD 13", "Trucos: guía, llama sagrada", "Nivel 1: curar heridas, santuario"], "equipment": ["Símbolo de Helm oculto", "Bastón"]
+      }
+    },
+    {
+      "id": "sargento-aldren-voss",
+      "name": "Sargento Aldren Voss",
+      "role": "Jefe de la escolta prisionero",
+      "faction": "Escolta de Alaric",
+      "motivation": "Proteger a los supervivientes y recuperar al clérigo.",
+      "age": "46 años", "ancestry": "Humano",
+      "description": "Veterano herido, vendado de forma improvisada, que aún mantiene postura militar.",
+      "personality": ["Disciplinado, valiente y muy protector."],
+      "knowledge": ["El hechicero nunca levantó la voz y dirigía a sus guerreros con gestos.", "Está convencido de que aquellos soldados no eran humanos."],
+      "summary": "Jefe de escolta herido y testigo fiable del control ejercido por el antagonista.",
+      "tags": ["Acto II", "Prisionero", "Veterano", "Testigo"],
+      "statBlock": {
+        "armorClass": 14, "hitPoints": 26, "speed": "6 m", "initiative": "+1", "proficiencyBonus": 3, "challenge": "2 herido",
+        "abilities": { "strength": 16, "dexterity": 12, "constitution": 15, "intelligence": 11, "wisdom": 14, "charisma": 13 },
+        "saves": ["Fue +6", "Con +5"], "skills": ["Atletismo +6", "Percepción +5"], "attacks": ["Espada larga +6, 1d8+3 cortante"],
+        "features": ["Mando protector", "Herido: no puede usar Ataque múltiple hasta recibir curación"], "spells": [], "equipment": ["Armadura dañada", "Espada larga confiscada por los bandidos"]
+      }
+    },
+    {
+      "id": "guarda-eamon",
+      "name": "Guarda Eamon",
+      "role": "Arquero de la escolta prisionero",
+      "faction": "Escolta de Alaric",
+      "motivation": "Dar testimonio de cómo entregaron vivo a Alaric.",
+      "age": "30 años", "ancestry": "Humano",
+      "description": "Arquero con el hombro vendado por una flecha.",
+      "personality": ["Alerta, preciso y frustrado por no poder usar bien el arco."],
+      "knowledge": ["Vio a los bandidos entregar vivo al clérigo al hechicero."],
+      "summary": "Testigo directo que confirma que Alaric sobrevivió a la emboscada.",
+      "tags": ["Acto II", "Prisionero", "Arquero", "Testigo"],
+      "statBlock": {
+        "armorClass": 13, "hitPoints": 12, "speed": "9 m", "initiative": "+3", "proficiencyBonus": 2, "challenge": "1/4 herido",
+        "abilities": { "strength": 11, "dexterity": 16, "constitution": 12, "intelligence": 10, "wisdom": 14, "charisma": 10 },
+        "saves": [], "skills": ["Percepción +4"], "attacks": ["Arco largo +5, 1d8+3 perforante con desventaja hasta ser curado", "Daga +5, 1d4+3 perforante"],
+        "features": ["Ojo de arquero", "Hombro herido"], "spells": [], "equipment": ["Cuero", "Arco confiscado", "Daga"]
+      }
+    },
+    {
+      "id": "guarda-borik",
+      "name": "Guarda Borik",
+      "role": "Escudero veterano prisionero",
+      "faction": "Escolta de Alaric",
+      "motivation": "Advertir a otros de que los guerreros no sienten dolor.",
+      "age": "78 años", "ancestry": "Enano",
+      "description": "Veterano compacto con barba gris, escudo abollado y manos de martillo.",
+      "personality": ["Tenaz, franco y difícil de intimidar."],
+      "knowledge": ["Atraveso la armadura de un guerrero con su martillo y este siguió avanzando.", "Su relato apunta claramente a la nigromancia."],
+      "summary": "La primera prueba testimonial contundente de que los soldados eran muertos vivientes.",
+      "tags": ["Acto II", "Prisionero", "Enano", "Pista clave"],
+      "statBlock": {
+        "armorClass": 17, "hitPoints": 32, "speed": "7,5 m", "initiative": "+0", "proficiencyBonus": 3, "challenge": "1",
+        "abilities": { "strength": 16, "dexterity": 10, "constitution": 16, "intelligence": 10, "wisdom": 14, "charisma": 11 },
+        "saves": ["Fue +6", "Con +6"], "skills": ["Atletismo +6", "Percepción +5"], "attacks": ["Martillo de guerra +6, 1d8+3 contundente"],
+        "features": ["Resistencia enana", "Muro de escudos: reacción para dar +2 CA a un aliado adyacente"], "spells": [], "equipment": ["Cota de malla", "Escudo abollado", "Martillo confiscado"]
+      }
+    },
+    {
+      "id": "guarda-lyra",
+      "name": "Guarda Lyra",
+      "role": "Batidora de la escolta prisionera",
+      "faction": "Escolta de Alaric",
+      "motivation": "Dar al grupo la dirección necesaria para reanudar la persecución.",
+      "age": "24 años", "ancestry": "Humana",
+      "description": "Exploradora joven con barro seco hasta las rodillas y capa desgarrada.",
+      "personality": ["Decidida, observadora y rápida para actuar."],
+      "knowledge": ["Siguió al grupo varios minutos hacia el noreste.", "Los guerreros marchaban en silencio perfecto.", "Oyó al hechicero decir: Quedaos con el carro. Lo único que necesito ya está conmigo."],
+      "summary": "La superviviente que aporta dirección, conducta enemiga y confirmación del verdadero objetivo.",
+      "tags": ["Acto II", "Prisionero", "Exploradora", "Pista clave"],
+      "statBlock": {
+        "armorClass": 14, "hitPoints": 24, "speed": "9 m", "initiative": "+3", "proficiencyBonus": 3, "challenge": "1/2",
+        "abilities": { "strength": 10, "dexterity": 16, "constitution": 12, "intelligence": 11, "wisdom": 16, "charisma": 10 },
+        "saves": [], "skills": ["Percepción +6", "Sigilo +6", "Supervivencia +6"], "attacks": ["Arco largo +6, 1d8+3 perforante", "Espada corta +6, 1d6+3 perforante"],
+        "features": ["Batidora: no reduce velocidad al rastrear", "Vista aguda"], "spells": [], "equipment": ["Cuero tachonado", "Arco confiscado", "Espada corta"]
+      }
+    },
+    {
+      "id": "falso-clerigo",
+      "name": "El falso clérigo",
+      "role": "Infiltrado cambiante",
+      "faction": "Desconocida",
+      "motivation": "Llegar hasta la carta usando la confianza del grupo.",
+      "summary": "Una posible amenaza social para introducir si los jugadores avanzan demasiado rápido.",
+      "secret": "Conoce gestos y frases de Alaric, pero falla en detalles de doctrina.",
+      "tags": ["Antagonista", "Engaño", "Opcional"],
+      "statBlock": {
+        "armorClass": 14, "hitPoints": 45, "speed": "9 m", "initiative": "+4", "proficiencyBonus": 3, "challenge": "3",
+        "abilities": { "strength": 10, "dexterity": 18, "constitution": 14, "intelligence": 13, "wisdom": 14, "charisma": 16 },
+        "saves": ["Des +7", "Car +6"],
+        "skills": ["Engaño +9", "Perspicacia +5", "Religión +4", "Sigilo +7"],
+        "attacks": ["Ataque múltiple: 2 ataques", "Espada corta +7, 1d6+4 perforante", "Ballesta de mano +7, 1d6+4 perforante"],
+        "features": ["Cambiar apariencia", "Imitación perfecta", "Ataque furtivo +2d6"],
+        "spells": ["Disfrazarse una vez al día"],
+        "equipment": ["Cuero tachonado oculto", "Espada corta", "Símbolo falso de Helm", "Documentos de Alaric"]
+      }
+    }
+  ],
+  "items": [
+    {
+      "id": "carta-sellada",
+      "name": "La carta sellada",
+      "kind": "Documento divino",
+      "magic": "Abjuración y Adivinación",
+      "summary": "Un sobre blanco impecable protegido por el sello de Helm. Es el objeto central del primer arco.",
+      "properties": [
+        "No puede quemarse ni mojarse.",
+        "Si alguien fuerza el sello, la carta vuelve a cerrarse.",
+        "Quien intenta romperla por fuerza recibe un destello cegador.",
+        "Solo Alaric puede abrirla con seguridad, salvo una prueba extrema de Arcano o Religión."
+      ],
+      "tags": ["MacGuffin", "Helm", "Mágico"]
+    },
+    {
+      "id": "mapa-ruta-alaric",
+      "name": "Mapa de la ruta de Alaric",
+      "kind": "Mapa de viaje",
+      "summary": "Ruta prevista entre Aguas Profundas y la mansión Hawkwinter, con dos desvios marcados.",
+      "properties": [
+        "Permite anticipar el punto más probable de la desaparición.",
+        "Incluye una marca reciente cerca de una vieja torre de vigilancia.",
+        "Lord Edric lo entrega durante los preparativos."
+      ],
+      "tags": ["Investigación", "Viaje", "Pista"]
+    },
+    {
+      "id": "cartas-recomendacion",
+      "name": "Cartas de recomendación",
+      "kind": "Documento político",
+      "summary": "Credenciales de Lord Edric para pedir ayuda a postas, guardias y contactos de la Liga.",
+      "properties": [
+        "Facilitan audiencia con autoridades locales.",
+        "Pueden atraer la atención de enemigos infiltrados.",
+        "Funcionan como recompensa social temprana."
+      ],
+      "tags": ["Liga", "Recurso", "Social"]
+    },
+    {
+      "id": "carta-emergencia-alaric",
+      "name": "Carta de emergencia de Alaric",
+      "kind": "Mensaje oculto",
+      "summary": "Una nota breve que Alaric escondió en el doble fondo del carro antes de ser capturado.",
+      "properties": [
+        "Confirma que Alaric esperaba ser perseguido.",
+        "Explica el funcionamiento de la brújula de Helm.",
+        "Permite continuar aunque Garrick muera o se niegue a hablar.",
+        "Texto: Si alguien encuentra estas palabras, significa que he caído prisionero. Mis captores desconocen este compartimento. La brújula siempre señalará mi posición. Si Helm aún vela por mí, confío en que alguien siga su aguja."
+      ],
+      "tags": ["Acto II", "Alaric", "Pista"]
+    },
+    {
+      "id": "brujula-de-helm",
+      "name": "Brújula de Helm",
+      "kind": "Objeto maravilloso",
+      "magic": "Adivinación divina",
+      "summary": "Una brújula de plata cuya aguja señala de forma constante hacia Alaric.",
+      "properties": [
+        "Señala la dirección de Alaric mientras siga vivo.",
+        "Solo funciona si portador y objetivo están en el mismo plano.",
+        "No indica distancia ni camino seguro.",
+        "No requiere identificación si se lee la carta de emergencia."
+      ],
+      "tags": ["Acto II", "Helm", "Mágico", "Pista"]
+    }
+  ],
+  "locations": [
+    {
+      "id": "mansion-hawkwinter",
+      "name": "Mansión Hawkwinter",
+      "region": "Costa de la Espada",
+      "mapUrl": "assets/maps/mansion-hawkwinter.png",
+      "purpose": "Escena inicial y punto de reunion del grupo.",
+      "summary": "Casa noble sobria, vigilada y tensa por la ausencia del clérigo.",
+      "details": [
+        "El salon principal sirve para presentar a los personajes.",
+        "El despacho de Edric contiene mapas, correspondencia y símbolos de Helm.",
+        "Los establos permiten equipar al grupo con caballos y provisiones."
+      ],
+      "tags": ["Acto I", "Social", "Inicio"]
+    },
+    {
+      "id": "camino-del-clerigo",
+      "name": "Camino del clérigo",
+      "region": "Ruta hacia Aguas Profundas",
+      "mapUrl": "assets/maps/emboscada-camino.png",
+      "purpose": "Investigación del Acto II.",
+      "summary": "Tramo de camino donde las pistas contradicen la idea de un simple asalto.",
+      "details": [
+        "Flechas en los árboles, sangre, armas abandonadas y un caballo muerto marcan la emboscada.",
+        "No hay cadáveres: los atacantes recogieron a sus caídos o se llevaron a los supervivientes.",
+        "Las rodadas conducen a la cantera, pero se pierden al cruzar un tramo rocoso."
+      ],
+      "tags": ["Acto II", "Exploración", "Misterio"]
+    },
+    {
+      "id": "ultima-guardia",
+      "name": "Posada La Última Guardia",
+      "region": "Camino de Aguas Profundas",
+      "mapUrl": "assets/maps/posada-ultima-guardia.png",
+      "purpose": "Ruta de respaldo si el grupo pierde las huellas del carro.",
+      "summary": "Una posada tranquila donde cuatro bandidos ebrios celebran el saqueo en una mesa apartada.",
+      "details": [
+        "Doran Mieloscura tolera a los bandidos porque pagan, pero no acepta peleas.",
+        "Los bandidos pueden ser enganados, sobornados, intimidados o escuchados.",
+        "Una pelea abierta hace que la posada deje de ser un refugio seguro para el grupo."
+      ],
+      "tags": ["Acto II", "Social", "Investigación"]
+    },
+    {
+      "id": "cantera-mano-de-hierro",
+      "name": "Cantera de Mano de Hierro",
+      "region": "Bosques al este del camino",
+      "mapUrl": "assets/maps/cantera-mano-hierro.png",
+      "purpose": "Base de los bandidos y combate principal del Acto II.",
+      "summary": "Una cantera abandonada, hundida entre colinas y defendida desde plataformas de piedra.",
+      "details": [
+        "Dos accesos estrechos descienden hasta el fondo de la cantera.",
+        "El carro de Alaric está parcialmente desmontado junto a una lona de botín.",
+        "Una pasarela elevada ofrece cobertura a los exploradores.",
+        "Los guerreros extraños y el nigromante se marcharon varias horas antes.",
+        "Los seis supervivientes de la caravana están encerrados en una caseta reforzada con barrotes.",
+        "No todos los miembros de la banda están de guardia: usa la escala del encuentro para decidir quienes combaten."
+      ],
+      "tags": ["Acto II", "Combate", "Campamento"]
+    },
+    {
+      "id": "templo-helm-aguas-profundas",
+      "name": "Templo de Helm de Aguas Profundas",
+      "region": "Aguas Profundas",
+      "mapUrl": "assets/maps/templo-helm-aguas-profundas.png",
+      "purpose": "Origen de la carta y fuente de revelaciones futuras.",
+      "summary": "Institución vigilante que sabe que la carta apunta a un peligro antiguo.",
+      "details": [
+        "La priora Mara envió la carta con instrucciones estrictas.",
+        "Los archivos del templo mencionan al Vigilante y al Ojo Durmiente.",
+        "Puede convertirse en base politica y religiosa para siguientes actos."
+      ],
+      "tags": ["Helm", "Lore", "Futuro"]
+    }
+  ],
+  "scenes": [
+    {
+      "id": "llegada-mansion",
+      "mapUrl": "assets/maps/mansion-hawkwinter.png",
+      "name": "Llegada a la mansión Hawkwinter",
+      "act": "Acto I",
+      "order": 1,
+      "objective": "Reunir a los personajes, presentar sus motivos y mostrar la ansiedad de Lord Edric.",
+      "summary": "Los héroes llegan por oro, revelación divina, amistad, deber político o relación con Alaric.",
+      "checks": [
+        {
+          "skill": "Perspicacia",
+          "dc": 13,
+          "result": "Edric está asustado de verdad, no manipulando al grupo."
+        },
+        {
+          "skill": "Historia",
+          "dc": 14,
+          "result": "La casa Hawkwinter tiene relación menor pero real con la Liga de los Lores."
+        }
+      ],
+      "clues": [
+        "Edric lleva dos noches sin dormir.",
+        "Alaric debía llegar antes del anochecer del tercer día.",
+        "El prior pidió que nadie salvo Alaric rompiera el sello."
+      ],
+      "tags": ["Social", "Presentación", "Gancho"]
+    },
+    {
+      "id": "entrega-carta",
+      "mapUrl": "assets/maps/mansion-hawkwinter.png",
+      "name": "La entrega de la carta",
+      "act": "Acto I",
+      "order": 2,
+      "objective": "Convertir la carta en un objeto deseado, protegido y peligroso de manipular.",
+      "summary": "Edric entrega el sobre sellado y explica las instrucciones recibidas del templo.",
+      "checks": [
+        {
+          "skill": "Arcano",
+          "dc": 30,
+          "result": "El sello podría abrirse, pero el riesgo de activar defensas divinas es extremo."
+        },
+        {
+          "skill": "Religión",
+          "dc": 27,
+          "result": "El sello reconoce autoridad de Helm y fe juramentada."
+        }
+      ],
+      "clues": [
+        "Detectar magia revela Abjuración y Adivinación.",
+        "La carta no se deteriora con fuego ni agua.",
+        "Forzarla provoca un destello y el sello se recompone."
+      ],
+      "tags": ["Objeto", "Magia", "Helm"]
+    },
+    {
+      "id": "preparativos",
+      "mapUrl": "assets/maps/mansion-hawkwinter.png",
+      "name": "Preparativos",
+      "act": "Acto I",
+      "order": 3,
+      "objective": "Dar recursos útiles y permitir que el grupo elija su enfoque antes del camino.",
+      "summary": "Lord Edric ofrece caballos, mapas, raciones, tienda, cartas de recomendación y dinero.",
+      "checks": [
+        {
+          "skill": "Investigación",
+          "dc": 14,
+          "result": "El mapa revela un tramo aislado donde Alaric pudo ser interceptado."
+        },
+        {
+          "skill": "Religión",
+          "dc": 12,
+          "result": "Alaric era conocido por cumplir promesas y no retrasarse sin motivo."
+        }
+      ],
+      "clues": [
+        "La ruta de Alaric era conocida por pocas personas.",
+        "Hay un desvío cerca de una torre vieja.",
+        "La Liga puede abrir puertas, pero también llamar la atención."
+      ],
+      "tags": ["Recursos", "Decisión", "Viaje"]
+    },
+    {
+      "id": "camino-investigacion",
+      "mapUrl": "assets/maps/emboscada-camino.png",
+      "name": "El lugar de la emboscada",
+      "act": "Acto II",
+      "order": 4,
+      "objective": "Reconstruir el ataque y encontrar las rodadas que llevan al escondite.",
+      "summary": "La ausencia de cadáveres, las posiciones de tiro y un residuo necrótico revelan una captura preparada.",
+      "readAloud": "Flechas partidas sobresalen de los árboles. Un caballo yace junto al camino entre sangre seca, armas abandonadas y restos de madera, pero no hay un solo cuerpo.",
+      "checks": [
+        {
+          "skill": "Supervivencia",
+          "dc": 13,
+          "result": "Encuentra las rodadas del carro y permite seguirlas directamente hasta la cantera."
+        },
+        {
+          "skill": "Investigación",
+          "dc": 13,
+          "result": "Reconstruye posiciones de tiro preparadas antes de la llegada de Alaric."
+        },
+        {
+          "skill": "Medicina",
+          "dc": 12,
+          "result": "La sangre indica varios heridos, pero no una masacre."
+        },
+        {
+          "skill": "Religión",
+          "dc": 15,
+          "result": "Encuentra un símbolo de Helm arrancado del cuello de Alaric."
+        },
+        {
+          "skill": "Arcano",
+          "dc": 15,
+          "result": "Detecta energía necrótica dejada por la presencia prolongada de algo antinatural."
+        }
+      ],
+      "clues": [
+        "Alaric fue capturado vivo.",
+        "Los asaltantes retiraron a sus heridos y se llevaron el carro.",
+        "Al menos uno de los atacantes desprendía energía necrótica."
+      ],
+      "outcomes": [
+        "Con Supervivencia CD 13, el grupo llega directamente a la cantera.",
+        "Si pierde el rastro, alcanza La Última Guardia, la última posada donde durmió Alaric."
+      ],
+      "gmNotes": [
+        "Cada personaje puede examinar una parte distinta de la escena.",
+        "No ocultes el avance tras una sola tirada: el fracaso cambia la ruta, no detiene la aventura."
+      ],
+      "tags": ["Investigación", "Exploración", "Misterio"]
+    },
+    {
+      "id": "posada-bandidos",
+      "mapUrl": "assets/maps/posada-ultima-guardia.png",
+      "name": "Los fanfarrones de la posada",
+      "act": "Acto II",
+      "order": 5,
+      "objective": "Descubrir la ubicación de la cantera mediante una escena social abierta.",
+      "summary": "Cuatro bandidos ebrios celebran el saqueo y dejan escapar detalles sobre el mago, el prisionero y el carro.",
+      "readAloud": "Una mesa al fondo rompe la calma del local. Cuatro viajeros brindan demasiado alto, lucen monedas recientes y se rien cada vez que alguno menciona un carro.",
+      "checks": [
+        {
+          "skill": "Engaño",
+          "dc": 13,
+          "result": "Los bandidos creen estar ante compradores de botín o aliados de la banda."
+        },
+        {
+          "skill": "Persuasión",
+          "dc": 14,
+          "result": "La bebida y la conversación les hacen presumir del golpe."
+        },
+        {
+          "skill": "Intimidación",
+          "dc": 14,
+          "result": "Revelan el camino a la cantera para evitar problemas."
+        },
+        {
+          "skill": "Sigilo + Percepción",
+          "dc": 13,
+          "result": "El grupo escucha la conversación sin ser descubierto."
+        }
+      ],
+      "clues": [
+        "El jefe quedó satisfecho con el mago raro.",
+        "El prisionero ya no está en la cantera.",
+        "El carro y su botín siguen en el campamento."
+      ],
+      "outcomes": [
+        "Un soborno de 5 po o una ronda de bebidas concede ventaja a la siguiente prueba social.",
+        "La violencia también revela la ruta, pero Doran expulsa al grupo y la posada deja de ser un refugio seguro."
+      ],
+      "gmNotes": [
+        "Entrega la ubicación con cualquier plan razonable bien interpretado.",
+        "La consecuencia de una pelea es social, no un bloqueo de la aventura."
+      ],
+      "tags": ["Social", "Investigación", "Ruta alternativa"]
+    },
+    {
+      "id": "aproximacion-cantera",
+      "mapUrl": "assets/maps/cantera-mano-hierro.png",
+      "name": "Aproximación a la cantera",
+      "act": "Acto II",
+      "order": 6,
+      "objective": "Permitir que el grupo observe, se infiltre y elija cómo iniciar el combate.",
+      "summary": "Guardias elevados, dos accesos estrechos y el carro visible convierten la llegada en una decisión táctica.",
+      "readAloud": "El bosque se abre sobre una hondonada de roca gris. Abajo arden dos fogatas; un carro desmontado descansa junto al botín mientras siluetas armadas vigilan desde una pasarela.",
+      "checks": [
+        {
+          "skill": "Percepción",
+          "dc": 13,
+          "result": "Localiza a los exploradores, el carro y una senda lateral poco vigilada."
+        },
+        {
+          "skill": "Sigilo grupal",
+          "dc": 13,
+          "result": "El grupo alcanza cobertura dentro de la cantera antes de ser detectado."
+        },
+        {
+          "skill": "Supervivencia",
+          "dc": 14,
+          "result": "Encuentra rastros recientes de Alaric, el mago y varios pasos pesados que salen hacia el este."
+        }
+      ],
+      "clues": [
+        "Alaric y los guerreros extraños ya no están aquí.",
+        "La banda conserva el carro porque aún clasifica el botín.",
+        "Los pasos de los escoltas son regulares y anormalmente profundos."
+      ],
+      "outcomes": [
+        "Una aproximación discreta permite elegir posición inicial y sorprende a un puesto de guardia.",
+        "Una aproximación abierta hace que los exploradores den la alarma."
+      ],
+      "tags": ["Exploración", "Táctica", "Cantera"]
+    },
+    {
+      "id": "despues-del-combate",
+      "mapUrl": "assets/maps/ruta-aguja-vigilante.png",
+      "name": "La aguja del Vigilante",
+      "act": "Acto II",
+      "order": 7,
+      "objective": "Obtener una dirección fiable hacia Alaric y revelar la naturaleza sobrenatural de sus captores.",
+      "summary": "El carro, Garrick y los supervivientes ofrecen varias pistas independientes para continuar la persecución.",
+      "checks": [
+        {
+          "skill": "Percepción",
+          "dc": 14,
+          "result": "Descubre el compartimento secreto del carro con la carta y la brújula de Helm."
+        },
+        {
+          "skill": "Intimidación",
+          "dc": 14,
+          "result": "Garrick describe al nigromante y señala la dirección en la que se llevó a Alaric."
+        }
+      ],
+      "clues": [
+        "El cliente pagó por capturar vivo al clérigo y no mostró interés por el cargamento.",
+        "Los guerreros no respiraban, no hablaban y nunca se quitaron el casco.",
+        "Uno recibió un hachazo en el cuello y siguió avanzando."
+      ],
+      "outcomes": [
+        "La brújula señala a Alaric mientras siga vivo y permanezca en el mismo plano.",
+        "Si el carro fue destruido, Garrick, Lyra o los rastros de salida mantienen la persecución.",
+        "El grupo completa el Acto II siguiendo la aguja hacia el este."
+      ],
+      "gmNotes": [
+        "Garrick llama al nigromante El Amo y evita pronunciar cualquier otro nombre.",
+        "Tomás revela el doble fondo sin tirada si el grupo se gana su confianza.",
+        "Borik y Aldren aportan las primeras pruebas claras de que los guerreros no estaban vivos.",
+        "No confirmes aún que los guerreros son muertos vivientes; deja que el grupo lo concluya."
+      ],
+      "tags": ["Revelación", "Helm", "Pista clave"]
+    }
+  ],
+  "encounters": [
+    {
+      "id": "reyerta-ultima-guardia",
+      "mapUrl": "assets/maps/posada-ultima-guardia.png",
+      "name": "Reyerta en La Última Guardia",
+      "act": "Acto II",
+      "location": "Posada La Última Guardia",
+      "difficulty": "Opcional - baja",
+      "objective": "Reducir o expulsar a los bandidos sin herir a los clientes.",
+      "summary": "Rusk, Niles, Bren y Oren se defienden si la conversación se vuelve violenta.",
+      "combatants": ["Rusk", "Niles", "Bren", "Oren"],
+      "scaling": [
+        "Para 3 PJs, Niles y Oren se rinden al caer el primero.",
+        "Para 5 PJs, Bren conserva sus 22 PG y usa sus maniobras de apresar."
+      ],
+      "terrain": [
+        "Mesas y barra proporcionan media cobertura.",
+        "Una criatura puede volcar una mesa como interacción con objeto.",
+        "Los clientes despejan la zona al final de la primera ronda."
+      ],
+      "tactics": [
+        "Bren busca pelea; Rusk lucha borracho; Niles quiere escapar y Oren intenta rendirse.",
+        "Rusk intenta alcanzar la puerta y advertir a la cantera."
+      ],
+      "developments": [
+        "Capturar a uno revela la cantera sin nueva prueba.",
+        "Si uno escapa, el campamento no puede ser sorprendido.",
+        "Doran exige pagar los daños y expulsa a quienes iniciaron la pelea."
+      ],
+      "tags": ["Opcional", "Posada", "Consecuencia social"]
+    },
+    {
+      "id": "asalto-cantera-mano-hierro",
+      "mapUrl": "assets/maps/cantera-mano-hierro.png",
+      "name": "Asalto a la cantera de Mano de Hierro",
+      "act": "Acto II",
+      "location": "Cantera de Mano de Hierro",
+      "difficulty": "Moderada",
+      "objective": "Derrotar a la banda, conservar el carro, liberar a los prisioneros e intentar capturar vivo a Garrick.",
+      "summary": "Un enfrentamiento vertical entre coberturas de piedra que puede resolverse por fuerza, infiltración o negociación.",
+      "combatants": [
+        "Garrick Mano de Hierro, jefe bandido",
+        "Kelm, segundo al mando",
+        "Mira y Lena, tiradoras",
+        "Tob, Harl, Varek, Silas, Dreg, Finn y Jorek según la escala"
+      ],
+      "scaling": [
+        "Para 3 PJs: Garrick, Tob, Varek y Jorek; Jorek puede cambiar de bando.",
+        "Para 4 PJs: Garrick, Kelm, Mira, Tob y Varek.",
+        "Para 5 PJs: usa la composición de 4 PJs y añade a Harl y Lena en la ronda 2.",
+        "Dreg, Silas y Finn pueden estar fuera, dormidos o llegar como refuerzo si el grupo busca un combate más difícil.",
+        "Si llegan heridos desde la posada, retrasa los refuerzos una ronda."
+      ],
+      "terrain": [
+        "La pasarela está a 3 metros de altura y tiene dos escaleras de mano.",
+        "Bloques de piedra y el carro proporcionan media cobertura.",
+        "Una vagoneta suelta recorre 6 metros cuesta abajo si se libera.",
+        "El borde de la cantera tiene zonas de terreno difícil y caidas de 3 metros."
+      ],
+      "tactics": [
+        "Los exploradores disparan desde la pasarela y cambian de cobertura.",
+        "Los bandidos contienen a los personajes cerca del carro.",
+        "Garrick usa el terreno, pero se rinde al quedar por debajo de la mitad de sus puntos de golpe y sin aliados conscientes.",
+        "Mira, Lena, Kelm y Finn priorizan escapar; Varek, Jorek y Oren aceptan rendirse."
+      ],
+      "developments": [
+        "Un enemigo capturado confirma que el nigromante partió hacia el este.",
+        "Garrick concede la información completa con Intimidación CD 14 o una oferta creible.",
+        "Liberar a Tomás elimina la prueba para hallar el doble fondo del carro.",
+        "Lyra confirma que el enemigo partió hacia el noreste y que el único objetivo era Alaric.",
+        "Registrar el carro con Percepción CD 14 descubre la carta y la brújula.",
+        "Matar a todos no bloquea el avance: la brújula sigue disponible."
+      ],
+      "tags": ["Principal", "Bandidos", "Terreno vertical", "Acto II"]
+    }
+  ],
+  "playerOptions": [
+    {
+      "id": "paladin-entrega",
+      "name": "Lady Seraphine Halcour",
+      "ancestry": "Humana",
+      "className": "Paladina",
+      "subclass": "Juramento de la Entrega",
+      "background": "Noble",
+      "hook": "Lady Seraphine Halcour pertenece a una casa noble aliada de Lord Edric y fue educada para comprender que un juramento sagrado pesa más que cualquier corona. Desde joven juró proteger a los inocentes, servir a Helm y sostener con su ejemplo aquello que otros solo prometen con palabras. Cuando supo que un clérigo había desaparecido y que una carta sellada aguardaba sin llegar a su destinatario, comprendió de inmediato la gravedad del asunto. Se une a la empresa para asegurar que el mensaje llegue a su destino y que la fe no ceda ante el miedo.",
+      "level": 5,
+      "feat": "Habilidoso",
+      "armorClass": 19,
+      "hitPoints": 44,
+      "speed": "9 m",
+      "initiative": "+0",
+      "proficiencyBonus": 3,
+      "abilities": { "strength": 18, "dexterity": 10, "constitution": 14, "intelligence": 8, "wisdom": 12, "charisma": 16 },
+      "saves": ["Sab +4", "Car +6"],
+      "skills": ["Atletismo +7", "Perspicacia +4", "Persuasión +6", "Religión +2", "Historia +2"],
+      "attacks": ["Espada larga +7, 1d8+4 cortante", "Jabalina +7, 1d6+4 perforante, alcance 9/36 m"],
+      "features": ["Ataque adicional", "Imponer las manos: reserva de 25 PG", "Canalizar divinidad: 2 usos", "Maestría con espada larga y jabalina", "Golpe divino y Montura fiel"],
+      "spells": ["CD 14, ataque +6", "Nivel 1: bendición, curar heridas, escudo de fe, protección contra el bien y el mal", "Nivel 2: auxilio, zona de la verdad, hallar corcel"],
+      "equipment": ["Cota de malla", "Escudo con símbolo de Helm", "Espada larga", "5 jabalinas", "Útiles de sacerdote"]
+    },
+    {
+      "id": "picaro-asesino",
+      "showToken": false,
+      "name": "Pícaro asesino",
+      "ancestry": "Humana",
+      "className": "Pícaro",
+      "subclass": "Asesino",
+      "background": "Criminal",
+      "hook": "Sigue el rastro del dinero y sospecha que la carta vale más que el pago.",
+      "level": 5,
+      "feat": "Alerta",
+      "armorClass": 16,
+      "hitPoints": 38,
+      "speed": "9 m",
+      "initiative": "+7",
+      "proficiencyBonus": 3,
+      "abilities": { "strength": 8, "dexterity": 18, "constitution": 14, "intelligence": 12, "wisdom": 14, "charisma": 10 },
+      "saves": ["Des +7", "Int +4"],
+      "skills": ["Acrobacias +7", "Engaño +3", "Investigación +4", "Percepción +5", "Sigilo +10", "Juego de Manos +7"],
+      "attacks": ["Arco corto +7, 1d6+4 perforante", "Espada corta +7, 1d6+4 perforante", "Ataque furtivo +3d6 una vez por turno"],
+      "features": ["Pericia en Sigilo", "Acción astuta", "Golpe astuto", "Asesinar", "Puntería firme", "Esquiva asombrosa"],
+      "spells": [],
+      "equipment": ["Cuero tachonado", "Arco corto y 20 flechas", "2 espadas cortas", "Herramientas de ladrón", "Kit de venenos"]
+    },
+    {
+      "id": "pippa-luz-de-luna-brandibuena",
+      "name": "Pippa \"Luz de Luna\" Brandibuena",
+      "ancestry": "Mediana",
+      "className": "Barda",
+      "subclass": "Colegio del Glamour",
+      "background": "Animadora",
+      "hook": "Pippa es una mediana barda cuya alegría y música iluminan incluso los días más grises. Recorrió tabernas, ferias y salones nobles de la Costa de la Espada, ganándose fama de artista querida, capaz de calmar temores y despertar esperanza. Durante una celebración de la Liga de los Lores conoció a Lord Edric Hawkwinter, que quedó impresionado por su carisma. Cuando supo de la desaparición de un clérigo de Helm y de la llegada de una carta sellada a la mansión, decidió unirse a la misión. Algunas historias no solo se cantan: también se viven.",
+      "level": 5,
+      "feat": "Músico",
+      "armorClass": 16,
+      "hitPoints": 38,
+      "speed": "9 m",
+      "initiative": "+3",
+      "proficiencyBonus": 3,
+      "abilities": { "strength": 8, "dexterity": 16, "constitution": 14, "intelligence": 10, "wisdom": 12, "charisma": 18 },
+      "saves": ["Des +6", "Car +7"],
+      "skills": ["Acrobacias +6", "Engaño +7", "Interpretación +10", "Perspicacia +4", "Persuasión +10"],
+      "attacks": ["Estoque +6, 1d8+3 perforante", "Daga +6, 1d4+3 perforante"],
+      "features": ["Inspiración bárdica d8: 4 usos", "Pericia en Interpretación y Persuasión", "Fuente de inspiración", "Manto de inspiración", "Magia cautivadora"],
+      "spells": ["CD 15, ataque +7", "Trucos: burla dañina, ilusión menor, mano de mago", "Nivel 1: palabra de curación, fuego feérico, susurros discordantes", "Nivel 2: invisibilidad, sugestión", "Nivel 3: patrón hipnótico, disipar magia"],
+      "equipment": ["Cuero tachonado", "Estoque", "Daga", "Laúd", "Kit de disfraz"]
+    },
+    {
+      "id": "barbaro-berseker",
+      "name": "Khorag Rompecumbres",
+      "ancestry": "Goliat",
+      "className": "Bárbaro",
+      "subclass": "Senda del Berserker",
+      "background": "Vagabundo",
+      "hook": "Khorag Rompecumbres es un goliat vagabundo que vive según deudas y promesas. Hace meses escoltó una caravana en la que viajaba el hermano Alaric, y desde entonces considera al clérigo un hombre bajo su protección. Cuando supo de su desaparición, entendió que aquello era una deuda personal que debía saldar. Lord Edric aceptó su ayuda sin dudarlo. Khorag no destaca por la sutileza, pero sí por su lealtad feroz y por una furia capaz de quebrar una emboscada. Se une a la misión para encontrar a Alaric y castigar a quienes creyeron que podían hacerlo desaparecer sin pagar el precio.",
+      "level": 5,
+      "feat": "Afortunado",
+      "armorClass": 15,
+      "hitPoints": 55,
+      "speed": "12 m",
+      "initiative": "+2",
+      "proficiencyBonus": 3,
+      "abilities": { "strength": 18, "dexterity": 14, "constitution": 16, "intelligence": 8, "wisdom": 12, "charisma": 10 },
+      "saves": ["Fue +7", "Con +6"],
+      "skills": ["Atletismo +7", "Intimidación +3", "Percepción +4", "Supervivencia +4"],
+      "attacks": ["Hacha a dos manos +7, 1d12+4 cortante", "Hacha de mano +7, 1d6+4 cortante"],
+      "features": ["Furia: 3 usos, +2 al daño", "Ataque temerario", "Sentido del peligro", "Frenesi", "Ataque adicional", "Movimiento rápido", "Ascendencia gigante"],
+      "spells": [],
+      "equipment": ["Hacha a dos manos", "2 hachas de mano", "4 jabalinas", "Petate", "Trofeo de viaje"]
+    },
+    {
+      "id": "brujo-celestial",
+      "name": "Elián Auriel",
+      "ancestry": "Aasimar",
+      "className": "Brujo",
+      "subclass": "Patrón Celestial",
+      "background": "Acolito",
+      "hook": "Elián Auriel siempre sintió la luz de un poder celestial guiando sus plegarias. Una visión reciente le mostró el sello de Helm brillando entre sombras y a un hombre de fe encadenado en la oscuridad. Convencido de que se trataba de una llamada divina, abandonó su retiro y viajó hasta la mansión de Lord Edric. Su presencia aporta consuelo, conocimiento sagrado y una voluntad serena. Elián cree que el secuestro del clérigo y la carta sellada forman parte de un designio mayor, y se une al grupo para proteger el mensaje, rescatar al inocente y enfrentarse a la oscuridad con la luz que le fue concedida.",
+      "level": 5,
+      "feat": "Iniciado en la magia (clérigo)",
+      "armorClass": 15,
+      "hitPoints": 38,
+      "speed": "9 m",
+      "initiative": "+2",
+      "proficiencyBonus": 3,
+      "abilities": { "strength": 8, "dexterity": 14, "constitution": 14, "intelligence": 10, "wisdom": 12, "charisma": 18 },
+      "saves": ["Sab +4", "Car +7"],
+      "skills": ["Conocimiento arcano +3", "Engaño +7", "Persuasión +7", "Religión +3"],
+      "attacks": ["Descarga sobrenatural +7, 2 rayos de 1d10 fuerza", "Daga +5, 1d4+2 perforante"],
+      "features": ["Magia del pacto: 2 espacios de nivel 3", "5 invocaciones sobrenaturales", "Luz sanadora: 6d6", "Resistencia celestial", "Revelación aasimar"],
+      "spells": ["CD 15, ataque +7", "Trucos: descarga sobrenatural, luz, taumaturgia, guía", "Preparados: maleficio, armadura de Agathys, pasó brumoso, sugestión, contrahechizo, revivir"],
+      "equipment": ["Cuero tachonado", "Daga", "Foco arcano", "Símbolo sagrado", "Útiles de sacerdote"]
+    },
+    {
+      "id": "mago-adivino",
+      "showToken": false,
+      "name": "Mago adivino",
+      "ancestry": "Elfica",
+      "className": "Mago",
+      "subclass": "Adivino",
+      "background": "Erudito",
+      "hook": "Ha sonado con un ojo que no debe abrirse.",
+      "level": 5,
+      "feat": "Iniciado en la magia (mago)",
+      "armorClass": 16,
+      "hitPoints": 32,
+      "speed": "9 m",
+      "initiative": "+3",
+      "proficiencyBonus": 3,
+      "abilities": { "strength": 8, "dexterity": 16, "constitution": 14, "intelligence": 18, "wisdom": 12, "charisma": 10 },
+      "saves": ["Int +7", "Sab +4"],
+      "skills": ["Conocimiento arcano +7", "Historia +7", "Investigación +7", "Percepción +4"],
+      "attacks": ["Rayo de fuego +7, 2d10 fuego", "Daga +6, 1d4+3 perforante"],
+      "features": ["Recuperación arcana", "Erudito ritual", "Portento: 2 dados", "Adivinación experta", "Visión en la oscuridad y Trance"],
+      "spells": ["CD 15, ataque +7", "Trucos: rayo de fuego, mano de mago, prestidigitación, guía", "Nivel 1: armadura de mago, escudo, detectar magia, identificar", "Nivel 2: pasó brumoso, ver invisibilidad, sugestión", "Nivel 3: contrahechizo, clarividencia, bola de fuego"],
+      "equipment": ["Libro de conjuros", "Foco arcano", "Daga", "Ropas de viaje", "Material de escritura"]
+    },
+    {
+      "id": "guerrero-campeon",
+      "showToken": false,
+      "name": "Guerrero campeón",
+      "ancestry": "Enana",
+      "className": "Guerrero",
+      "subclass": "Campeón",
+      "background": "Soldado",
+      "hook": "La Liga de los Lores le ordeno recuperar al clérigo y evaluar la amenaza.",
+      "level": 5,
+      "feat": "Atacante salvaje",
+      "armorClass": 20,
+      "hitPoints": 49,
+      "speed": "9 m",
+      "initiative": "+4",
+      "proficiencyBonus": 3,
+      "abilities": { "strength": 18, "dexterity": 12, "constitution": 16, "intelligence": 10, "wisdom": 14, "charisma": 8 },
+      "saves": ["Fue +7", "Con +6"],
+      "skills": ["Atletismo +7", "Intimidación +2", "Percepción +5", "Supervivencia +5"],
+      "attacks": ["Hacha de guerra +7, 1d8+4 cortante", "Jabalina +7, 1d6+4 perforante"],
+      "features": ["Estilo de combate: Defensa", "Tomar aliento", "Oleada de acción", "Crítico mejorado: 19-20", "Atleta sobresaliente", "Ataque adicional", "3 maestrias con armas"],
+      "spells": [],
+      "equipment": ["Armadura de placas", "Escudo", "Hacha de guerra", "4 jabalinas", "Insignia de la Liga"]
+    },
+    {
+      "id": "hechicero-draconiano",
+      "name": "Sarkhaz Escamabrasa",
+      "ancestry": "Draconida",
+      "className": "Hechicero",
+      "subclass": "Hechicería Draconiana",
+      "background": "Ermitano",
+      "hook": "Sarkhaz Escamabrasa se apartó del mundo para dominar el fuego de su sangre dracónica y escuchar los ecos de su linaje. Pero sus noches se llenaron de una misma visión: el hermano Alaric encadenado, un camino cubierto de ceniza y una carta que ardía sin consumirse. Tomó aquella imagen como un presagio imposible de ignorar. Desde entonces ha dejado su retiro para averiguar qué fuerza amenaza la Costa de la Espada. Su magia devastadora puede romper una emboscada cuando llegue el momento, pero también busca respuestas sobre el extraño vínculo entre el fuego, el destino y la carta de Helm.",
+      "level": 5,
+      "feat": "Sanador",
+      "armorClass": 15,
+      "hitPoints": 42,
+      "speed": "9 m",
+      "initiative": "+2",
+      "proficiencyBonus": 3,
+      "abilities": { "strength": 8, "dexterity": 14, "constitution": 16, "intelligence": 10, "wisdom": 12, "charisma": 18 },
+      "saves": ["Con +6", "Car +7"],
+      "skills": ["Conocimiento arcano +3", "Intimidación +7", "Medicina +4", "Persuasión +7"],
+      "attacks": ["Rayo de fuego +7, 2d10 fuego", "Aliento dracónico, salvación Des CD 14"],
+      "features": ["Fuente de magia: 5 puntos", "Metamagia: conjuro acelerado y sutil", "Resiliencia draconiana", "Afinidad elemental", "Resistencia draconida"],
+      "spells": ["CD 15, ataque +7", "Trucos: rayo de fuego, agarre electrizante, prestidigitación, ilusión menor", "Nivel 1: escudo, orbe cromático", "Nivel 2: pasó brumoso, imagen múltiple", "Nivel 3: bola de fuego, volar"],
+      "equipment": ["Foco arcano", "2 dagas", "Útiles de sanador", "Ropas de ermitaño", "Componentes de conjuro"]
+    },
+    {
+      "id": "explorador-cazador",
+      "name": "Ghara Rastroceniza",
+      "ancestry": "Orca",
+      "className": "Exploradora",
+      "subclass": "Cazadora",
+      "background": "Guía",
+      "hook": "Ghara Rastroceniza conoce los senderos de la región como otros conocen las calles de su barrio. Ha guiado caravanas, cazado bestias y leído huellas sobre barro, piedra y nieve. Por eso, cuando oyó hablar de la desaparición del hermano Alaric, supo que no podía tratarse de un simple accidente de camino. Contratada por Lord Edric para seguir el rastro verdadero, Ghara examinó la ruta y confirmó sus sospechas: el clérigo fue interceptado. Se une a la misión porque sabe que las huellas hablan y porque, si los perseguidores dejan de cometer errores, ella será quien los encuentre igualmente.",
+      "level": 5,
+      "feat": "Iniciado en la magia (druida)",
+      "armorClass": 17,
+      "hitPoints": 44,
+      "speed": "9 m",
+      "initiative": "+4",
+      "proficiencyBonus": 3,
+      "abilities": { "strength": 12, "dexterity": 18, "constitution": 14, "intelligence": 8, "wisdom": 16, "charisma": 10 },
+      "saves": ["Fue +4", "Des +7"],
+      "skills": ["Atletismo +4", "Naturaleza +2", "Percepción +6", "Sigilo +7", "Supervivencia +9"],
+      "attacks": ["Arco largo +9, 1d8+4 perforante", "Espada corta +7, 1d6+4 perforante"],
+      "features": ["Enemigo predilecto", "Pericia en Supervivencia", "Estilo: Tiro con arco", "Presa del cazador", "Ataque adicional", "Implacable orco"],
+      "spells": ["CD 14, ataque +6", "Trucos: guía, producir llama", "Nivel 1: marca del cazador, curar heridas, golpe enredador", "Nivel 2: pasar sin rastro, crecimiento espinoso"],
+      "equipment": ["Coraza", "Arco largo y 40 flechas", "2 espadas cortas", "Útiles de navegante", "Cuerda y garfio"]
+    },
+    {
+      "id": "druida-tierra",
+      "name": "Nimra Musgorrío",
+      "ancestry": "Gnoma",
+      "className": "Druida",
+      "subclass": "Círculo de la Tierra",
+      "background": "Ermitana",
+      "hook": "Nimra Musgorrío custodiaba un paraje natural escondido entre colinas y raíces antiguas. Durante años vivió en soledad, escuchando a la tierra y velando por el equilibrio del lugar. Pero una oleada de energía necrótica contaminó el bosque bajo su protección y dejó una herida oscura en la naturaleza. Siguiendo el rastro de esa corrupción, Nimra descubrió señales que la conectaban con el camino del hermano Alaric. Convencida de que la desaparición del clérigo y la podredumbre de la tierra forman parte del mismo peligro, viaja para ayudar a Lord Edric y sanar aquello que la oscuridad ha empezado a marchitar.",
+      "level": 5,
+      "feat": "Sanador",
+      "armorClass": 16,
+      "hitPoints": 38,
+      "speed": "9 m",
+      "initiative": "+2",
+      "proficiencyBonus": 3,
+      "abilities": { "strength": 8, "dexterity": 14, "constitution": 14, "intelligence": 12, "wisdom": 18, "charisma": 10 },
+      "saves": ["Int +4", "Sab +7"],
+      "skills": ["Medicina +7", "Naturaleza +4", "Percepción +7", "Supervivencia +7"],
+      "attacks": ["Producir llama +7, 2d8 fuego", "Cimitarra +5, 1d6+2 cortante"],
+      "features": ["Forma salvaje: 2 usos", "Compañero salvaje", "Recuperación natural", "Conjuros del círculo", "Astucia gnoma"],
+      "spells": ["CD 15, ataque +7", "Trucos: producir llama, guía, látigo de espinas", "Nivel 1: curar heridas, fuego feérico, enmarañar, hablar con los animales", "Nivel 2: pasar sin rastro, rayo de luna, restauración menor", "Nivel 3: llamar al relámpago, disipar magia, hablar con las plantas"],
+      "equipment": ["Armadura de pieles", "Escudo", "Cimitarra", "Foco druídico", "Útiles de sanador"]
+    },
+    {
+      "id": "mago-evocador",
+      "name": "Tilda Chispaforja",
+      "ancestry": "Gnoma",
+      "className": "Maga",
+      "subclass": "Evocadora",
+      "background": "Artesana",
+      "hook": "Tilda Chispaforja levantó su pequeño taller gracias al apoyo económico de Lord Edric, quien supo ver talento donde otros solo veían excentricidad. Entre herramientas, fórmulas y experimentos de precisión, se convirtió en una evocadora brillante, capaz tanto de construir como de desatar poder cuando la situación lo exige. Cuando Edric pidió ayuda para responder a una emboscada planeada con demasiada precisión, Tilda acudió sin dudarlo. Sabe que esta misión exige una especialista en magia ofensiva y en soluciones rápidas, y está decidida a devolver el favor a su benefactor.",
+      "level": 5,
+      "feat": "Fabricante",
+      "armorClass": 15,
+      "hitPoints": 32,
+      "speed": "9 m",
+      "initiative": "+2",
+      "proficiencyBonus": 3,
+      "abilities": { "strength": 8, "dexterity": 14, "constitution": 14, "intelligence": 18, "wisdom": 12, "charisma": 10 },
+      "saves": ["Int +7", "Sab +4"],
+      "skills": ["Conocimiento arcano +7", "Historia +7", "Investigación +7", "Percepción +4"],
+      "attacks": ["Rayo de fuego +7, 2d10 fuego", "Daga +5, 1d4+2 perforante"],
+      "features": ["Recuperación arcana", "Erudito ritual", "Esculpir conjuros", "Truco potente", "Astucia gnoma"],
+      "spells": ["CD 15, ataque +7", "Trucos: rayo de fuego, rayo de escarcha, mano de mago, reparar", "Nivel 1: armadura de mago, escudo, proyectil mágico, detectar magia", "Nivel 2: pasó brumoso, rayo abrasador, telaraña", "Nivel 3: bola de fuego, relámpago, contrahechizo"],
+      "equipment": ["Libro de conjuros", "Varita arcana", "Daga", "Herramientas de herrero", "Cuaderno de diseños"]
+    },
+    {
+      "id": "guerrero-maestro-combate",
+      "name": "Marwen Tresh",
+      "ancestry": "Humana",
+      "className": "Guerrera",
+      "subclass": "Maestra del Combate",
+      "background": "Escriba",
+      "hook": "Marwen Tresh pasó años catalogando correspondencia, rutas y mensajes para la Liga de los Lores. Su mente disciplinada detectó un detalle inquietante: alguien conocía la ruta del hermano Alaric y el momento exacto de su viaje. Aquello no era azar, sino infiltración. Aunque muchos la conocen por su trabajo de escritorio, Marwen fue entrenada para la guerra y para la táctica. Se une a la misión para descubrir quién filtró la información, cerrar esa brecha en la Liga y poner su acero y su experiencia al servicio de quienes buscan rescatar al clérigo desaparecido.",
+      "level": 5,
+      "feat": "Habilidoso",
+      "armorClass": 18,
+      "hitPoints": 49,
+      "speed": "9 m",
+      "initiative": "+2",
+      "proficiencyBonus": 3,
+      "abilities": { "strength": 18, "dexterity": 14, "constitution": 16, "intelligence": 10, "wisdom": 12, "charisma": 8 },
+      "saves": ["Fue +7", "Con +6"],
+      "skills": ["Atletismo +7", "Historia +3", "Investigación +3", "Percepción +4", "Perspicacia +4"],
+      "attacks": ["Espadón +7, 2d6+4 cortante", "Ballesta ligera +5, 1d8+2 perforante"],
+      "features": ["Estilo: Combate con armas a dos manos", "Tomar aliento", "Oleada de acción", "4 dados de superioridad d8", "Maniobras: ataque preciso, derribo, réplica", "Ataque adicional"],
+      "spells": [],
+      "equipment": ["Armadura de bandas", "Espadón", "Ballesta ligera y 20 virotes", "Material de escritura", "Mapa de rutas"]
+    },
+    {
+      "id": "bardo-conocimiento",
+      "name": "Brynja Cobrevoz",
+      "ancestry": "Enana",
+      "className": "Barda",
+      "subclass": "Colegio del Conocimiento",
+      "background": "Comerciante",
+      "hook": "Brynja Cobrevoz es mercader, cantora de rutas y coleccionista de historias. Mientras revisaba un cargamento procedente de mercados secundarios, descubrió grabado en una mercancía el símbolo del Ojo Durmiente, una marca que jamás debió circular abiertamente. Esa pista la condujo hasta los problemas que ahora cercan a Lord Edric. Brynja sabe que el comercio revela verdades que muchos prefieren ocultar. Se suma a la expedición para seguir la pista del símbolo, reunir rumores y utilizar su memoria prodigiosa para desenredar la red de intereses que se extiende tras la carta sellada y la desaparición del clérigo.",
+      "level": 5,
+      "feat": "Afortunado",
+      "armorClass": 15,
+      "hitPoints": 43,
+      "speed": "9 m",
+      "initiative": "+2",
+      "proficiencyBonus": 3,
+      "abilities": { "strength": 10, "dexterity": 14, "constitution": 16, "intelligence": 12, "wisdom": 10, "charisma": 18 },
+      "saves": ["Des +5", "Car +7"],
+      "skills": ["Conocimiento arcano +4", "Engaño +7", "Historia +7", "Investigación +4", "Persuasión +10", "Religión +4"],
+      "attacks": ["Estoque +5, 1d8+2 perforante", "Burla dañina, salvación Sab CD 15, 2d6 psíquico"],
+      "features": ["Inspiración bárdica d8: 4 usos", "Pericia en Historia y Persuasión", "Fuente de inspiración", "3 competencias adicionales", "Palabras cortantes"],
+      "spells": ["CD 15, ataque +7", "Trucos: burla dañina, mano de mago, mensaje", "Nivel 1: palabra de curación, fuego feérico, detectar magia", "Nivel 2: sugestión, invisibilidad, restauración menor", "Nivel 3: disipar magia, patrón hipnótico"],
+      "equipment": ["Cuero tachonado", "Estoque", "Daga", "Citara", "Balanza y documentos mercantiles"]
+    },
+    {
+      "id": "picaro-embaucador",
+      "name": "Nerezza Vhal",
+      "ancestry": "Tiflin",
+      "className": "Pícara",
+      "subclass": "Embaucadora Arcana",
+      "background": "Charlatana",
+      "hook": "Nerezza Vhal vivía del engaño elegante, los disfraces rápidos y las mentiras bien vendidas. Su plan era colocar una copia falsa de la carta a un coleccionista crédulo, hasta descubrir que el sello auténtico parecía observar cada uno de sus movimientos. Aquel detalle bastó para convencerla de que se había acercado demasiado a un secreto peligroso. En lugar de huir para siempre, decidió llevar lo que sabe hasta Lord Edric. Su talento para colarse donde otros no entran e improvisar identidades puede resultar decisivo.",
+      "level": 5,
+      "feat": "Habilidoso",
+      "armorClass": 16,
+      "hitPoints": 38,
+      "speed": "9 m",
+      "initiative": "+4",
+      "proficiencyBonus": 3,
+      "abilities": { "strength": 8, "dexterity": 18, "constitution": 14, "intelligence": 16, "wisdom": 10, "charisma": 12 },
+      "saves": ["Des +7", "Int +6"],
+      "skills": ["Acrobacias +7", "Engaño +7", "Investigación +6", "Juego de Manos +7", "Persuasión +4", "Sigilo +10"],
+      "attacks": ["Arco corto +7, 1d6+4 perforante", "Estoque +7, 1d8+4 perforante", "Ataque furtivo +3d6 una vez por turno"],
+      "features": ["Pericia en Engaño y Sigilo", "Acción astuta", "Golpe astuto", "Mano de mago legerdemain", "Puntería firme", "Esquiva asombrosa", "Resistencia infernal"],
+      "spells": ["CD 14, ataque +6", "Trucos: mano de mago, ilusión menor, burla cruel", "Nivel 1: disfrazarse, imagen silenciosa, escudo, encontrar familiar"],
+      "equipment": ["Cuero tachonado", "Estoque", "Arco corto y 20 flechas", "Herramientas de ladrón", "Kit de disfraz y falsificación"]
+    },
+    {
+      "id": "monje-elementos",
+      "name": "Shael Ithildor",
+      "ancestry": "Elfica",
+      "className": "Monje",
+      "subclass": "Guerrera de los Elementos",
+      "background": "Guardiana",
+      "hook": "Shael Ithildor servía como guardiana de un archivo dedicado a Helm cuando unos intrusos intentaron robar referencias antiguas al Vigilante y a sus juramentos sagrados. Aunque logró frustrar el asalto, varias notas dejaron claro que alguien buscaba información relacionada con el mismo clérigo cuya desaparición ahora inquieta a Lord Edric. Convencida de que ambos incidentes forman parte de un mismo plan, Shael abandona el archivo para llevar sus hallazgos a la investigación. Su disciplina, su dominio elemental y su sentido del deber la convierten en una aliada firme.",
+      "level": 5,
+      "feat": "Alerta",
+      "armorClass": 17,
+      "hitPoints": 38,
+      "speed": "12 m",
+      "initiative": "+7",
+      "proficiencyBonus": 3,
+      "abilities": { "strength": 10, "dexterity": 18, "constitution": 14, "intelligence": 8, "wisdom": 16, "charisma": 12 },
+      "saves": ["Fue +3", "Des +7"],
+      "skills": ["Acrobacias +7", "Perspicacia +6", "Percepción +6", "Sigilo +7"],
+      "attacks": ["Ataque sin armas +7, 1d8+4 contundente o elemental", "Bastón +7, 1d8+4 contundente"],
+      "features": ["5 puntos de concentración", "Ráfaga de golpes", "Defensa paciente", "Pasó del viento", "Desviar ataques", "Golpes elementales", "Ataque adicional", "Golpe aturdidor"],
+      "spells": [],
+      "equipment": ["Bastón", "10 dardos", "Útiles de caligrafía", "Uniforme de guardia", "Símbolo de su monasterio"]
+    }
+  ],
+  "antagonistOptions": [
+    {
+      "id": "bandidos",
+      "name": "Bandidos",
+      "summary": "Fuerza desechable contratada para tender la emboscada, capturar vivo a Alaric y conservar el carro como pago adicional."
+    },
+    {
+      "id": "nigromante",
+      "name": "El Hombre Encapuchado",
+      "summary": "Autor intelectual del ataque. Se llevó al clérigo hacia el este con un propósito ligado al Ojo Durmiente."
+    },
+    {
+      "id": "guerreros-no-muertos",
+      "name": "Guerreros silenciosos",
+      "summary": "Escoltas con armaduras antiguas que no respiran, no hablan y soportan heridas imposibles; su naturaleza no se confirma aún."
+    },
+    {
+      "id": "cambiante",
+      "name": "Cambiante infiltrado",
+      "summary": "Amenaza opcional para un acto posterior: alguien podría ocupar el lugar del clérigo para acercarse a la carta."
+    }
+  ],
+  "rewards": [
+    "Favor de la Liga de los Lores",
+    "Prestigio entre los templos de Helm",
+    "Acceso a información privilegiada",
+    "Contactos politicos",
+    "Posibilidad de convertirse en agentes oficiales"
+  ],
+  "mysteryHooks": [
+    "La carta no arde, no se moja y vuelve a cerrarse si se fuerza.",
+    "El objetivo de los enemigos parece ser el clérigo, no el sobre.",
+    "El mensaje final apunta al Ojo Durmiente y a una llave antigua."
+  ],
+  "sealedLetter": {
+    "school": ["Abjuración", "Adivinación"],
+    "arcanaDc": 30,
+    "religionDc": 27,
+    "traits": [
+      "Papel blanco impecable",
+      "Sello de Helm con luz tenue",
+      "No puede quemarse",
+      "No puede mojarse",
+      "Si se fuerza, vuelve a cerrarse y emite un destello cegador"
+    ],
+    "message": "La llave permanece donde el Vigilante cayó por primera vez. No permitas que el Ojo Durmiente despierte."
+  },
+  "acts": [
+    {
+      "id": "acto-i",
+      "label": "Acto I",
+      "name": "La casa del noble",
+      "summary": "Los aventureros se conocen en la mansión Hawkwinter, reciben el encargo de Lord Edric y descubren las protecciones de la carta sellada.",
+      "objective": "Presentar al grupo, establecer la urgencia y preparar la expedición tras el clérigo desaparecido.",
+      "status": "Completado",
+      "scenes": ["Llegada", "El noble explica", "Información", "Preparativos"]
+    },
+    {
+      "id": "acto-ii",
+      "label": "Acto II",
+      "name": "Las huellas del desaparecido",
+      "summary": "El grupo reconstruye la emboscada, obtiene la ubicación de la cantera y descubre que Alaric fue entregado vivo a un misterioso hechicero.",
+      "objective": "Seguir las pistas hasta la banda de Mano de Hierro y conseguir una dirección fiable hacia Alaric.",
+      "status": "En curso",
+      "scenes": [
+        "El lugar de la emboscada",
+        "Los fanfarrones de la posada (ruta de respaldo)",
+        "Aproximación a la cantera",
+        "Asalto a la cantera de Mano de Hierro",
+        "La aguja del Vigilante"
+      ]
+    }
+  ]
+}

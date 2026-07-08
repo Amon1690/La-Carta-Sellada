@@ -1,0 +1,29 @@
+@use '@angular/material' as mat;
+@use './styles/index';
+
+// Tema Material
+html {
+  @include mat.theme((
+    color: (
+      primary: mat.$azure-palette,
+      tertiary: mat.$blue-palette,
+    ),
+    typography: Arial,
+    density: 0,
+  ));
+}
+
+body {
+  color-scheme: dark;
+
+  background-color: var(--mat-sys-surface);
+  color: var(--mat-sys-on-surface);
+  font-family: var(--font-app);
+
+  margin: 0;
+}
+
+html,
+body {
+  height: 100%;
+}

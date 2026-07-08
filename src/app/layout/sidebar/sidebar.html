@@ -1,0 +1,22 @@
+<nav>
+  <h3>Navegación</h3>
+
+  <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">Dashboard</a>
+
+  <h3 class="campaign-heading">Reglas 2024</h3>
+  @for (item of ruleItems; track item.path) {
+    <a [routerLink]="['/', item.path]" routerLinkActive="active">{{ item.label }}</a>
+  }
+
+  @if (campaignId()) {
+    <h3 class="campaign-heading">Campaña activa</h3>
+    @for (item of campaignItems; track item.path) {
+      <a [routerLink]="campaignPath(item.path)" routerLinkActive="active">{{ item.label }}</a>
+    }
+  } @else {
+    <h3 class="campaign-heading">Selecciona una campaña</h3>
+    @for (item of campaignItems; track item.path) {
+      <span class="disabled" [attr.aria-label]="item.label + ' deshabilitado'">{{ item.label }}</span>
+    }
+  }
+</nav>

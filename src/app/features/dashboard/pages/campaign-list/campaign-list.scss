@@ -1,0 +1,142 @@
+.campaigns-page {
+  display: grid;
+  gap: var(--space-lg);
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.campaigns-page > header {
+  display: grid;
+  gap: var(--space-xs);
+  padding-bottom: var(--space-md);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.campaigns-page > header p,
+.campaigns-page > header h1,
+.campaigns-page > header span,
+h2,
+dl,
+dd {
+  margin: 0;
+}
+
+.campaigns-page > header p,
+.campaign-heading span {
+  color: var(--accent-gold);
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.campaigns-page > header h1 {
+  color: var(--text-strong);
+  font-size: 32px;
+}
+
+.campaigns-page > header > span,
+.campaign-content > p,
+.empty p {
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+.campaign-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-lg);
+}
+
+.campaign-card {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  color: inherit;
+  text-decoration: none;
+}
+
+.campaign-card:hover {
+  border-color: rgba(224, 201, 147, 0.55);
+}
+
+.campaign-cover {
+  aspect-ratio: 16 / 7;
+  border-bottom: 1px solid var(--border-subtle);
+  background-color: #202226;
+  background-repeat: no-repeat;
+}
+
+.campaign-content {
+  display: grid;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+}
+
+.campaign-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.campaign-heading h2 {
+  margin-top: 4px;
+  color: var(--text-strong);
+  font-size: 24px;
+}
+
+.campaign-heading strong {
+  align-self: start;
+  border: 1px solid rgba(86, 156, 214, 0.5);
+  border-radius: 999px;
+  color: #9dcbef;
+  padding: 5px 9px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-sm);
+}
+
+dl div {
+  display: grid;
+  gap: 4px;
+  border-left: 1px solid var(--border-subtle);
+  padding-left: var(--space-sm);
+}
+
+dt {
+  color: var(--text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+dd {
+  color: var(--text-strong);
+  font-weight: 700;
+}
+
+.open-label {
+  color: var(--text-strong);
+  text-align: right;
+}
+
+.empty {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+}
+
+.loading {
+  color: var(--text-muted);
+}
+
+@media (max-width: 760px) {
+  .campaign-grid {
+    grid-template-columns: 1fr;
+  }
+}

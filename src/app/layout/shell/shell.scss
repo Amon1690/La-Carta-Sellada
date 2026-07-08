@@ -1,0 +1,29 @@
+:host {
+  display: grid;
+  grid-template-rows: var(--app-toolbar-height) 1fr var(--app-statusbar-height);
+  height: 100vh;
+  overflow: hidden;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: var(--app-sidebar-width) 1fr;
+  min-height: 0;
+  overflow: hidden;
+}
+
+main {
+  overflow: auto;
+  padding: var(--space-lg);
+  background: var(--surface-page);
+}
+
+@media (max-width: 860px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  app-sidebar {
+    display: none;
+  }
+}

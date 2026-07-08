@@ -1,0 +1,266 @@
+@if (vm$ | async; as vm) {
+  @if (vm; as boardVm) {
+    <main class="vtt-shell">
+      <header class="vtt-toolbar">
+        <div class="board-title">
+          <span class="vtt-mark">VTT</span>
+          <div>
+            <small>{{ boardVm.entry.kindLabel }} · {{ boardVm.campaign.name }}</small>
+            <h1>{{ boardVm.entry.name }}</h1>
+          </div>
+        </div>
+
+        <div class="tool-group" role="toolbar" aria-label="Herramientas del tablero">
+          <button
+            type="button"
+            title="Seleccionar y mover fichas"
+            [class.active]="mode() === 'select'"
+            [attr.aria-pressed]="mode() === 'select'"
+            (click)="setMode('select')"
+          ><span aria-hidden="true">↖</span><b>Seleccionar</b></button>
+          <button
+            type="button"
+            title="Desplazar el tablero"
+            [class.active]="mode() === 'pan'"
+            [attr.aria-pressed]="mode() === 'pan'"
+            (click)="setMode('pan')"
+          ><span aria-hidden="true">✥</span><b>Mover</b></button>
+          <button
+            type="button"
+            title="Cubrir una zona con niebla"
+            [class.active]="mode() === 'fog'"
+            [attr.aria-pressed]="mode() === 'fog'"
+            (click)="setMode('fog')"
+          ><span aria-hidden="true">■</span><b>Ocultar</b></button>
+          <button
+            type="button"
+            title="Descubrir una zona"
+            [class.active]="mode() === 'reveal'"
+            [attr.aria-pressed]="mode() === 'reveal'"
+            (click)="setMode('reveal')"
+          ><span aria-hidden="true">□</span><b>Revelar</b></button>
+          <button
+            type="button"
+            title="Medir distancias"
+            [class.active]="mode() === 'measure'"
+            [attr.aria-pressed]="mode() === 'measure'"
+            (click)="setMode('measure')"
+          ><span aria-hidden="true">⌁</span><b>Medir</b></button>
+        </div>
+
+        <div class="toolbar-actions">
+          <div class="zoom-control" aria-label="Zoom">
+            <button type="button" title="Alejar" (click)="zoomBy(-0.1)">−</button>
+            <output>{{ (zoom() * 100).toFixed(0) }}%</output>
+            <button type="button" title="Acercar" (click)="zoomBy(0.1)">+</button>
+            <button type="button" title="Ajustar mapa" (click)="fitMap()">Ajustar</button>
+          </div>
+
+          <div class="dice-control">
+            <button
+              type="button"
+              class="dice-button"
+              title="Lanzar dados"
+              [attr.aria-expanded]="diceOpen()"
+              (click)="toggleDice()"
+            ><span aria-hidden="true">◆</span> {{ diceResult() || 'Dados' }}</button>
+            @if (diceOpen()) {
+              <div class="dice-menu" role="menu" aria-label="Dados">
+                @for (sides of [4, 6, 8, 10, 12, 20, 100]; track sides) {
+                  <button type="button" role="menuitem" (click)="rollDie(sides)">d{{ sides }}</button>
+                }
+              </div>
+            }
+          </div>
+
+          <span class="save-state">{{ saveStatus() }}</span>
+        </div>
+      </header>
+
+      <div class="vtt-workspace">
+        <section
+          #viewport
+          class="map-viewport"
+          [class.pan-mode]="mode() === 'pan'"
+          aria-label="Tablero de juego"
+        >
+          <div
+            class="board-stage"
+            [style.width.px]="mapWidth * zoom()"
+            [style.height.px]="mapHeight * zoom()"
+          >
+            <div
+              #board
+              class="map-board"
+              [class.drawing]="mode() === 'fog' || mode() === 'reveal' || mode() === 'measure'"
+              [style.width.px]="mapWidth"
+              [style.height.px]="mapHeight"
+              [style.transform]="'scale(' + zoom() + ')'"
+              (pointerdown)="boardPointerDown($event)"
+              (pointermove)="boardPointerMove($event)"
+              (pointerup)="boardPointerUp($event)"
+              (pointercancel)="boardPointerUp($event)"
+            >
+              <img class="map-image" [src]="boardVm.entry.mapUrl" [alt]="'Mapa de ' + boardVm.entry.name" draggable="false" />
+
+              @if (layers().grid) {
+                <div
+                  class="grid-layer"
+                  [style.background-size]="gridSize + 'px ' + gridSize + 'px'"
+                  aria-hidden="true"
+                ></div>
+              }
+
+              @if (layers().fog) {
+                @for (fog of fogRects(); track fog.id) {
+                  <div
+                    class="fog-rect"
+                    [style.left.px]="fog.x"
+                    [style.top.px]="fog.y"
+                    [style.width.px]="fog.width"
+                    [style.height.px]="fog.height"
+                  ></div>
+                }
+              }
+
+              @if (draftFog(); as draft) {
+                <div
+                  class="fog-draft"
+                  [class.reveal-draft]="mode() === 'reveal'"
+                  [style.left.px]="draft.x"
+                  [style.top.px]="draft.y"
+                  [style.width.px]="draft.width"
+                  [style.height.px]="draft.height"
+                ></div>
+              }
+
+              @if (measureLine(); as ruler) {
+                <svg class="measure-layer" [attr.viewBox]="'0 0 ' + mapWidth + ' ' + mapHeight" aria-hidden="true">
+                  <line [attr.x1]="ruler.x1" [attr.y1]="ruler.y1" [attr.x2]="ruler.x2" [attr.y2]="ruler.y2"></line>
+                  <circle [attr.cx]="ruler.x1" [attr.cy]="ruler.y1" r="7"></circle>
+                  <circle [attr.cx]="ruler.x2" [attr.cy]="ruler.y2" r="7"></circle>
+                  <text [attr.x]="(ruler.x1 + ruler.x2) / 2" [attr.y]="(ruler.y1 + ruler.y2) / 2 - 14">{{ measureLabel() }}</text>
+                </svg>
+              }
+
+              @if (layers().tokens) {
+                @for (token of tokens(); track token.instanceId) {
+                  <button
+                    type="button"
+                    class="vtt-token"
+                    cdkDrag
+                    [cdkDragBoundary]="'.map-board'"
+                    [cdkDragScale]="zoom()"
+                    [cdkDragFreeDragPosition]="{ x: token.x, y: token.y }"
+                    [cdkDragDisabled]="mode() !== 'select'"
+                    [class.selected]="selectedTokenId() === token.instanceId"
+                    [class.active-turn]="activeTurnId() === token.instanceId"
+                    [class.hidden-token]="token.hidden"
+                    [style.width.px]="gridSize * token.size"
+                    [style.height.px]="gridSize * token.size"
+                    [attr.aria-label]="token.name"
+                    (click)="selectToken(token.instanceId, $event)"
+                    (cdkDragEnded)="tokenDragEnded(token, $event)"
+                  >
+                    <img [src]="token.image" alt="" draggable="false" />
+                    @if (token.maxHp > 0) {
+                      <span class="hp-track" aria-hidden="true"><i [style.width.%]="hpPercent(token)"></i></span>
+                    }
+                    @if (layers().labels) {
+                      <span class="token-label">{{ token.name }}</span>
+                    }
+                  </button>
+                }
+              }
+            </div>
+          </div>
+        </section>
+
+        <aside class="vtt-sidebar">
+          <nav class="sidebar-tabs" aria-label="Panel de herramientas">
+            <button type="button" [class.active]="sidebarTab() === 'tokens'" (click)="setSidebarTab('tokens')">Fichas</button>
+            <button type="button" [class.active]="sidebarTab() === 'layers'" (click)="setSidebarTab('layers')">Capas</button>
+            <button type="button" [class.active]="sidebarTab() === 'turns'" (click)="setSidebarTab('turns')">Turnos</button>
+          </nav>
+
+          <div class="sidebar-content">
+            @if (sidebarTab() === 'tokens') {
+              @if (selectedToken(); as token) {
+                <section class="token-inspector">
+                  <header>
+                    <img [src]="token.image" alt="" />
+                    <div><small>Ficha seleccionada</small><h2>{{ token.name }}</h2></div>
+                    <button type="button" class="danger-icon" title="Eliminar ficha" (click)="removeSelectedToken()">×</button>
+                  </header>
+                  <div class="field-grid">
+                    <label>PG <input type="number" min="0" [value]="token.hp" (input)="updateSelectedNumber('hp', $any($event.target).value)" /></label>
+                    <label>Máx. <input type="number" min="0" [value]="token.maxHp" (input)="updateSelectedNumber('maxHp', $any($event.target).value)" /></label>
+                    <label>Tamaño
+                      <select [value]="token.size" (change)="updateSelectedNumber('size', $any($event.target).value)">
+                        <option value="1">1 casilla</option><option value="2">2 casillas</option><option value="3">3 casillas</option><option value="4">4 casillas</option>
+                      </select>
+                    </label>
+                    <label class="check-field"><input type="checkbox" [checked]="token.hidden" (change)="updateSelectedHidden($any($event.target).checked)" /> Oculta</label>
+                  </div>
+                </section>
+              }
+
+              <label class="token-search">
+                <span>Buscar ficha</span>
+                <input type="search" [value]="tokenQuery()" (input)="updateTokenQuery($any($event.target).value)" placeholder="Nombre, clase o función" />
+              </label>
+              <div class="token-library">
+                @for (choice of filteredTokenChoices(); track choice.id) {
+                  <button type="button" (click)="addToken(choice)">
+                    <img [src]="choice.image" alt="" />
+                    <span><b>{{ choice.name }}</b><small>{{ choice.group }} · {{ choice.subtitle }}</small></span>
+                    <i aria-hidden="true">+</i>
+                  </button>
+                } @empty {
+                  <p class="empty-state">No hay fichas coincidentes.</p>
+                }
+              </div>
+            }
+
+            @if (sidebarTab() === 'layers') {
+              <section class="layer-panel">
+                <h2>Visibilidad</h2>
+                <label><span><b>Cuadrícula</b><small>30 × 20 casillas</small></span><input type="checkbox" [checked]="layers().grid" (change)="toggleLayer('grid')" /></label>
+                <label><span><b>Niebla</b><small>Zonas ocultas</small></span><input type="checkbox" [checked]="layers().fog" (change)="toggleLayer('fog')" /></label>
+                <label><span><b>Fichas</b><small>PJ y PNJ</small></span><input type="checkbox" [checked]="layers().tokens" (change)="toggleLayer('tokens')" /></label>
+                <label><span><b>Nombres</b><small>Etiquetas de fichas</small></span><input type="checkbox" [checked]="layers().labels" (change)="toggleLayer('labels')" /></label>
+              </section>
+              <section class="fog-actions">
+                <h2>Niebla de guerra</h2>
+                <div><button type="button" (click)="coverMap()">Ocultar todo</button><button type="button" (click)="revealMap()">Revelar todo</button></div>
+              </section>
+              <button type="button" class="reset-button" (click)="resetBoard()">Restablecer tablero</button>
+            }
+
+            @if (sidebarTab() === 'turns') {
+              <section class="turn-panel">
+                <header><div><small>Combate</small><h2>Iniciativa</h2></div><button type="button" (click)="advanceTurn()">Siguiente →</button></header>
+                <ol>
+                  @for (token of initiativeTokens(); track token.instanceId; let position = $index) {
+                    <li [class.active]="activeTurnId() === token.instanceId">
+                      <button type="button" class="turn-select" title="Marcar turno activo" (click)="setActiveTurn(token.instanceId)">{{ position + 1 }}</button>
+                      <img [src]="token.image" alt="" />
+                      <span><b>{{ token.name }}</b><small>{{ token.hp }}/{{ token.maxHp }} PG</small></span>
+                      <input type="number" aria-label="Iniciativa" [value]="token.initiative" (change)="updateInitiative(token.instanceId, $any($event.target).value)" />
+                    </li>
+                  } @empty {
+                    <p class="empty-state">Añade fichas para preparar la iniciativa.</p>
+                  }
+                </ol>
+              </section>
+            }
+          </div>
+        </aside>
+      </div>
+    </main>
+  } @else {
+    <main class="vtt-missing"><h1>Mapa no encontrado</h1><p>Este tablero no está disponible en la campaña.</p></main>
+  }
+} @else {
+  <main class="vtt-missing"><p>Cargando tablero...</p></main>
+}

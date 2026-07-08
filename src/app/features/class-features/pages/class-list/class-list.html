@@ -1,0 +1,35 @@
+@if (classes$ | async; as classes) {
+  <section class="class-page">
+    <header>
+      <p>Reglas 2024</p>
+      <h1>Rasgos de clase</h1>
+      <span>Selecciona una clase para consultar su progresión de rasgos por nivel.</span>
+    </header>
+
+    <div class="class-grid">
+      @for (characterClass of classes; track characterClass.id) {
+        <a class="class-card" [routerLink]="['/rasgos-clase', characterClass.id]">
+          <div class="class-heading">
+            <span>{{ characterClass.primaryAbility }}</span>
+            <strong>{{ characterClass.features.length }} rasgos</strong>
+          </div>
+          <h2>{{ characterClass.name }}</h2>
+          <p>{{ characterClass.summary }}</p>
+          <dl>
+            <div>
+              <dt>Característica</dt>
+              <dd>{{ characterClass.primaryAbility }}</dd>
+            </div>
+            <div>
+              <dt>Dado de golpe</dt>
+              <dd>{{ characterClass.hitDie }}</dd>
+            </div>
+          </dl>
+          <span class="open-label">Ver progresión <span aria-hidden="true">→</span></span>
+        </a>
+      }
+    </div>
+  </section>
+} @else {
+  <p class="loading">Cargando clases...</p>
+}

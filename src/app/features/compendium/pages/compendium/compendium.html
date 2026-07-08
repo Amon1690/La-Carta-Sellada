@@ -1,0 +1,188 @@
+@if (vm$ | async; as vm) {
+  <section class="compendium">
+    <header>
+      <p>{{ vm.eyebrow }}</p>
+      <h1>{{ vm.title }}</h1>
+      <span>{{ vm.description }}</span>
+    </header>
+
+    <section class="tools" aria-label="Filtros de compendio">
+      <label class="search-control">
+        <span>Buscar</span>
+        <input
+          [value]="query()"
+          (input)="updateQuery($any($event.target).value)"
+          placeholder="Buscar en esta sección"
+        />
+      </label>
+
+      <div class="filter-pills" aria-label="Etiquetas">
+        @for (tag of tagOptions(vm.entries); track tag) {
+          <button
+            type="button"
+            [class.active]="isTagSelected(tag, vm.entries)"
+            [attr.aria-pressed]="isTagSelected(tag, vm.entries)"
+            (click)="setTag(tag)"
+          >
+            {{ tag }}
+          </button>
+        }
+      </div>
+    </section>
+
+    @if (filteredEntries(vm.entries).length) {
+      <div class="entry-grid">
+        @for (entry of filteredEntries(vm.entries); track entry.key) {
+          <article class="entry-card">
+            @if (entry.tokenPreview && entry.tokenUrl; as tokenUrl) {
+              <div class="token-preview">
+                <img [src]="tokenUrl" [alt]="'Token de ' + entry.name" />
+              </div>
+            }
+
+            @if (entry.portrait; as portrait) {
+              <div
+                class="entry-portrait"
+                role="img"
+                [attr.aria-label]="'Retrato de ' + entry.name"
+                [style.background-image]="'url(' + portrait.src + ')'"
+                [style.background-position]="portrait.position"
+                [style.background-size]="portrait.size"
+              ></div>
+            }
+
+            <div class="entry-heading">
+              <div>
+                <span>{{ entry.kicker }}</span>
+                <h2>{{ entry.name }}</h2>
+              </div>
+              <div class="entry-actions">
+                @if (entry.tokenUrl; as tokenUrl) {
+                  <a
+                    class="asset-button"
+                    [href]="tokenUrl"
+                    target="_blank"
+                    rel="noopener"
+                    [attr.aria-label]="'Abrir token de ' + entry.name"
+                  >
+                    <img [src]="tokenUrl" alt="" />
+                    Token
+                  </a>
+                }
+                @if (entry.gridTokenUrl; as gridTokenUrl) {
+                  <a
+                    class="asset-button"
+                    [href]="gridTokenUrl"
+                    target="_blank"
+                    rel="noopener"
+                    [attr.aria-label]="'Abrir token de una casilla de ' + entry.name"
+                  >
+                    <img [src]="gridTokenUrl" alt="" />
+                    Casilla
+                  </a>
+                }
+                @if (entry.mapUrl) {
+                  <a
+                    class="asset-button"
+                    [href]="entry.mapUrl"
+                    target="_blank"
+                    rel="noopener"
+                    [attr.aria-label]="'Abrir mapa de ' + entry.name"
+                  >
+                    <span aria-hidden="true">▦</span>
+                    Mapa
+                  </a>
+                }
+                @if (entry.vttUrl; as vttUrl) {
+                  <a
+                    class="asset-button"
+                    [href]="vttUrl"
+                    target="_blank"
+                    rel="noopener"
+                    [attr.aria-label]="'Abrir tablero virtual de ' + entry.name"
+                  >
+                    <span aria-hidden="true">▣</span>
+                    VTT
+                  </a>
+                }
+              </div>
+            </div>
+
+            <p>{{ entry.summary }}</p>
+
+            @if (entry.description) {
+              <details class="entry-description">
+                <summary>Descripción completa</summary>
+                <p>{{ entry.description }}</p>
+              </details>
+            }
+
+            @if (entry.stats?.length) {
+              <dl class="stat-strip" aria-label="Estadísticas principales">
+                @for (stat of entry.stats; track stat.label) {
+                  <div>
+                    <dt>{{ stat.label }}</dt>
+                    <dd>{{ stat.value }}</dd>
+                  </div>
+                }
+              </dl>
+            }
+
+            @if (entry.detailSections?.length) {
+              <div class="npc-detail-sections">
+                @for (section of entry.detailSections; track section.title) {
+                  <section
+                    class="npc-detail-section"
+                    [class.compact]="section.compact"
+                  >
+                    <h3>{{ section.title }}</h3>
+                    <ul>
+                      @for (detail of section.entries; track $index) {
+                        <li>{{ detail }}</li>
+                      }
+                    </ul>
+                  </section>
+                }
+              </div>
+            }
+
+            @if (entry.tags.length) {
+              <div class="tags">
+                @for (tag of entry.tags; track tag) {
+                  <span>{{ tag }}</span>
+                }
+              </div>
+            }
+
+            @if (entry.meta.length) {
+              <dl>
+                @for (meta of entry.meta; track meta) {
+                  <div>
+                    <dt>Nota</dt>
+                    <dd>{{ meta }}</dd>
+                  </div>
+                }
+              </dl>
+            }
+
+            @if (entry.bullets.length) {
+              <ul>
+                @for (bullet of entry.bullets; track bullet) {
+                  <li>{{ bullet }}</li>
+                }
+              </ul>
+            }
+          </article>
+        }
+      </div>
+    } @else {
+      <section class="empty">
+        <h2>Sin resultados</h2>
+        <p>No hay entradas que coincidan con la búsqueda o etiqueta activa.</p>
+        <button type="button" (click)="clearFilters()">Limpiar filtros</button>
+      </section>
+    }
+  </section>
+} @else {
+  <p class="loading">Cargando compendio...</p>
+}

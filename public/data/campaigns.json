@@ -1,0 +1,16 @@
+[
+  {
+    "id": "la-carta-sellada",
+    "name": "La Carta Sellada",
+    "system": "Dragones y Mazmorras 5.5 (2024)",
+    "premise": "Un clérigo de Helm ha desaparecido y una carta divina no puede caer en manos equivocadas.",
+    "status": "En curso",
+    "currentAct": "Acto II",
+    "startingLevel": 5,
+    "partySize": "3-5",
+    "dataPath": "data/campaign.json",
+    "coverImage": "assets/npcs/atlas-01-hawkwinter.png",
+    "coverPosition": "left top",
+    "coverSize": "200% auto"
+  }
+]

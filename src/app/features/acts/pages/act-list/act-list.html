@@ -1,0 +1,44 @@
+@if (campaign$ | async; as campaign) {
+  <section class="acts-page">
+    <header class="page-header">
+      <p>Libro de campaña</p>
+      <h1>Actos</h1>
+      <span>Selecciona un acto para consultar su resumen, escenas y encuentros.</span>
+    </header>
+
+    <div class="act-list">
+      @for (act of campaign.acts; track act.id; let index = $index) {
+        <a class="act-card" [routerLink]="['/campanas', campaignId, 'actos', act.id]">
+          <div class="act-number" aria-hidden="true">{{ index + 1 }}</div>
+
+          <div class="act-content">
+            <div class="act-heading">
+              <div>
+                <span>{{ act.label }}</span>
+                <h2>{{ act.name }}</h2>
+              </div>
+              <strong [class.current]="act.status === 'En curso'">{{ act.status }}</strong>
+            </div>
+
+            <p>{{ act.summary }}</p>
+
+            <dl>
+              <div>
+                <dt>Escenas</dt>
+                <dd>{{ sceneCount(campaign, act) }}</dd>
+              </div>
+              <div>
+                <dt>Encuentros</dt>
+                <dd>{{ encounterCount(campaign, act) }}</dd>
+              </div>
+            </dl>
+          </div>
+
+          <span class="open-label">Abrir acto <span aria-hidden="true">→</span></span>
+        </a>
+      }
+    </div>
+  </section>
+} @else {
+  <p class="loading">Cargando actos...</p>
+}
