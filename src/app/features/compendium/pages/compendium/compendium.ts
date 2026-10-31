@@ -1,7 +1,8 @@
 import { AsyncPipe } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
-import { combineLatest, map, of } from 'rxjs';
+import { BehaviorSubject, combineLatest, map, of } from 'rxjs';
 
 import {
   Campaign,
@@ -39,9 +40,77 @@ type CompendiumSection =
   | 'feats'
   | 'skills'
   | 'equipment'
+  | 'rule-players'
   | 'generic-npcs'
   | 'timeline'
   | 'antagonists';
+
+type EditableSheetKind = 'player' | 'npc' | 'generic-npc';
+type EditableSheetEntity = EditablePlayerSheet | CampaignNpc | RuleGenericNpc;
+
+interface EditablePlayerSheet extends PlayerOption {
+  tokenUrl?: string;
+  gridTokenUrl?: string;
+  affiliation?: string;
+}
+
+interface EditableCollection<T extends { id: string }> {
+  edited: Record<string, T>;
+  created: T[];
+}
+
+interface SheetEditorState {
+  kind: EditableSheetKind;
+  mode: 'create' | 'edit';
+  title: string;
+  sourceId?: string;
+}
+
+interface SheetDraft {
+  id: string;
+  name: string;
+  summary: string;
+  tagsText: string;
+  role: string;
+  category: string;
+  lineage: string;
+  ancestry: string;
+  className: string;
+  subclass: string;
+  background: string;
+  level: number;
+  feat: string;
+  faction: string;
+  motivation: string;
+  age: string;
+  description: string;
+  armorClass: number;
+  hitPoints: number;
+  speed: string;
+  initiative: string;
+  proficiencyBonus: number;
+  challenge: string;
+  strength: number;
+  dexterity: number;
+  constitution: number;
+  intelligence: number;
+  wisdom: number;
+  charisma: number;
+  personalityText: string;
+  savesText: string;
+  skillsText: string;
+  traitsText: string;
+  attacksText: string;
+  spellsText: string;
+  equipmentText: string;
+  knowledgeText: string;
+  reactionsText: string;
+  secret: string;
+  tokenUrl: string;
+  gridTokenUrl: string;
+  affiliation: string;
+  showToken: boolean;
+}
 
 interface CompendiumCard {
   key: string;
@@ -60,6 +129,8 @@ interface CompendiumCard {
   stats?: { label: string; value: string }[];
   detailSections?: CompendiumDetailSection[];
   portrait?: CompendiumPortrait;
+  editableKind?: EditableSheetKind;
+  editableEntity?: EditableSheetEntity;
 }
 
 interface CompendiumDetailSection {
@@ -135,11 +206,12 @@ interface CompendiumViewModel {
   title: string;
   description: string;
   entries: CompendiumCard[];
+  editableKind?: EditableSheetKind;
 }
 
 @Component({
   selector: 'app-compendium',
-  imports: [AsyncPipe],
+  imports: [AsyncPipe, FormsModule],
   templateUrl: './compendium.html',
   styleUrl: './compendium.scss',
 })
@@ -147,30 +219,33 @@ export class Compendium {
   protected readonly allTagsLabel = 'Todas';
   protected readonly query = signal('');
   protected readonly activeTags = signal<string[]>([]);
+  protected readonly editor = signal<SheetEditorState | undefined>(undefined);
+  protected draft: SheetDraft = this.emptyDraft('player');
 
   private readonly campaignData = inject(CampaignDataService);
   private readonly rulesData = inject(RulesDataService);
   private readonly route = inject(ActivatedRoute);
+  private readonly editableVersion = new BehaviorSubject(0);
   private readonly campaignId =
     this.route.snapshot.paramMap.get('campaignId') ?? '';
   private readonly section = this.route.snapshot.data[
     'section'
   ] as CompendiumSection;
-  private readonly campaign$ = [
-    'spells',
-    'feats',
-    'skills',
-    'equipment',
-    'generic-npcs',
-  ].includes(this.section)
-    ? of(undefined)
-    : this.campaignData.getCampaign();
+  private readonly campaign$ =
+    this.section === 'rule-players'
+      ? this.campaignData.getDefaultCampaign()
+      : ['spells', 'feats', 'skills', 'equipment', 'generic-npcs'].includes(
+            this.section
+          )
+        ? of(undefined)
+        : this.campaignData.getCampaign();
 
   protected readonly vm$ = combineLatest([
     this.campaign$,
     this.rulesData.getRules(),
     this.route.data,
     this.route.queryParamMap,
+    this.editableVersion,
   ]).pipe(
     map(([campaign, rules, data, queryParams]) => {
       const query = queryParams.get('q') ?? '';
@@ -220,6 +295,59 @@ export class Compendium {
   protected clearFilters(): void {
     this.query.set('');
     this.activeTags.set([]);
+  }
+
+  protected startCreate(kind: EditableSheetKind): void {
+    this.draft = this.emptyDraft(kind);
+    this.editor.set({
+      kind,
+      mode: 'create',
+      title: `Nueva ${this.sheetKindLabel(kind)}`,
+    });
+  }
+
+  protected startEdit(entry: CompendiumCard): void {
+    if (!entry.editableKind || !entry.editableEntity) return;
+    this.draft = this.draftFromEntity(entry.editableKind, entry.editableEntity);
+    this.editor.set({
+      kind: entry.editableKind,
+      mode: 'edit',
+      sourceId: entry.editableEntity.id,
+      title: `Editar ${entry.name}`,
+    });
+  }
+
+  protected cancelEditor(): void {
+    this.editor.set(undefined);
+  }
+
+  protected saveDraft(event: Event): void {
+    event.preventDefault();
+    const editor = this.editor();
+    if (!editor) return;
+
+    if (editor.kind === 'player') {
+      this.saveEditableEntity(
+        this.playerSheetsStoreKey(),
+        this.playerFromDraft(editor),
+        editor.mode
+      );
+    } else if (editor.kind === 'generic-npc') {
+      this.saveEditableEntity(
+        this.genericNpcsStoreKey(),
+        this.genericNpcFromDraft(editor),
+        editor.mode
+      );
+    } else {
+      this.saveEditableEntity(
+        this.campaignNpcsStoreKey(this.campaignId),
+        this.campaignNpcFromDraft(editor),
+        editor.mode
+      );
+    }
+
+    this.editableVersion.next(this.editableVersion.getValue() + 1);
+    this.cancelEditor();
   }
 
   protected tagOptions(entries: CompendiumCard[]): string[] {
@@ -309,13 +437,27 @@ export class Compendium {
             'Armas, armaduras, herramientas y equipo de aventura con propiedades, precio y peso.',
           entries: rules.equipment.map((item) => this.equipmentCard(item)),
         };
+      case 'rule-players':
+        return {
+          eyebrow: 'Reglas 2024',
+          title: 'Fichas PJs',
+          description:
+            'Biblioteca editable de personajes jugadores listos para usar, adaptar o crear desde cero.',
+          entries: this.playerSheets(campaign).map((player) =>
+            this.playerCard(player, true)
+          ),
+          editableKind: 'player',
+        };
       case 'generic-npcs':
         return {
           eyebrow: 'Reglas 2024',
           title: 'Fichas genéricas',
           description:
             'Perfiles originales compatibles con D&D 2024 para improvisar aliados, habitantes, adversarios y encuentros en cualquier campaña.',
-          entries: GENERIC_NPCS.map((npc) => this.genericNpcCard(npc)),
+          entries: this.withEditableGenericNpcs(GENERIC_NPCS).map((npc) =>
+            this.genericNpcCard(npc, true)
+          ),
+          editableKind: 'generic-npc',
         };
     }
 
@@ -343,7 +485,10 @@ export class Compendium {
           title: 'Fichas de PNJ',
           description:
             'Aliados, ausentes y figuras que empujan el misterio inicial.',
-          entries: campaign.npcs.map((npc) => this.npcCard(npc)),
+          entries: this.withEditableCampaignNpcs(campaign.id, campaign.npcs).map(
+            (npc) => this.npcCard(npc, true)
+          ),
+          editableKind: 'npc',
         };
       case 'tokens':
         return {
@@ -367,9 +512,10 @@ export class Compendium {
           title: 'Fichas de PJ',
           description:
             'Quince personajes de nivel 5 listos para jugar, con gancho directo para entrar en la aventura.',
-          entries: campaign.playerOptions.map((player) =>
-            this.playerCard(player)
+          entries: this.playerSheets(campaign).map((player) =>
+            this.playerCard(player, true)
           ),
+          editableKind: 'player',
         };
       case 'items':
         return {
@@ -438,11 +584,12 @@ export class Compendium {
     rules: RulesCompendium
   ): CompendiumCard[] {
     return [
-      ...campaign.npcs.map((npc) => this.npcCard(npc)),
-      ...campaign.playerCharacters.map((player) =>
-        this.namedPlayerTokenCard(player)
+      ...this.withEditableCampaignNpcs(campaign.id, campaign.npcs).map((npc) =>
+        this.npcCard(npc, true)
       ),
-      ...campaign.playerOptions.map((player) => this.playerCard(player)),
+      ...this.playerSheets(campaign).map((player) =>
+        this.playerCard(player, true)
+      ),
       ...campaign.items.map((item) => this.itemCard(item)),
       ...campaign.locations.map((location) => this.locationCard(location)),
       ...this.sortedScenes(campaign).map((scene) => this.sceneCard(scene)),
@@ -464,7 +611,7 @@ export class Compendium {
     return campaign.scenes.slice().sort((a, b) => a.order - b.order);
   }
 
-  private npcCard(npc: CampaignNpc): CompendiumCard {
+  private npcCard(npc: CampaignNpc, editable = false): CompendiumCard {
     const statBlock = npc.statBlock;
     return {
       key: `npc:${npc.id}`,
@@ -557,29 +704,100 @@ export class Compendium {
           }
         : {}),
       portrait: NPC_PORTRAITS[npc.id],
-      tokenUrl: this.tokenPath('npcs', npc.id),
+      ...(npc.id.startsWith('custom-')
+        ? {}
+        : { tokenUrl: this.tokenPath('npcs', npc.id) }),
+      ...(editable
+        ? { editableKind: 'npc' as const, editableEntity: npc }
+        : {}),
     };
   }
 
-  private playerCard(player: PlayerOption): CompendiumCard {
+  private playerCard(
+    player: EditablePlayerSheet,
+    editable = false
+  ): CompendiumCard {
+    const tokenUrl =
+      player.tokenUrl ??
+      (player.showToken !== false && !player.id.startsWith('custom-')
+        ? this.tokenPath('players', player.id)
+        : undefined);
+    const gridTokenUrl =
+      player.gridTokenUrl ??
+      (player.showToken !== false && !player.id.startsWith('custom-')
+        ? this.gridTokenPath('players', player.id)
+        : undefined);
+
     return {
       key: `player:${player.id}`,
       name: player.name,
       kicker: `${player.className} - ${player.ancestry}`,
       summary: player.hook,
-      tags: [player.className, player.ancestry, player.background],
+      tags: Array.from(
+        new Set([
+          player.className,
+          player.ancestry,
+          player.background,
+          player.subclass,
+          ...(player.tags ?? []),
+        ])
+      ),
       meta: [
         `Subclase: ${player.subclass}`,
         `Trasfondo: ${player.background} - dote ${player.feat}`,
-        this.abilityLine(player.abilities),
-        `Salvaciones: ${player.saves.join(', ')}`,
-        `Habilidades: ${player.skills.join(', ')}`,
+        `Nivel: ${player.level}`,
+        ...(player.affiliation ? [`Afiliación: ${player.affiliation}`] : []),
       ],
-      bullets: [
-        ...player.attacks.map((entry) => `Ataque: ${entry}`),
-        ...player.features.map((entry) => `Rasgo: ${entry}`),
-        ...player.spells.map((entry) => `Conjuro: ${entry}`),
-        ...player.equipment.map((entry) => `Equipo: ${entry}`),
+      bullets: [],
+      detailSections: [
+        {
+          title: 'Características',
+          compact: true,
+          entries: [
+            `FUE ${player.abilities.strength}`,
+            `DES ${player.abilities.dexterity}`,
+            `CON ${player.abilities.constitution}`,
+            `INT ${player.abilities.intelligence}`,
+            `SAB ${player.abilities.wisdom}`,
+            `CAR ${player.abilities.charisma}`,
+          ],
+        },
+        {
+          title: 'Salvaciones',
+          entries: player.saves.length
+            ? player.saves
+            : ['Sin bonificadores adicionales.'],
+        },
+        {
+          title: 'Habilidades',
+          entries: player.skills.length
+            ? player.skills
+            : ['Sin competencias adicionales.'],
+        },
+        {
+          title: 'Rasgos',
+          entries: player.features.length
+            ? player.features
+            : ['Sin rasgos especiales.'],
+        },
+        {
+          title: 'Ataques',
+          entries: player.attacks.length
+            ? player.attacks
+            : ['Sin ataques registrados.'],
+        },
+        {
+          title: 'Conjuros',
+          entries: player.spells.length
+            ? player.spells
+            : ['No dispone de conjuros.'],
+        },
+        {
+          title: 'Equipo',
+          entries: player.equipment.length
+            ? player.equipment
+            : ['Sin equipo registrado.'],
+        },
       ],
       stats: [
         { label: 'CA', value: String(player.armorClass) },
@@ -588,11 +806,15 @@ export class Compendium {
         { label: 'Init.', value: player.initiative },
         { label: 'Compet.', value: `+${player.proficiencyBonus}` },
       ],
-      tokenUrl: this.tokenPath('players', player.id),
+      ...(tokenUrl ? { tokenUrl } : {}),
+      ...(gridTokenUrl ? { gridTokenUrl } : {}),
+      ...(editable
+        ? { editableKind: 'player' as const, editableEntity: player }
+        : {}),
     };
   }
 
-  private genericNpcCard(npc: RuleGenericNpc): CompendiumCard {
+  private genericNpcCard(npc: RuleGenericNpc, editable = false): CompendiumCard {
     return {
       key: `generic-npc:${npc.id}`,
       name: npc.name,
@@ -668,9 +890,16 @@ export class Compendium {
             : ['Sin equipo registrado.'],
         },
       ],
-      tokenUrl: `assets/tokens/generic/${npc.id}.png`,
-      gridTokenUrl: `assets/tokens-grid/generic/${npc.id}.png`,
-      tokenPreview: true,
+      ...(npc.id.startsWith('custom-')
+        ? {}
+        : {
+            tokenUrl: `assets/tokens/generic/${npc.id}.png`,
+            gridTokenUrl: `assets/tokens-grid/generic/${npc.id}.png`,
+            tokenPreview: true,
+          }),
+      ...(editable
+        ? { editableKind: 'generic-npc' as const, editableEntity: npc }
+        : {}),
     };
   }
 
@@ -902,6 +1131,571 @@ export class Compendium {
       meta: [],
       bullets: [],
     };
+  }
+
+  private playerSheets(campaign: Campaign | undefined): EditablePlayerSheet[] {
+    if (!campaign) {
+      return this.withEditablePlayerSheets([]);
+    }
+
+    const namedPlayers = campaign.playerCharacters.map((player) =>
+      this.playerCharacterToSheet(player, campaign.playerOptions)
+    );
+    const visibleOptions = campaign.playerOptions
+      .filter((player) => player.showToken !== false)
+      .map((player) => this.playerOptionToSheet(player));
+
+    return this.withEditablePlayerSheets([...namedPlayers, ...visibleOptions]);
+  }
+
+  private withEditablePlayerSheets(
+    base: EditablePlayerSheet[]
+  ): EditablePlayerSheet[] {
+    return this.applyEditableCollection(base, this.playerSheetsStoreKey());
+  }
+
+  private playerOptionToSheet(player: PlayerOption): EditablePlayerSheet {
+    const hasToken = player.showToken !== false && !player.id.startsWith('custom-');
+    return {
+      ...player,
+      tokenUrl: hasToken ? this.tokenPath('players', player.id) : undefined,
+      gridTokenUrl: hasToken ? this.gridTokenPath('players', player.id) : undefined,
+    };
+  }
+
+  private playerCharacterToSheet(
+    player: CampaignPlayerCharacter,
+    templates: PlayerOption[]
+  ): EditablePlayerSheet {
+    const template =
+      this.findPlayerTemplate(player, templates) ?? this.defaultPlayerTemplate();
+    return {
+      ...template,
+      id: player.id,
+      showToken: true,
+      name: player.name,
+      tags: player.tags,
+      ancestry: player.ancestry,
+      className: player.className,
+      subclass: player.subclass,
+      background: player.background,
+      hook: player.summary,
+      tokenUrl: player.tokenUrl,
+      gridTokenUrl: player.gridTokenUrl,
+      affiliation: player.affiliation,
+    };
+  }
+
+  private findPlayerTemplate(
+    player: CampaignPlayerCharacter,
+    templates: PlayerOption[]
+  ): PlayerOption | undefined {
+    const className = this.normalize(player.className);
+    const subclass = this.normalize(player.subclass);
+    return (
+      templates.find(
+        (template) =>
+          this.normalize(template.className) === className &&
+          this.normalize(template.subclass) === subclass
+      ) ??
+      templates.find((template) => this.normalize(template.subclass) === subclass) ??
+      templates.find((template) => this.normalize(template.className) === className)
+    );
+  }
+
+  private defaultPlayerTemplate(): PlayerOption {
+    return {
+      id: 'template',
+      name: 'PJ',
+      ancestry: 'Humano',
+      className: 'Clase',
+      subclass: 'A elegir',
+      background: 'A elegir',
+      hook: 'Pendiente de definir.',
+      level: 5,
+      feat: 'A elegir',
+      armorClass: 12,
+      hitPoints: 38,
+      speed: '9 m',
+      initiative: '+0',
+      proficiencyBonus: 3,
+      abilities: {
+        strength: 10,
+        dexterity: 10,
+        constitution: 10,
+        intelligence: 10,
+        wisdom: 10,
+        charisma: 10,
+      },
+      saves: [],
+      skills: [],
+      attacks: [],
+      features: [],
+      spells: [],
+      equipment: [],
+    };
+  }
+
+  private withEditableGenericNpcs(base: RuleGenericNpc[]): RuleGenericNpc[] {
+    return this.applyEditableCollection(base, this.genericNpcsStoreKey());
+  }
+
+  private withEditableCampaignNpcs(
+    campaignId: string,
+    base: CampaignNpc[]
+  ): CampaignNpc[] {
+    return this.applyEditableCollection(base, this.campaignNpcsStoreKey(campaignId));
+  }
+
+  private applyEditableCollection<T extends { id: string }>(
+    base: T[],
+    key: string
+  ): T[] {
+    const collection = this.loadEditableCollection<T>(key);
+    const baseIds = new Set(base.map((entry) => entry.id));
+    const edited = base.map((entry) => collection.edited[entry.id] ?? entry);
+    const created = collection.created.filter((entry) => !baseIds.has(entry.id));
+    return [...edited, ...created];
+  }
+
+  private saveEditableEntity<T extends { id: string }>(
+    key: string,
+    entity: T,
+    mode: 'create' | 'edit'
+  ): void {
+    const collection = this.loadEditableCollection<T>(key);
+    const createdIndex = collection.created.findIndex(
+      (entry) => entry.id === entity.id
+    );
+
+    if (mode === 'create' || entity.id.startsWith('custom-') || createdIndex >= 0) {
+      if (createdIndex >= 0) {
+        collection.created[createdIndex] = entity;
+      } else {
+        collection.created.push(entity);
+      }
+      delete collection.edited[entity.id];
+    } else {
+      collection.edited[entity.id] = entity;
+    }
+
+    this.saveEditableCollection(key, collection);
+  }
+
+  private loadEditableCollection<T extends { id: string }>(
+    key: string
+  ): EditableCollection<T> {
+    if (typeof localStorage === 'undefined') {
+      return { edited: {}, created: [] };
+    }
+
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return { edited: {}, created: [] };
+      const parsed = JSON.parse(raw) as Partial<EditableCollection<T>>;
+      return {
+        edited: parsed.edited ?? {},
+        created: Array.isArray(parsed.created) ? parsed.created : [],
+      };
+    } catch {
+      return { edited: {}, created: [] };
+    }
+  }
+
+  private saveEditableCollection<T extends { id: string }>(
+    key: string,
+    collection: EditableCollection<T>
+  ): void {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(key, JSON.stringify(collection));
+  }
+
+  private draftFromEntity(
+    kind: EditableSheetKind,
+    entity: EditableSheetEntity
+  ): SheetDraft {
+    if (kind === 'player') {
+      return this.draftFromPlayer(entity as EditablePlayerSheet);
+    }
+    if (kind === 'generic-npc') {
+      return this.draftFromGenericNpc(entity as RuleGenericNpc);
+    }
+    return this.draftFromCampaignNpc(entity as CampaignNpc);
+  }
+
+  private draftFromPlayer(player: EditablePlayerSheet): SheetDraft {
+    return {
+      ...this.emptyDraft('player'),
+      id: player.id,
+      name: player.name,
+      summary: player.hook,
+      tagsText: this.listToText(
+        player.tags ?? [
+          player.className,
+          player.ancestry,
+          player.subclass,
+          player.background,
+        ]
+      ),
+      ancestry: player.ancestry,
+      className: player.className,
+      subclass: player.subclass,
+      background: player.background,
+      level: player.level,
+      feat: player.feat,
+      armorClass: player.armorClass,
+      hitPoints: player.hitPoints,
+      speed: player.speed,
+      initiative: player.initiative,
+      proficiencyBonus: player.proficiencyBonus,
+      strength: player.abilities.strength,
+      dexterity: player.abilities.dexterity,
+      constitution: player.abilities.constitution,
+      intelligence: player.abilities.intelligence,
+      wisdom: player.abilities.wisdom,
+      charisma: player.abilities.charisma,
+      savesText: this.listToText(player.saves),
+      skillsText: this.listToText(player.skills),
+      traitsText: this.listToText(player.features),
+      attacksText: this.listToText(player.attacks),
+      spellsText: this.listToText(player.spells),
+      equipmentText: this.listToText(player.equipment),
+      tokenUrl: player.tokenUrl ?? '',
+      gridTokenUrl: player.gridTokenUrl ?? '',
+      affiliation: player.affiliation ?? '',
+      showToken: player.showToken !== false,
+    };
+  }
+
+  private draftFromCampaignNpc(npc: CampaignNpc): SheetDraft {
+    const statBlock = npc.statBlock;
+    return {
+      ...this.emptyDraft('npc'),
+      id: npc.id,
+      name: npc.name,
+      summary: npc.summary,
+      tagsText: this.listToText(npc.tags),
+      role: npc.role,
+      faction: npc.faction,
+      motivation: npc.motivation,
+      age: npc.age ?? '',
+      ancestry: npc.ancestry ?? '',
+      description: npc.description ?? '',
+      personalityText: this.listToText(npc.personality ?? []),
+      knowledgeText: this.listToText(npc.knowledge ?? []),
+      reactionsText: this.listToText(npc.reactions ?? []),
+      secret: npc.secret ?? '',
+      armorClass: statBlock?.armorClass ?? 12,
+      hitPoints: statBlock?.hitPoints ?? 9,
+      speed: statBlock?.speed ?? '9 m',
+      initiative: statBlock?.initiative ?? '+0',
+      proficiencyBonus: statBlock?.proficiencyBonus ?? 2,
+      challenge: statBlock?.challenge ?? '0',
+      strength: statBlock?.abilities.strength ?? 10,
+      dexterity: statBlock?.abilities.dexterity ?? 10,
+      constitution: statBlock?.abilities.constitution ?? 10,
+      intelligence: statBlock?.abilities.intelligence ?? 10,
+      wisdom: statBlock?.abilities.wisdom ?? 10,
+      charisma: statBlock?.abilities.charisma ?? 10,
+      savesText: this.listToText(statBlock?.saves ?? []),
+      skillsText: this.listToText(statBlock?.skills ?? []),
+      traitsText: this.listToText(statBlock?.features ?? []),
+      attacksText: this.listToText(statBlock?.attacks ?? []),
+      spellsText: this.listToText(statBlock?.spells ?? []),
+      equipmentText: this.listToText(statBlock?.equipment ?? []),
+    };
+  }
+
+  private draftFromGenericNpc(npc: RuleGenericNpc): SheetDraft {
+    return {
+      ...this.emptyDraft('generic-npc'),
+      id: npc.id,
+      name: npc.name,
+      summary: npc.summary,
+      tagsText: this.listToText(npc.tags),
+      category: npc.category,
+      role: npc.role,
+      lineage: npc.lineage,
+      armorClass: npc.armorClass,
+      hitPoints: npc.hitPoints,
+      speed: npc.speed,
+      initiative: npc.initiative,
+      proficiencyBonus: npc.proficiencyBonus,
+      challenge: npc.challenge,
+      strength: npc.abilities.strength,
+      dexterity: npc.abilities.dexterity,
+      constitution: npc.abilities.constitution,
+      intelligence: npc.abilities.intelligence,
+      wisdom: npc.abilities.wisdom,
+      charisma: npc.abilities.charisma,
+      personalityText: this.listToText(npc.personality),
+      savesText: this.listToText(npc.saves),
+      skillsText: this.listToText(npc.skills),
+      traitsText: this.listToText(npc.traits),
+      attacksText: this.listToText(npc.attacks),
+      spellsText: this.listToText(npc.spells),
+      equipmentText: this.listToText(npc.equipment),
+    };
+  }
+
+  private playerFromDraft(editor: SheetEditorState): EditablePlayerSheet {
+    const id = this.draftId(editor);
+    return {
+      id,
+      showToken: this.draft.showToken,
+      name: this.textOr(this.draft.name, 'PJ sin nombre'),
+      tags: this.tagsFromText(this.draft.tagsText),
+      ancestry: this.textOr(this.draft.ancestry, 'Humano'),
+      className: this.textOr(this.draft.className, 'Clase'),
+      subclass: this.textOr(this.draft.subclass, 'Sin subclase'),
+      background: this.textOr(this.draft.background, 'A elegir'),
+      hook: this.textOr(this.draft.summary, 'Pendiente de definir.'),
+      level: this.numberOr(this.draft.level, 1),
+      feat: this.textOr(this.draft.feat, 'A elegir'),
+      armorClass: this.numberOr(this.draft.armorClass, 10),
+      hitPoints: this.numberOr(this.draft.hitPoints, 1),
+      speed: this.textOr(this.draft.speed, '9 m'),
+      initiative: this.textOr(this.draft.initiative, '+0'),
+      proficiencyBonus: this.numberOr(this.draft.proficiencyBonus, 2),
+      abilities: this.abilitiesFromDraft(),
+      saves: this.linesFromText(this.draft.savesText),
+      skills: this.linesFromText(this.draft.skillsText),
+      attacks: this.linesFromText(this.draft.attacksText),
+      features: this.linesFromText(this.draft.traitsText),
+      spells: this.linesFromText(this.draft.spellsText),
+      equipment: this.linesFromText(this.draft.equipmentText),
+      tokenUrl: this.optionalText(this.draft.tokenUrl),
+      gridTokenUrl: this.optionalText(this.draft.gridTokenUrl),
+      affiliation: this.optionalText(this.draft.affiliation),
+    };
+  }
+
+  private campaignNpcFromDraft(editor: SheetEditorState): CampaignNpc {
+    const id = this.draftId(editor);
+    return {
+      id,
+      name: this.textOr(this.draft.name, 'PNJ sin nombre'),
+      summary: this.textOr(this.draft.summary, 'Pendiente de definir.'),
+      tags: this.tagsFromText(this.draft.tagsText),
+      role: this.textOr(this.draft.role, 'PNJ'),
+      faction: this.textOr(this.draft.faction, 'Independiente'),
+      motivation: this.textOr(this.draft.motivation, 'Pendiente de definir'),
+      age: this.optionalText(this.draft.age),
+      ancestry: this.optionalText(this.draft.ancestry),
+      description: this.optionalText(this.draft.description),
+      personality: this.linesFromText(this.draft.personalityText),
+      knowledge: this.linesFromText(this.draft.knowledgeText),
+      reactions: this.linesFromText(this.draft.reactionsText),
+      secret: this.optionalText(this.draft.secret),
+      statBlock: {
+        armorClass: this.numberOr(this.draft.armorClass, 10),
+        hitPoints: this.numberOr(this.draft.hitPoints, 1),
+        speed: this.textOr(this.draft.speed, '9 m'),
+        initiative: this.textOr(this.draft.initiative, '+0'),
+        proficiencyBonus: this.numberOr(this.draft.proficiencyBonus, 2),
+        challenge: this.textOr(this.draft.challenge, '0'),
+        abilities: this.abilitiesFromDraft(),
+        saves: this.linesFromText(this.draft.savesText),
+        skills: this.linesFromText(this.draft.skillsText),
+        features: this.linesFromText(this.draft.traitsText),
+        attacks: this.linesFromText(this.draft.attacksText),
+        spells: this.linesFromText(this.draft.spellsText),
+        equipment: this.linesFromText(this.draft.equipmentText),
+      },
+    };
+  }
+
+  private genericNpcFromDraft(editor: SheetEditorState): RuleGenericNpc {
+    const id = this.draftId(editor);
+    return {
+      id,
+      name: this.textOr(this.draft.name, 'Ficha genérica sin nombre'),
+      category: this.textOr(this.draft.category, 'Genérico'),
+      role: this.textOr(this.draft.role, 'Personaje de apoyo'),
+      lineage: this.textOr(this.draft.lineage, 'Humanoide'),
+      summary: this.textOr(this.draft.summary, 'Pendiente de definir.'),
+      tags: this.tagsFromText(this.draft.tagsText),
+      armorClass: this.numberOr(this.draft.armorClass, 10),
+      hitPoints: this.numberOr(this.draft.hitPoints, 1),
+      speed: this.textOr(this.draft.speed, '9 m'),
+      initiative: this.textOr(this.draft.initiative, '+0'),
+      proficiencyBonus: this.numberOr(this.draft.proficiencyBonus, 2),
+      challenge: this.textOr(this.draft.challenge, '0'),
+      abilities: this.abilitiesFromDraft(),
+      personality: this.linesFromText(this.draft.personalityText),
+      saves: this.linesFromText(this.draft.savesText),
+      skills: this.linesFromText(this.draft.skillsText),
+      traits: this.linesFromText(this.draft.traitsText),
+      attacks: this.linesFromText(this.draft.attacksText),
+      spells: this.linesFromText(this.draft.spellsText),
+      equipment: this.linesFromText(this.draft.equipmentText),
+    };
+  }
+
+  private emptyDraft(kind: EditableSheetKind): SheetDraft {
+    const base: SheetDraft = {
+      id: '',
+      name: '',
+      summary: '',
+      tagsText: '',
+      role: '',
+      category: '',
+      lineage: '',
+      ancestry: '',
+      className: '',
+      subclass: '',
+      background: '',
+      level: 5,
+      feat: '',
+      faction: '',
+      motivation: '',
+      age: '',
+      description: '',
+      armorClass: 12,
+      hitPoints: 10,
+      speed: '9 m',
+      initiative: '+0',
+      proficiencyBonus: 3,
+      challenge: '0',
+      strength: 10,
+      dexterity: 10,
+      constitution: 10,
+      intelligence: 10,
+      wisdom: 10,
+      charisma: 10,
+      personalityText: '',
+      savesText: '',
+      skillsText: '',
+      traitsText: '',
+      attacksText: '',
+      spellsText: '',
+      equipmentText: '',
+      knowledgeText: '',
+      reactionsText: '',
+      secret: '',
+      tokenUrl: '',
+      gridTokenUrl: '',
+      affiliation: '',
+      showToken: false,
+    };
+
+    if (kind === 'player') {
+      return {
+        ...base,
+        className: 'Guerrero',
+        subclass: 'A elegir',
+        ancestry: 'Humano',
+        background: 'A elegir',
+        feat: 'A elegir',
+        tagsText: 'PJ\nNivel 5',
+        hitPoints: 38,
+        showToken: false,
+      };
+    }
+
+    if (kind === 'generic-npc') {
+      return {
+        ...base,
+        category: 'Genérico',
+        role: 'Personaje de apoyo',
+        lineage: 'Humanoide',
+        proficiencyBonus: 2,
+        hitPoints: 9,
+      };
+    }
+
+    return {
+      ...base,
+      role: 'PNJ',
+      faction: 'Independiente',
+      motivation: 'Pendiente de definir',
+      proficiencyBonus: 2,
+      hitPoints: 9,
+    };
+  }
+
+  private draftId(editor: SheetEditorState): string {
+    return editor.mode === 'create'
+      ? this.newSheetId(this.draft.name)
+      : editor.sourceId ?? this.draft.id;
+  }
+
+  private abilitiesFromDraft(): {
+    strength: number;
+    dexterity: number;
+    constitution: number;
+    intelligence: number;
+    wisdom: number;
+    charisma: number;
+  } {
+    return {
+      strength: this.numberOr(this.draft.strength, 10),
+      dexterity: this.numberOr(this.draft.dexterity, 10),
+      constitution: this.numberOr(this.draft.constitution, 10),
+      intelligence: this.numberOr(this.draft.intelligence, 10),
+      wisdom: this.numberOr(this.draft.wisdom, 10),
+      charisma: this.numberOr(this.draft.charisma, 10),
+    };
+  }
+
+  private playerSheetsStoreKey(): string {
+    return 'la-carta-sellada:editable:fichas-pjs';
+  }
+
+  private genericNpcsStoreKey(): string {
+    return 'la-carta-sellada:editable:fichas-genericas';
+  }
+
+  private campaignNpcsStoreKey(campaignId: string): string {
+    return `la-carta-sellada:editable:${campaignId || 'sin-campana'}:pnjs`;
+  }
+
+  private sheetKindLabel(kind: EditableSheetKind): string {
+    if (kind === 'player') return 'ficha de PJ';
+    if (kind === 'generic-npc') return 'ficha genérica';
+    return 'ficha de PNJ';
+  }
+
+  private newSheetId(name: string): string {
+    const slug =
+      this.normalize(name)
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '') || 'ficha';
+    return `custom-${slug}-${Date.now().toString(36)}`;
+  }
+
+  private listToText(entries: string[]): string {
+    return entries.join('\n');
+  }
+
+  private linesFromText(value: string): string[] {
+    return value
+      .split(/\r?\n/)
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+
+  private tagsFromText(value: string): string[] {
+    return Array.from(
+      new Set(
+        value
+          .split(/[,\n]/)
+          .map((entry) => entry.trim())
+          .filter(Boolean)
+      )
+    );
+  }
+
+  private textOr(value: string, fallback: string): string {
+    return value.trim() || fallback;
+  }
+
+  private optionalText(value: string): string | undefined {
+    return value.trim() || undefined;
+  }
+
+  private numberOr(value: number, fallback: number): number {
+    return Number.isFinite(Number(value)) ? Math.round(Number(value)) : fallback;
   }
 
   private normalize(value: string): string {

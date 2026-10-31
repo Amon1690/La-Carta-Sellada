@@ -113,6 +113,7 @@ export interface PlayerOption extends GameStatBlock {
   id: string;
   showToken?: boolean;
   name: string;
+  tags?: string[];
   ancestry: string;
   className: string;
   subclass: string;

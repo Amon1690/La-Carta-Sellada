@@ -1,10 +1,118 @@
 @if (vm$ | async; as vm) {
   <section class="compendium">
-    <header>
-      <p>{{ vm.eyebrow }}</p>
-      <h1>{{ vm.title }}</h1>
-      <span>{{ vm.description }}</span>
+    <header class="compendium-header">
+      <div>
+        <p>{{ vm.eyebrow }}</p>
+        <h1>{{ vm.title }}</h1>
+        <span>{{ vm.description }}</span>
+      </div>
+      @if (vm.editableKind; as editableKind) {
+        <button type="button" class="primary-action" (click)="startCreate(editableKind)">Nueva ficha</button>
+      }
     </header>
+
+    @if (editor(); as currentEditor) {
+      <section class="sheet-editor" aria-label="Editor de ficha">
+        <header>
+          <div>
+            <small>{{ currentEditor.mode === 'create' ? 'Creación' : 'Edición' }}</small>
+            <h2>{{ currentEditor.title }}</h2>
+          </div>
+          <button type="button" class="ghost-action" (click)="cancelEditor()">Cerrar</button>
+        </header>
+
+        <form (submit)="saveDraft($event)">
+          <fieldset>
+            <legend>Identidad</legend>
+            <label>Nombre <input name="sheet-name" [(ngModel)]="draft.name" required /></label>
+            <label>Resumen o gancho <textarea name="sheet-summary" rows="4" [(ngModel)]="draft.summary"></textarea></label>
+            <label>Etiquetas <textarea name="sheet-tags" rows="3" [(ngModel)]="draft.tagsText" placeholder="Una por línea o separadas por comas"></textarea></label>
+          </fieldset>
+
+          @if (currentEditor.kind === 'player') {
+            <fieldset>
+              <legend>Personaje jugador</legend>
+              <label>Linaje <input name="player-ancestry" [(ngModel)]="draft.ancestry" /></label>
+              <label>Clase <input name="player-class" [(ngModel)]="draft.className" /></label>
+              <label>Subclase <input name="player-subclass" [(ngModel)]="draft.subclass" /></label>
+              <label>Trasfondo <input name="player-background" [(ngModel)]="draft.background" /></label>
+              <label>Nivel <input name="player-level" type="number" min="1" [(ngModel)]="draft.level" /></label>
+              <label>Dote <input name="player-feat" [(ngModel)]="draft.feat" /></label>
+            </fieldset>
+          }
+
+          @if (currentEditor.kind === 'npc') {
+            <fieldset>
+              <legend>PNJ de campaña</legend>
+              <label>Rol <input name="npc-role" [(ngModel)]="draft.role" /></label>
+              <label>Facción <input name="npc-faction" [(ngModel)]="draft.faction" /></label>
+              <label>Motivación <input name="npc-motivation" [(ngModel)]="draft.motivation" /></label>
+              <label>Edad <input name="npc-age" [(ngModel)]="draft.age" /></label>
+              <label>Linaje <input name="npc-ancestry" [(ngModel)]="draft.ancestry" /></label>
+              <label>Aspecto <textarea name="npc-description" rows="3" [(ngModel)]="draft.description"></textarea></label>
+            </fieldset>
+          }
+
+          @if (currentEditor.kind === 'generic-npc') {
+            <fieldset>
+              <legend>Ficha genérica</legend>
+              <label>Categoría <input name="generic-category" [(ngModel)]="draft.category" /></label>
+              <label>Rol <input name="generic-role" [(ngModel)]="draft.role" /></label>
+              <label>Tipo o linaje <input name="generic-lineage" [(ngModel)]="draft.lineage" /></label>
+            </fieldset>
+          }
+
+          <fieldset>
+            <legend>Estadísticas</legend>
+            <label>CA <input name="stat-ac" type="number" min="0" [(ngModel)]="draft.armorClass" /></label>
+            <label>PG <input name="stat-hp" type="number" min="0" [(ngModel)]="draft.hitPoints" /></label>
+            <label>Velocidad <input name="stat-speed" [(ngModel)]="draft.speed" /></label>
+            <label>Iniciativa <input name="stat-initiative" [(ngModel)]="draft.initiative" /></label>
+            <label>Competencia <input name="stat-prof" type="number" min="0" [(ngModel)]="draft.proficiencyBonus" /></label>
+            @if (currentEditor.kind !== 'player') {
+              <label>VD <input name="stat-challenge" [(ngModel)]="draft.challenge" /></label>
+            }
+          </fieldset>
+
+          <fieldset class="ability-editor">
+            <legend>Características</legend>
+            <label>FUE <input name="ability-str" type="number" [(ngModel)]="draft.strength" /></label>
+            <label>DES <input name="ability-dex" type="number" [(ngModel)]="draft.dexterity" /></label>
+            <label>CON <input name="ability-con" type="number" [(ngModel)]="draft.constitution" /></label>
+            <label>INT <input name="ability-int" type="number" [(ngModel)]="draft.intelligence" /></label>
+            <label>SAB <input name="ability-wis" type="number" [(ngModel)]="draft.wisdom" /></label>
+            <label>CAR <input name="ability-cha" type="number" [(ngModel)]="draft.charisma" /></label>
+          </fieldset>
+
+          <fieldset class="long-fields">
+            <legend>Detalle de ficha</legend>
+            @if (currentEditor.kind !== 'player') {
+              <label>Personalidad <textarea name="detail-personality" rows="4" [(ngModel)]="draft.personalityText"></textarea></label>
+            }
+            <label>Salvaciones <textarea name="detail-saves" rows="3" [(ngModel)]="draft.savesText"></textarea></label>
+            <label>Habilidades <textarea name="detail-skills" rows="3" [(ngModel)]="draft.skillsText"></textarea></label>
+            <label>Rasgos <textarea name="detail-traits" rows="4" [(ngModel)]="draft.traitsText"></textarea></label>
+            <label>Ataques <textarea name="detail-attacks" rows="4" [(ngModel)]="draft.attacksText"></textarea></label>
+            <label>Conjuros <textarea name="detail-spells" rows="4" [(ngModel)]="draft.spellsText"></textarea></label>
+            <label>Equipo <textarea name="detail-equipment" rows="4" [(ngModel)]="draft.equipmentText"></textarea></label>
+          </fieldset>
+
+          @if (currentEditor.kind === 'npc') {
+            <fieldset class="long-fields">
+              <legend>Información de campaña</legend>
+              <label>Qué sabe <textarea name="npc-knowledge" rows="4" [(ngModel)]="draft.knowledgeText"></textarea></label>
+              <label>Reacciones <textarea name="npc-reactions" rows="4" [(ngModel)]="draft.reactionsText"></textarea></label>
+              <label>Secreto <textarea name="npc-secret" rows="3" [(ngModel)]="draft.secret"></textarea></label>
+            </fieldset>
+          }
+
+          <div class="editor-actions">
+            <button type="submit" class="primary-action">Guardar ficha</button>
+            <button type="button" class="ghost-action" (click)="cancelEditor()">Cancelar</button>
+          </div>
+        </form>
+      </section>
+    }
 
     <section class="tools" aria-label="Filtros de compendio">
       <label class="search-control">
@@ -57,6 +165,9 @@
                 <h2>{{ entry.name }}</h2>
               </div>
               <div class="entry-actions">
+                @if (entry.editableKind) {
+                  <button type="button" class="asset-button" (click)="startEdit(entry)">Editar</button>
+                }
                 @if (entry.tokenUrl; as tokenUrl) {
                   <a
                     class="asset-button"

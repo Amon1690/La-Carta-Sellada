@@ -83,6 +83,7 @@
           class="map-viewport"
           [class.pan-mode]="mode() === 'pan'"
           aria-label="Tablero de juego"
+          (wheel)="zoomWithWheel($event)"
         >
           <div
             class="board-stage"
@@ -151,13 +152,14 @@
                     cdkDrag
                     [cdkDragBoundary]="'.map-board'"
                     [cdkDragScale]="zoom()"
-                    [cdkDragFreeDragPosition]="{ x: token.x, y: token.y }"
                     [cdkDragDisabled]="mode() !== 'select'"
                     [class.selected]="selectedTokenId() === token.instanceId"
                     [class.active-turn]="activeTurnId() === token.instanceId"
                     [class.hidden-token]="token.hidden"
                     [style.width.px]="gridSize * token.size"
                     [style.height.px]="gridSize * token.size"
+                    [style.left.px]="token.x"
+                    [style.top.px]="token.y"
                     [attr.aria-label]="token.name"
                     (click)="selectToken(token.instanceId, $event)"
                     (cdkDragEnded)="tokenDragEnded(token, $event)"
@@ -239,7 +241,13 @@
 
             @if (sidebarTab() === 'turns') {
               <section class="turn-panel">
-                <header><div><small>Combate</small><h2>Iniciativa</h2></div><button type="button" (click)="advanceTurn()">Siguiente →</button></header>
+                <header>
+                  <div><small>Combate</small><h2>Iniciativa</h2></div>
+                  <div class="turn-actions">
+                    <button type="button" [disabled]="!tokens().length" (click)="rollAllInitiatives()">Tirar todos</button>
+                    <button type="button" (click)="advanceTurn()">Siguiente →</button>
+                  </div>
+                </header>
                 <ol>
                   @for (token of initiativeTokens(); track token.instanceId; let position = $index) {
                     <li [class.active]="activeTurnId() === token.instanceId">

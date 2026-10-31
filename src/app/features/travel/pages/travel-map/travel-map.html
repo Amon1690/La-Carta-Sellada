@@ -1,0 +1,495 @@
+<section class="travel-page">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Reglas 2024</p>
+      <h1>Viajes</h1>
+      <p>Rutas, grupos y jornadas a través de Faerûn.</p>
+    </div>
+    <div class="journey-stats" aria-label="Estado del viaje">
+      <span><small>Ruta</small><b>{{ routeDistance() }} km</b></span>
+      <span><small>Restante</small><b>{{ remainingDistance() }} km</b></span>
+      <span><small>Jornadas</small><b>{{ estimatedDays() || '—' }}</b></span>
+      <span><small>Lugares</small><b>{{ locations.length }}</b></span>
+    </div>
+  </header>
+
+  <div class="travel-workspace">
+    <div class="map-column">
+      <nav class="map-toolbar" aria-label="Herramientas del mapa">
+        <div class="mode-tools">
+          <button type="button" aria-label="Seleccionar grupos" [class.active]="mode() === 'select'" (click)="setMode('select')">
+            <span aria-hidden="true">↖</span><b>Seleccionar</b>
+          </button>
+          <button type="button" aria-label="Colocar grupo" [class.active]="mode() === 'place'" (click)="setMode('place')">
+            <span aria-hidden="true">◎</span><b>Colocar</b>
+          </button>
+          <button type="button" aria-label="Trazar ruta" [class.active]="mode() === 'route'" (click)="setMode('route')">
+            <span aria-hidden="true">⌁</span><b>Ruta</b>
+          </button>
+          <button type="button" aria-label="Mover mapa" [class.active]="mode() === 'pan'" (click)="setMode('pan')">
+            <span aria-hidden="true">✥</span><b>Mover</b>
+          </button>
+        </div>
+
+        <div class="route-tools">
+          <button type="button" aria-label="Deshacer último tramo" [disabled]="route().length === 0" (click)="undoRoutePoint()">↶</button>
+          <button type="button" aria-label="Eliminar ruta" [disabled]="route().length === 0" (click)="clearRoute()">×</button>
+        </div>
+
+        <div class="zoom-tools">
+          <button type="button" aria-label="Alejar mapa" (click)="zoomBy(-0.1)">−</button>
+          <output>{{ zoom() * 100 | number: '1.0-0' }}%</output>
+          <button type="button" aria-label="Acercar mapa" (click)="zoomBy(0.1)">+</button>
+          <button type="button" class="reset-view" aria-label="Restablecer vista" (click)="resetView()">⌂</button>
+        </div>
+      </nav>
+
+      <div
+        #mapViewport
+        class="map-viewport"
+        [class.pan-mode]="mode() === 'pan'"
+        [class.draw-mode]="mode() === 'route' || mode() === 'place'"
+        (wheel)="zoomWithWheel($event)"
+      >
+        <div
+          #mapStage
+          class="map-stage"
+          [style.width.px]="stageWidth()"
+          [style.height.px]="stageHeight()"
+          (click)="mapClicked($event)"
+          (pointerdown)="beginPan($event)"
+        >
+          <img class="faerun-map" src="assets/maps/faerun-atlas-aidedd.jpg" alt="Mapa completo de Faerûn con sus regiones y localizaciones" draggable="false" />
+
+          <svg class="route-layer" viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="Ruta trazada sobre el mapa">
+            @if (route().length > 1) {
+              <polyline class="route-line" fill="none" [attr.points]="polylinePoints()"></polyline>
+            }
+          </svg>
+
+          @for (location of locations; track location.id) {
+            <button
+              type="button"
+              class="map-location"
+              [class.selected]="selectedLocationId() === location.id"
+              [class.edge-right]="location.x > 82"
+              [class.edge-bottom]="location.y > 80"
+              [class.major-location]="location.category === 'city' || location.category === 'fortress'"
+              [class.geographic-location]="location.sourceKind === 'zone'"
+              [attr.data-category]="location.category"
+              [style.left.%]="location.x"
+              [style.top.%]="location.y"
+              [attr.aria-label]="location.name + '. ' + location.categoryLabel + '. ' + location.summary"
+              (click)="locationClicked(location, $event)"
+            >
+              <i aria-hidden="true"></i>
+              <span class="location-tooltip" role="tooltip">
+                <b>{{ location.name }}</b>
+                <small>{{ location.categoryLabel }} · {{ location.region }}</small>
+                <p>{{ location.summary }}</p>
+                <em>
+                  {{ location.sourceKind === 'zone' ? 'Centro cartográfico del área' : 'Coordenada del marcador' }}:
+                  {{ location.sourceX | number: '1.0-2' }}, {{ location.sourceY | number: '1.0-2' }} px
+                </em>
+              </span>
+            </button>
+          }
+
+          @for (group of groups(); track group.id) {
+            <button
+              type="button"
+              class="group-token"
+              [class.selected]="selectedGroupId() === group.id"
+              [style.left.%]="group.x"
+              [style.top.%]="group.y"
+              [style.--group-color]="group.color"
+              [attr.aria-label]="group.name + ', ' + group.memberIds.length + ' integrantes'"
+              (click)="selectGroup(group.id, $event)"
+              (pointerdown)="beginTokenDrag(group, $event)"
+            >
+              <span class="token-portraits" aria-hidden="true">
+                @for (member of groupMembers(group); track member.id) {
+                  <img [src]="member.image" alt="" draggable="false" />
+                } @empty {
+                  <b>{{ groupInitials(group) }}</b>
+                }
+              </span>
+              <span class="group-count">{{ group.memberIds.length }}</span>
+              <strong>{{ group.name }}</strong>
+            </button>
+          }
+        </div>
+      </div>
+
+      <footer class="map-status">
+        <span><i aria-hidden="true"></i>{{ status() }}</span>
+        <span>{{ activePaceLabel() }} · {{ dailyDistance() }} km/día · Atlas AideDD / Mike Schley</span>
+      </footer>
+    </div>
+
+    <aside class="travel-sidebar">
+      <nav class="side-tabs" aria-label="Configuración del viaje">
+        <button type="button" [class.active]="sideTab() === 'groups'" (click)="setSideTab('groups')">Grupos</button>
+        <button type="button" [class.active]="sideTab() === 'plan'" (click)="setSideTab('plan')">Plan</button>
+        <button type="button" [class.active]="sideTab() === 'days'" (click)="setSideTab('days')">Jornadas</button>
+      </nav>
+
+      <div class="side-content">
+        @if (sideTab() === 'groups') {
+          <section class="panel-section groups-section">
+            <header class="section-heading">
+              <div><small>Expediciones</small><h2>Grupos de viaje</h2></div>
+              <button type="button" class="primary-button" (click)="openGroupEditor()">+ Grupo</button>
+            </header>
+
+            @if (groupEditorOpen()) {
+              <form class="group-editor" (submit)="$event.preventDefault(); createGroup()">
+                <div class="editor-fields">
+                  <label>Nombre
+                    <input name="groupName" type="text" [ngModel]="groupName()" (ngModelChange)="groupName.set($event)" />
+                  </label>
+                  <label class="color-field">Color
+                    <input name="groupColor" type="color" [ngModel]="groupColor()" (ngModelChange)="groupColor.set($event)" />
+                  </label>
+                </div>
+                <label class="member-search">Integrantes
+                  <input name="memberQuery" type="search" [ngModel]="memberQuery()" (ngModelChange)="updateMemberQuery($event)" placeholder="Buscar PJ o PNJ" />
+                </label>
+                <div class="member-list">
+                  @for (member of filteredMembers(); track member.id) {
+                    <label>
+                      <input
+                        type="checkbox"
+                        [checked]="draftHasMember(member.id)"
+                        (change)="toggleDraftMember(member.id, $any($event.target).checked)"
+                      />
+                      <img [src]="member.image" alt="" />
+                      <span><b>{{ member.name }}</b><small>{{ member.kind }} · {{ member.detail }}</small></span>
+                    </label>
+                  }
+                </div>
+                <div class="editor-actions">
+                  <button type="button" (click)="closeGroupEditor()">Cancelar</button>
+                  <button type="submit" class="primary-button">Crear grupo</button>
+                </div>
+              </form>
+            }
+
+            <div class="group-list">
+              @for (group of groups(); track group.id) {
+                <button type="button" [class.active]="selectedGroupId() === group.id" (click)="selectGroup(group.id)">
+                  <span class="group-swatch" [style.background]="group.color">{{ groupInitials(group) }}</span>
+                  <span><b>{{ group.name }}</b><small>{{ groupMemberNames(group) }}</small></span>
+                  <i>{{ group.memberIds.length }}</i>
+                </button>
+              } @empty {
+                <p class="empty-state">Todavía no hay grupos de viaje.</p>
+              }
+            </div>
+
+            @if (selectedGroup(); as group) {
+              <div class="selected-group-detail">
+                <header><span>Grupo activo</span><button type="button" aria-label="Eliminar grupo" (click)="removeSelectedGroup()">×</button></header>
+                <h3>{{ group.name }}</h3>
+                <div class="member-chips">
+                  @for (member of selectedGroupMembers(); track member.id) {
+                    <span><img [src]="member.image" alt="" />{{ member.name }}</span>
+                  }
+                </div>
+              </div>
+            }
+          </section>
+        }
+
+        @if (sideTab() === 'plan') {
+          <section class="panel-section plan-section">
+            <header class="section-heading"><div><small>Preparación</small><h2>Plan de viaje</h2></div></header>
+
+            <div class="field-pair">
+              <label>Origen
+                <select [ngModel]="plan().originId" (ngModelChange)="originChanged($event)">
+                  @for (location of locations; track location.id) { <option [value]="location.id">{{ location.name }}</option> }
+                </select>
+              </label>
+              <label>Destino
+                <select [ngModel]="plan().destinationId" (ngModelChange)="destinationChanged($event)">
+                  @for (location of locations; track location.id) { <option [value]="location.id">{{ location.name }}</option> }
+                </select>
+              </label>
+            </div>
+            <button type="button" class="route-destination" (click)="routeToSelectedDestination()">Añadir destino a la ruta</button>
+
+            <fieldset class="pace-control">
+              <legend>Ritmo</legend>
+              <div>
+                <button type="button" [class.active]="plan().pace === 'fast'" (click)="planFieldChanged('pace', 'fast')"><b>Rápido</b><small>45 km/día</small></button>
+                <button type="button" [class.active]="plan().pace === 'normal'" (click)="planFieldChanged('pace', 'normal')"><b>Normal</b><small>36 km/día</small></button>
+                <button type="button" [class.active]="plan().pace === 'slow'" (click)="planFieldChanged('pace', 'slow')"><b>Lento</b><small>27 km/día</small></button>
+              </div>
+            </fieldset>
+
+            <div class="field-pair compact-fields">
+              <label>Horas por jornada
+                <input type="number" min="1" max="16" [ngModel]="plan().hours" (ngModelChange)="planFieldChanged('hours', +$event)" />
+              </label>
+              <label>Horas al doble (montura)
+                <input type="number" min="0" max="4" [ngModel]="plan().mountBoostHours" (ngModelChange)="planFieldChanged('mountBoostHours', +$event)" />
+              </label>
+            </div>
+
+            <label class="switch-field">
+              <span><b>Terreno difícil</b><small>Reduce la distancia a la mitad</small></span>
+              <input type="checkbox" [ngModel]="plan().difficultTerrain" (ngModelChange)="planFieldChanged('difficultTerrain', $event)" />
+            </label>
+
+            <div class="field-pair">
+              <label>Estación
+                <select [ngModel]="plan().season" (ngModelChange)="planFieldChanged('season', $event)">
+                  <option>Primavera</option><option>Verano</option><option>Otoño</option><option>Invierno</option>
+                </select>
+              </label>
+              <label>Peligro
+                <select [ngModel]="plan().danger" (ngModelChange)="planFieldChanged('danger', $event)">
+                  <option value="safe">Zona segura</option><option value="road">Camino civilizado</option><option value="wild">Entorno salvaje</option><option value="hostile">Territorio hostil</option><option value="extreme">Peligro extremo</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="field-pair compact-fields">
+              <label>Comida (kg)
+                <input type="number" min="0" step="0.1" [ngModel]="plan().foodKg" (ngModelChange)="planFieldChanged('foodKg', +$event)" />
+              </label>
+              <label>Agua (l)
+                <input type="number" min="0" step="0.1" [ngModel]="plan().waterLiters" (ngModelChange)="planFieldChanged('waterLiters', +$event)" />
+              </label>
+            </div>
+
+            <div class="field-pair compact-fields">
+              <label>Fondos del grupo (po)
+                <input type="number" min="0" step="1" [ngModel]="plan().gold" (ngModelChange)="planFieldChanged('gold', +$event)" />
+              </label>
+              <label>Fatiga acumulada
+                <input type="number" min="0" step="1" [ngModel]="plan().fatigue" (ngModelChange)="planFieldChanged('fatigue', +$event)" />
+              </label>
+            </div>
+
+            <section class="travel-roles" aria-label="Puestos de viaje">
+              <header>
+                <small>Expedición</small>
+                <h3>Puestos de viaje</h3>
+              </header>
+
+              <article class="role-assignment guide-role">
+                <div class="role-title">
+                  <span>G</span>
+                  <div><b>Guía</b><small>Obligatorio · un integrante</small></div>
+                  @if (guideRolePenalty()) { <i>CD +{{ guideRolePenalty() }}</i> }
+                </div>
+                <select [ngModel]="plan().guideId" (ngModelChange)="guideChanged($event)">
+                  <option value="">Sin asignar</option>
+                  @for (member of selectedGroupMembers(); track member.id) {
+                    <option [value]="member.id">{{ member.name }} · {{ memberRoleSummary(member) }}</option>
+                  }
+                </select>
+                @if (guideMember(); as guide) {
+                  <p>{{ memberRoleSummary(guide) }}</p>
+                } @else {
+                  <strong>Falta asignar el guía</strong>
+                }
+              </article>
+
+              <article class="role-assignment">
+                <div class="role-title">
+                  <span>C</span>
+                  <div><b>Cazadores</b><small>Supervivencia</small></div>
+                  @if (hunterSupportReduction()) { <i>CD -{{ hunterSupportReduction() }}</i> }
+                </div>
+                <div class="role-member-list">
+                  @for (member of selectedGroupMembers(); track member.id) {
+                    <label>
+                      <input
+                        type="checkbox"
+                        [checked]="roleHasMember('hunter', member.id)"
+                        [disabled]="member.id === plan().guideId || roleHasMember('watch', member.id)"
+                        (change)="toggleRoleMember('hunter', member.id, $any($event.target).checked)"
+                      />
+                      <img [src]="member.image" alt="" />
+                      <span><b>{{ member.name }}</b><small>{{ memberSkillLabel(member, 'survival') }}</small></span>
+                    </label>
+                  }
+                </div>
+              </article>
+
+              <article class="role-assignment">
+                <div class="role-title">
+                  <span>V</span>
+                  <div><b>Vigías</b><small>Percepción</small></div>
+                  @if (watcherSupportReduction()) { <i>CD -{{ watcherSupportReduction() }}</i> }
+                </div>
+                <div class="role-member-list">
+                  @for (member of selectedGroupMembers(); track member.id) {
+                    <label>
+                      <input
+                        type="checkbox"
+                        [checked]="roleHasMember('watch', member.id)"
+                        [disabled]="member.id === plan().guideId || roleHasMember('hunter', member.id)"
+                        (change)="toggleRoleMember('watch', member.id, $any($event.target).checked)"
+                      />
+                      <img [src]="member.image" alt="" />
+                      <span><b>{{ member.name }}</b><small>{{ memberSkillLabel(member, 'perception') }}</small></span>
+                    </label>
+                  }
+                </div>
+              </article>
+            </section>
+
+            <label>Orden de marcha
+              <textarea rows="2" [ngModel]="plan().marchOrder" (ngModelChange)="planFieldChanged('marchOrder', $event)"></textarea>
+            </label>
+            <label>Actividades
+              <textarea rows="2" [ngModel]="plan().activities" (ngModelChange)="planFieldChanged('activities', $event)" placeholder="Vigías, rastreo, forrajeo, cartografía"></textarea>
+            </label>
+            <label>Encuentros preparados
+              <textarea rows="2" [ngModel]="plan().preparedEncounters" (ngModelChange)="planFieldChanged('preparedEncounters', $event)"></textarea>
+            </label>
+            <label>Información del DM
+              <textarea rows="2" [ngModel]="plan().dmSecrets" (ngModelChange)="planFieldChanged('dmSecrets', $event)"></textarea>
+            </label>
+          </section>
+        }
+
+        @if (sideTab() === 'days') {
+          <section class="panel-section days-section">
+            <header class="section-heading">
+              <div><small>Registro</small><h2>Jornadas</h2></div>
+              <button
+                type="button"
+                class="primary-button"
+                [disabled]="remainingDistance() === 0 || !!pendingEncounter() || !guideMember()"
+                (click)="resolveDay()"
+              >Resolver jornada</button>
+            </header>
+
+            <div class="day-summary">
+              <span><small>Recorrido</small><b>{{ travelledDistance() }} km</b></span>
+              <span><small>Recursos</small><b>{{ plan().foodKg }} kg · {{ plan().waterLiters }} l</b></span>
+              <span><small>Fondos</small><b>{{ plan().gold }} po</b></span>
+              <span><small>Fatiga</small><b>{{ plan().fatigue }}</b></span>
+            </div>
+
+            <ol class="day-log">
+              @for (log of logs(); track log.day) {
+                <li [class.pending]="log.pendingDecision">
+                  <header><b>Jornada {{ log.day }}</b><span>{{ log.distance }} km</span></header>
+                  <dl>
+                    <div><dt>Clima</dt><dd>{{ log.weather }}</dd></div>
+                    <div><dt>Encuentros</dt><dd>{{ log.encounter }}</dd></div>
+                    <div><dt>Consumo</dt><dd>{{ log.resources }}</dd></div>
+                    <div><dt>Posición</dt><dd>{{ log.position }}</dd></div>
+                  </dl>
+                  @if (log.events?.length) {
+                    <div class="role-event-list">
+                      @for (event of log.events; track event.role + ':' + event.id) {
+                        <article
+                          class="role-event"
+                          [class.positive]="event.polarity === 'positive'"
+                          [class.negative]="event.polarity === 'negative'"
+                          [class.success]="event.success"
+                        >
+                          <header>
+                            <span>{{ roleLabel(event.role) }} · {{ event.polarity === 'positive' ? 'Oportunidad' : 'Infortunio' }}</span>
+                            <i>{{ event.actorName }}</i>
+                          </header>
+                          <h3>{{ event.title }}</h3>
+                          <p>{{ event.story }}</p>
+                          <div class="event-check">
+                            <span>{{ eventSkillLabel(event) }}</span>
+                            <b>d20 {{ event.roll }} · total {{ event.total }}</b>
+                            <i>CD {{ event.dc }}</i>
+                          </div>
+                          <strong>{{ event.outcome }}</strong>
+                          <small>{{ event.effectSummary }}</small>
+                          @if (event.campaignHook) {
+                            <blockquote>{{ event.campaignHook }}</blockquote>
+                          }
+                        </article>
+                      }
+                    </div>
+                  }
+                  @if (log.pendingDecision) { <strong class="decision-flag">Decisión del DM pendiente</strong> }
+                </li>
+              } @empty {
+                <p class="empty-state">Traza una ruta para comenzar el registro.</p>
+              }
+            </ol>
+            @if (logs().length) {
+              <button type="button" class="secondary-button reset-journey" (click)="resetJourney()">Reiniciar jornadas</button>
+            }
+          </section>
+        }
+      </div>
+    </aside>
+  </div>
+</section>
+
+@if (pendingEncounter(); as pending) {
+  @if (pendingEncounterDefinition(); as encounter) {
+    <div class="travel-encounter-backdrop">
+      <section
+        class="travel-encounter-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="travel-encounter-title"
+      >
+        <div class="travel-encounter-map">
+          <img [src]="encounter.mapUrl" [alt]="'Mapa de ' + encounter.name" />
+          <span>{{ pending.region }}</span>
+        </div>
+
+        <div class="travel-encounter-content">
+          <header>
+            <small>Encuentro durante la jornada {{ pending.day }}</small>
+            <h2 id="travel-encounter-title">{{ encounter.name }}</h2>
+            <p>{{ encounter.summary }}</p>
+          </header>
+
+          <dl class="travel-encounter-facts">
+            <div><dt>Posición</dt><dd>{{ pending.position }}</dd></div>
+            <div><dt>Nivel del grupo</dt><dd>{{ pending.level }}</dd></div>
+            <div><dt>Aventureros</dt><dd>{{ pending.partySize }}</dd></div>
+            <div><dt>Escenario</dt><dd>{{ encounter.environmentLabel }}</dd></div>
+            <div><dt>Tipo</dt><dd>{{ encounter.type }}</dd></div>
+          </dl>
+
+          <div class="travel-encounter-roster">
+            <h3>Participantes preparados</h3>
+            <ul>
+              @for (monster of pendingEncounterRoster(); track monster.id) {
+                <li><b>{{ monster.count }}×</b> {{ monster.name }}</li>
+              } @empty {
+                <li>Sin adversarios automáticos</li>
+              }
+            </ul>
+          </div>
+
+          <p class="travel-encounter-objective"><b>Objetivo:</b> {{ encounter.objective }}</p>
+
+          <footer>
+            <button type="button" class="travel-encounter-skip" (click)="skipPendingEncounter()">
+              Omitir encuentro
+            </button>
+            <a
+              class="travel-encounter-play"
+              [href]="pendingEncounterVttUrl()"
+              target="_blank"
+              rel="noopener"
+              (click)="playPendingEncounter()"
+            >
+              Jugar en el VTT
+            </a>
+          </footer>
+        </div>
+      </section>
+    </div>
+  }
+}

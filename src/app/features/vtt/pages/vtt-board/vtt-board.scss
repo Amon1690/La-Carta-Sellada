@@ -699,8 +699,22 @@ button {
   padding-bottom: 11px;
 }
 
+.turn-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  width: 150px;
+}
+
 .turn-panel header button {
   padding: 0 10px;
+}
+
+.turn-panel header button:disabled {
+  color: #8c877f;
+  border-color: #44474c;
+  background: #292c30;
+  cursor: not-allowed;
 }
 
 .turn-panel ol {

@@ -790,4 +790,62 @@ export const GENERIC_NPCS: RuleGenericNpc[] = [
       equipment: ['Silla militar', 'Brida', 'Alforjas'],
     }
   ),
+  profile(
+    'demonio-menor', 'Demonio menor', 'Demonio', 'Soldado infernal', 'Demonio',
+    'Engendro violento llamado por cultistas o expulsado por una brecha entre planos.',
+    ['Infernal', 'Bruto', 'Combate'], [13, 22, '9 m', '+2', 2, '1/2'], [13, 14, 14, 7, 10, 8],
+    {
+      personality: ['Agresivo, rencoroso y sometido a la voluntad de una criatura más poderosa.'],
+      saves: ['Con +4'], skills: ['Intimidación +1'],
+      traits: ['Resistencia demoníaca. Resiste daño de frío, fuego y relámpago.', 'Visión en la oscuridad 18 m.'],
+      attacks: ['Garras. Ataque cuerpo a cuerpo: +4; impacto 7 (2d4 + 2) cortante.', 'Mordisco. Ataque cuerpo a cuerpo: +4; impacto 6 (1d8 + 2) perforante.'],
+      equipment: ['Restos de armadura infernal'],
+    }
+  ),
+  profile(
+    'demonio-alado', 'Demonio alado', 'Demonio', 'Depredador aéreo', 'Demonio',
+    'Demonio de asalto que domina el campo de batalla desde el aire y castiga a objetivos aislados.',
+    ['Infernal', 'Volador', 'Élite'], [16, 78, '9 m, volar 18 m', '+3', 3, '5'], [19, 16, 17, 10, 12, 14],
+    {
+      personality: ['Paciente mientras vuela y brutal cuando encuentra una presa sin apoyo.'],
+      saves: ['Fue +7', 'Con +6', 'Car +5'], skills: ['Percepción +4', 'Intimidación +5'],
+      traits: ['Resistencia mágica. Tiene ventaja en salvaciones contra conjuros y efectos mágicos.', 'Resiste daño de frío, fuego y relámpago.'],
+      attacks: ['Ataque múltiple. Realiza dos ataques de garra y uno de mordisco.', 'Garra. Ataque cuerpo a cuerpo: +7; impacto 11 (2d6 + 4) cortante.', 'Mordisco. Ataque cuerpo a cuerpo: +7; impacto 13 (2d8 + 4) perforante.'],
+      equipment: ['Armadura de obsidiana'],
+    }
+  ),
+  profile(
+    'cocodrilo-gigante', 'Cocodrilo gigante', 'Bestia', 'Depredador acuático', 'Bestia',
+    'Reptil enorme que permanece inmóvil bajo el agua hasta que una presa entra en su alcance.',
+    ['Pantano', 'Río', 'Acuático'], [14, 52, '6 m, nadar 12 m', '+0', 2, '2'], [19, 10, 16, 2, 12, 5],
+    {
+      personality: ['Animal territorial que abandona una presa difícil si puede conservar su guarida.'],
+      skills: ['Percepción +3', 'Sigilo +4'],
+      traits: ['Aguantar la respiración. Puede contener la respiración durante 30 minutos.', 'Camuflaje acuático. Tiene ventaja en Sigilo mientras permanece casi sumergido.'],
+      attacks: ['Mordisco. Ataque cuerpo a cuerpo: +6; impacto 15 (2d10 + 4) perforante y el objetivo queda Apresado, escapatoria CD 14.', 'Coletazo. Ataque cuerpo a cuerpo: +6; impacto 13 (2d8 + 4) contundente y salvación de Fue CD 14 o Derribado.'],
+    }
+  ),
+  profile(
+    'serpiente-gigante', 'Serpiente constrictora gigante', 'Bestia', 'Emboscadora constrictora', 'Bestia',
+    'Serpiente de gran tamaño que cae desde ramas o ruinas para envolver a una sola presa.',
+    ['Selva', 'Pantano', 'Emboscada'], [13, 36, '9 m, trepar 9 m, nadar 9 m', '+2', 2, '1'], [17, 15, 13, 2, 12, 4],
+    {
+      personality: ['Depredador paciente que siente vibraciones y evita grupos alertados.'],
+      skills: ['Percepción +3', 'Sigilo +6'],
+      traits: ['Sentidos de cazador. Tiene ventaja en Percepción para localizar criaturas que se muevan sobre ramas, agua o piedra.'],
+      attacks: ['Mordisco. Ataque cuerpo a cuerpo: +5; impacto 10 (2d6 + 3) perforante.', 'Constreñir. Ataque cuerpo a cuerpo: +5; impacto 13 (3d6 + 3) contundente y el objetivo queda Apresado, escapatoria CD 13.'],
+    }
+  ),
+  profile(
+    'arpia', 'Arpía', 'Monstruosidad', 'Cazadora de acantilados', 'Monstruosidad',
+    'Depredadora alada cuyo canto atrae a los viajeros hacia cornisas, riscos y cubiertas expuestas.',
+    ['Montaña', 'Costa', 'Volador'], [12, 38, '6 m, volar 12 m', '+2', 2, '2'], [12, 15, 14, 8, 11, 14],
+    {
+      personality: ['Cruel, curiosa y dispuesta a negociar por comida, joyas o información.'],
+      saves: ['Des +4', 'Car +4'], skills: ['Percepción +2', 'Interpretación +4'],
+      traits: ['Canto cautivador. Criaturas a 90 m que oigan el canto superan una salvación de Sab CD 12 o quedan Hechizadas y se acercan por la ruta más directa.'],
+      attacks: ['Ataque múltiple. Realiza un ataque de garras y uno de garrote.', 'Garras. Ataque cuerpo a cuerpo: +4; impacto 7 (2d4 + 2) cortante.', 'Garrote. Ataque cuerpo a cuerpo: +4; impacto 5 (1d6 + 2) contundente.'],
+      equipment: ['Garrote', 'Baratijas robadas'],
+    }
+  ),
 ];

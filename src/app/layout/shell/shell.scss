@@ -26,4 +26,14 @@ main {
   app-sidebar {
     display: none;
   }
+
+  main {
+    padding: var(--space-md);
+  }
+}
+
+@media (max-width: 480px) {
+  main {
+    padding: 10px;
+  }
 }

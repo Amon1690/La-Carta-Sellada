@@ -74,11 +74,33 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'fichas-pjs',
+        data: { section: 'rule-players' },
+        loadComponent: () =>
+          import('./features/compendium/pages/compendium/compendium').then(
+            (m) => m.Compendium
+          ),
+      },
+      {
         path: 'fichas-genericas',
         data: { section: 'generic-npcs' },
         loadComponent: () =>
           import('./features/compendium/pages/compendium/compendium').then(
             (m) => m.Compendium
+          ),
+      },
+      {
+        path: 'encuentros-genericos',
+        loadComponent: () =>
+          import(
+            './features/generic-encounters/pages/generic-encounter-list/generic-encounter-list'
+          ).then((m) => m.GenericEncounterList),
+      },
+      {
+        path: 'viajes',
+        loadComponent: () =>
+          import('./features/travel/pages/travel-map/travel-map').then(
+            (m) => m.TravelMap
           ),
       },
       {
