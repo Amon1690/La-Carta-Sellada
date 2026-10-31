@@ -13,6 +13,24 @@ npm start
 
 Despues abre `http://localhost:4200/`.
 
+## Validación y agentes
+
+```bash
+npm run test:tools
+npm run test:workflow
+npm run validate:data
+npm run build
+npm run test:ci
+```
+
+La CI comprueba herramientas, coordinación de agentes, datos, recursos,
+compilación y pruebas de Angular. Requiere Node 22 y Chrome.
+
+El piloto de mejora continua incluye una cola priorizada, desarrollo acotado,
+verificación y revisión independientes y PRs en borrador. Permanece pausado hasta
+configurar la clave y las variables de GitHub. Consulta la
+[guía de activación y operación](docs/agents-workflow.md).
+
 ## Build
 
 Para compilar la version de produccion:

@@ -1,0 +1,297 @@
+name: Mejora continua
+run-name: Agentes · ${{ inputs.mode || (github.event.schedule == '23 3 * * 1' && 'audit' || 'work') }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Crear cola, desarrollar una tarea o auditar
+        type: choice
+        default: bootstrap
+        options: [bootstrap, work, audit]
+  schedule:
+    - cron: '17 */6 * * *'
+    - cron: '23 3 * * 1'
+
+permissions: {}
+
+# Una reserva activa a la vez durante el piloto. No se cancela trabajo en curso.
+concurrency:
+  group: agents-pilot
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: Coordinar y reservar
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+      actions: read
+    outputs:
+      mode: ${{ steps.plan.outputs.mode }}
+      issue: ${{ steps.plan.outputs.issue }}
+      branch: ${{ steps.plan.outputs.branch }}
+      base: ${{ steps.plan.outputs.base }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/github-script@v7
+        id: plan
+        env:
+          AGENT_MODE: ${{ inputs.mode || (github.event.schedule == '23 3 * * 1' && 'audit' || 'work') }}
+          AGENTS_ENABLED: ${{ vars.AGENTS_ENABLED }}
+          AGENTS_MODEL: ${{ vars.AGENTS_MODEL }}
+          HAS_OPENAI_KEY: ${{ secrets.OPENAI_API_KEY != '' }}
+        with:
+          script: await require('./tools/agents/github.cjs').plan({ github, context, core });
+      - uses: actions/upload-artifact@v4
+        if: steps.plan.outputs.mode != ''
+        with:
+          name: task
+          path: .agent-runtime/*.json
+          include-hidden-files: true
+          retention-days: 7
+
+  develop:
+    name: Desarrollar
+    needs: plan
+    if: needs.plan.outputs.mode == 'work' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.base }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: task
+          path: .agent-runtime
+      - name: Copiar exportador de confianza
+        run: |
+          mkdir -p "$RUNNER_TEMP/agent-tools"
+          cp tools/agents/{patch,policy}.cjs "$RUNNER_TEMP/agent-tools/"
+      - uses: openai/codex-action@v1
+        timeout-minutes: 12
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          model: ${{ vars.AGENTS_MODEL }}
+          effort: medium
+          sandbox: workspace-write
+          safety-strategy: drop-sudo
+          prompt-file: .github/agents/developer.md
+          output-file: .agent-runtime/developer.md
+      - name: Exportar solo cambios autorizados
+        run: node "$RUNNER_TEMP/agent-tools/patch.cjs" export .agent-runtime
+      - uses: actions/upload-artifact@v4
+        with:
+          name: proposal
+          path: |
+            .agent-runtime/changes.patch
+            .agent-runtime/developer.md
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  verify:
+    name: Verificar propuesta
+    needs: [plan, develop]
+    if: needs.plan.outputs.mode == 'work'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.base }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/download-artifact@v4
+        with:
+          name: proposal
+          path: .agent-runtime
+      - run: node tools/agents/patch.cjs apply .agent-runtime
+      - run: npm ci
+      - run: npm run test:tools
+      - run: npm run test:workflow
+      - run: npm run validate:data
+      - run: npm run build
+      - run: npm run test:ci
+
+  review:
+    name: Revisar en contexto independiente
+    needs: [plan, develop]
+    if: needs.plan.outputs.mode == 'work' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.base }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: task
+          path: .agent-runtime
+      - uses: actions/download-artifact@v4
+        with:
+          name: proposal
+          path: .agent-runtime
+      - run: node tools/agents/patch.cjs apply .agent-runtime
+      - uses: openai/codex-action@v1
+        timeout-minutes: 6
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          model: ${{ vars.AGENTS_MODEL }}
+          effort: medium
+          sandbox: read-only
+          safety-strategy: drop-sudo
+          prompt-file: .github/agents/reviewer.md
+          codex-args: '["--output-schema", ".github/agents/review.schema.json"]'
+          output-file: .agent-runtime/review.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: review
+          path: .agent-runtime/review.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Preparar PR comprobada
+    needs: [plan, verify, review]
+    if: needs.plan.outputs.mode == 'work'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      checks: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.base }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: task
+          path: .agent-runtime
+      - uses: actions/download-artifact@v4
+        with:
+          name: proposal
+          path: .agent-runtime
+      - uses: actions/download-artifact@v4
+        with:
+          name: review
+          path: .agent-runtime
+      - run: node tools/agents/patch.cjs apply .agent-runtime
+      - uses: actions/github-script@v7
+        env:
+          TASK_ISSUE: ${{ needs.plan.outputs.issue }}
+          TASK_BRANCH: ${{ needs.plan.outputs.branch }}
+          BASE_SHA: ${{ needs.plan.outputs.base }}
+        with:
+          script: await require('./tools/agents/github.cjs').publish({ github, context, core });
+
+  audit:
+    name: Analizar nuevas mejoras
+    needs: plan
+    if: needs.plan.outputs.mode == 'audit' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.base }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: task
+          path: .agent-runtime
+      - uses: openai/codex-action@v1
+        timeout-minutes: 10
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          model: ${{ vars.AGENTS_MODEL }}
+          effort: medium
+          sandbox: read-only
+          safety-strategy: drop-sudo
+          prompt-file: .github/agents/auditor.md
+          codex-args: '["--output-schema", ".github/agents/audit.schema.json"]'
+          output-file: .agent-runtime/audit.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: audit
+          path: .agent-runtime/audit.json
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  publish-audit:
+    name: Registrar propuestas sin autorizarlas
+    needs: [plan, audit]
+    if: needs.plan.outputs.mode == 'audit'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.base }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: audit
+          path: .agent-runtime
+      - uses: actions/github-script@v7
+        with:
+          script: await require('./tools/agents/github.cjs').publishAudit({ github, context, core });
+
+  finalize:
+    name: Cerrar reserva y registrar resultado
+    needs: [plan, develop, verify, review, publish]
+    if: always() && needs.plan.outputs.issue != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.base }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        if: needs.review.result == 'success'
+        with:
+          name: review
+          path: .agent-runtime
+      - uses: actions/github-script@v7
+        env:
+          TASK_ISSUE: ${{ needs.plan.outputs.issue }}
+          JOB_RESULTS: ${{ toJSON(needs) }}
+        with:
+          script: await require('./tools/agents/github.cjs').finalize({ github, context, core });

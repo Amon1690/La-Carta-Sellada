@@ -1,0 +1,23 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["summary", "proposals"],
+  "properties": {
+    "summary": { "type": "string" },
+    "proposals": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "title", "evidence", "acceptance"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,60}$" },
+          "title": { "type": "string" },
+          "evidence": { "type": "string" },
+          "acceptance": { "type": "array", "minItems": 1, "items": { "type": "string" } }
+        }
+      }
+    }
+  }
+}

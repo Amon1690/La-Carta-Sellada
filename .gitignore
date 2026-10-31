@@ -33,6 +33,10 @@ yarn-error.log
 .sass-cache/
 /connect.lock
 /coverage
+/.agent-runtime/
+/.tmp/
+# Exportación de trabajo sin referencias en la app (supera el límite de GitHub).
+/public/assets/maps/faerun-travel-map.png
 /libpeerconnection.log
 testem.log
 /typings
