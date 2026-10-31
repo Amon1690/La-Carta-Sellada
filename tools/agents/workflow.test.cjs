@@ -128,6 +128,13 @@ test('una reserva interrumpida sin identificador queda bloqueada y visible', () 
   assert(f.calls.some(([name, p]) => name === 'add' && p.labels.includes('agent:blocked')));
 })));
 
+test('un fallo al recuperar el estado no elimina la reserva anterior', () => runtime(() => environment({}, async () => {
+  const f = fixture({ issues: [issue(1, 'shared-character-sheets', ['agent:in-progress'])], comments: [{ user: { login: 'github-actions[bot]' }, body: '<!-- agent-attempt:122 -->' }] });
+  f.github.rest.issues.addLabels = async () => { throw new Error('GitHub no disponible'); };
+  await assert.rejects(plan(f), /GitHub no disponible/);
+  assert(!f.calls.some(([name]) => name === 'remove'));
+})));
+
 test('limita también auditorías manuales y reejecuciones sin coste adicional', () => runtime(() => environment({ AGENT_MODE: 'audit' }, async () => {
   const f = fixture({ runs: [1, 2].map(() => ({ name: 'Mejora continua', display_title: 'Agentes · audit' })) });
   await plan(f); assert.deepEqual(f.outputs, {});

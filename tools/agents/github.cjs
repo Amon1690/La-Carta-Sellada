@@ -69,8 +69,8 @@ async function plan({ github, context, core }) {
     if (run.status !== 'completed') continue;
     const taskPr = pulls.find((p) => p.body?.includes(`<!-- agent-issue:${issue.number} -->`));
     const label = taskPr ? 'agent:review' : attempts(history) >= 2 ? 'agent:blocked' : 'agent:ready';
-    await a.remove(issue.number, 'agent:in-progress');
     await a.add(issue.number, label);
+    await a.remove(issue.number, 'agent:in-progress');
     issue.labels = issue.labels.filter((l) => (l.name ?? l) !== 'agent:in-progress');
     issue.labels.push({ name: label });
     await a.comment(issue.number, `Reserva recuperada de una ejecución terminada. Estado: ${label}.`);
