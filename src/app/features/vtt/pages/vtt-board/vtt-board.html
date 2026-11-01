@@ -93,6 +93,9 @@
             <div
               #board
               class="map-board"
+              tabindex="0"
+              role="group"
+              aria-label="Mapa de juego. Arrastra para seleccionar fichas."
               [class.drawing]="mode() === 'fog' || mode() === 'reveal' || mode() === 'measure'"
               [style.width.px]="mapWidth"
               [style.height.px]="mapHeight"
@@ -100,7 +103,8 @@
               (pointerdown)="boardPointerDown($event)"
               (pointermove)="boardPointerMove($event)"
               (pointerup)="boardPointerUp($event)"
-              (pointercancel)="boardPointerUp($event)"
+              (pointercancel)="boardPointerCancel($event)"
+              (lostpointercapture)="boardPointerCancel($event)"
             >
               <img class="map-image" [src]="boardVm.entry.mapUrl" [alt]="'Mapa de ' + boardVm.entry.name" draggable="false" />
 
@@ -149,11 +153,7 @@
                   <button
                     type="button"
                     class="vtt-token"
-                    cdkDrag
-                    [cdkDragBoundary]="'.map-board'"
-                    [cdkDragScale]="zoom()"
-                    [cdkDragDisabled]="mode() !== 'select'"
-                    [class.selected]="selectedTokenId() === token.instanceId"
+                    [class.selected]="isTokenSelected(token.instanceId)"
                     [class.active-turn]="activeTurnId() === token.instanceId"
                     [class.hidden-token]="token.hidden"
                     [style.width.px]="gridSize * token.size"
@@ -161,8 +161,9 @@
                     [style.left.px]="token.x"
                     [style.top.px]="token.y"
                     [attr.aria-label]="token.name"
+                    [attr.aria-pressed]="isTokenSelected(token.instanceId)"
+                    (pointerdown)="tokenPointerDown(token, $event)"
                     (click)="selectToken(token.instanceId, $event)"
-                    (cdkDragEnded)="tokenDragEnded(token, $event)"
                   >
                     <img [src]="token.image" alt="" draggable="false" />
                     @if (token.maxHp > 0) {
@@ -173,6 +174,12 @@
                     }
                   </button>
                 }
+              }
+              @if (selectionRect(); as selection) {
+                <div class="selection-rect" aria-hidden="true"
+                  [style.left.px]="selection.x" [style.top.px]="selection.y"
+                  [style.width.px]="selection.width" [style.height.px]="selection.height"
+                ></div>
               }
             </div>
           </div>
@@ -187,12 +194,31 @@
 
           <div class="sidebar-content">
             @if (sidebarTab() === 'tokens') {
+              <section class="selection-tools" aria-label="Selección de fichas">
+                <p>Mayús/Ctrl/⌘ + clic para añadir o quitar. Arrastra sobre el mapa para seleccionar un área.</p>
+                <div class="selection-actions">
+                  <button type="button" [disabled]="!tokens().length || !layers().tokens" (click)="selectAllTokens()">Seleccionar todas</button>
+                  <button type="button" [disabled]="!selectedTokens().length" (click)="clearSelection()">Deseleccionar</button>
+                </div>
+                <small role="status">{{ selectedTokens().length }} {{ selectedTokens().length === 1 ? 'ficha seleccionada' : 'fichas seleccionadas' }}</small>
+              </section>
+              @if (selectedTokens().length > 1) {
+                <section class="token-inspector">
+                  <h2>{{ selectedTokens().length }} fichas seleccionadas</h2>
+                  <p class="selection-help">Arrastra una de ellas para mover el grupo. Supr elimina la selección; Esc la cancela.</p>
+                  <div class="selection-actions">
+                    <button type="button" (click)="setSelectedHidden(true)">Ocultar</button>
+                    <button type="button" (click)="setSelectedHidden(false)">Mostrar</button>
+                    <button type="button" class="remove-selection" (click)="removeSelectedTokens()">Eliminar</button>
+                  </div>
+                </section>
+              }
               @if (selectedToken(); as token) {
                 <section class="token-inspector">
                   <header>
                     <img [src]="token.image" alt="" />
                     <div><small>Ficha seleccionada</small><h2>{{ token.name }}</h2></div>
-                    <button type="button" class="danger-icon" title="Eliminar ficha" (click)="removeSelectedToken()">×</button>
+                    <button type="button" class="danger-icon" title="Eliminar ficha" (click)="removeSelectedTokens()">×</button>
                   </header>
                   @if (token.maxHp <= 0) {
                     <p>PG sin registrar. Introduce los PG máximos para este combate. Completar la ficha del personaje se aplicará a las nuevas fichas que añadas.</p>
