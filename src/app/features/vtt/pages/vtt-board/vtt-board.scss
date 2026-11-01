@@ -810,6 +810,9 @@ button {
   cursor: pointer;
 }
 
+.combat-launch { grid-column: 1 / -1; padding: 7px; margin: 5px 0; border: 1px solid #9d814a; border-radius: 4px; color: #f8e5b8; background: #403627; cursor: pointer; font-size: .73rem; }
+.combat-launch:disabled { opacity: .45; cursor: default; }
+
 .turn-panel li.active .turn-select {
   border-color: #65bb91;
   background: #315642;

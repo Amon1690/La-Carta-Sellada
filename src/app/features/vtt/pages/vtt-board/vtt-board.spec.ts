@@ -1,3 +1,4 @@
+import { VttCombat } from '../../../../core/services/vtt-combat';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Signal, WritableSignal, provideZonelessChangeDetection } from '@angular/core';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
@@ -6,6 +7,7 @@ import { Campaign, GameStatBlock } from '../../../../core/models/campaign';
 import { CampaignDataService } from '../../../../core/services/campaign-data';
 import { CHARACTER_SHEET_STORAGE, CharacterSheetsService, EditablePlayerSheet } from '../../../../core/services/character-sheets';
 import { VttBoard } from './vtt-board';
+import { RulesDataService } from '../../../../core/services/rules-data';
 
 interface Token {
   instanceId: string; actorId: string; name: string; image: string;
@@ -48,6 +50,7 @@ describe('Multiselección de fichas en VTT', () => {
     routeParams = new BehaviorSubject(params());
     TestBed.configureTestingModule({ providers: [
       provideZonelessChangeDetection(),
+      { provide: RulesDataService, useValue: { getRules: () => of({ spells: [], equipment: [] }) } },
       { provide: CampaignDataService, useValue: { getCampaignById: (id: string) => of(campaign(id)) } },
       { provide: CHARACTER_SHEET_STORAGE, useValue: (() => {
         const values = new Map<string, string>();
@@ -376,5 +379,20 @@ describe('Multiselección de fichas en VTT', () => {
     expect(fixture.nativeElement.querySelector('.measure-layer text').textContent).toContain('casillas');
     mode('Seleccionar y mover fichas');
     expect(fixture.nativeElement.querySelector('.measure-layer')).toBeNull();
+  });
+
+  it('integra combate con la iniciativa y conserva el bloque inválido completo sin borrar la partida', async () => {
+    const view = fixture.componentInstance as unknown as { combat: VttCombat; rollAllInitiatives(): void; startCombat(): void; setActiveTurn(id: string): void };
+    actorFor('A', 'generic:guardia-veterano'); actorFor('B', 'generic:aprendiz-arcano'); actorFor('C', 'generic:guardia');
+    view.rollAllInitiatives();
+    expect(view.combat.state().started).toBeTrue();
+    expect(view.combat.state().turnId).toBe(board.activeTurnId());
+    const current = JSON.parse(localStorage.getItem(key())!);
+    const corrupt = { version: 1, broken: true };
+    current.combat = corrupt; localStorage.setItem(key(), JSON.stringify(current));
+    routeParams.next(params()); fixture.detectChanges(); await fixture.whenStable();
+    expect(view.combat.error()).toContain('no es válido');
+    expect(board.tokens().length).toBe(3);
+    expect(JSON.parse(localStorage.getItem(key())!).combat).toEqual(corrupt);
   });
 });

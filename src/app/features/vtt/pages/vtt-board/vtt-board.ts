@@ -15,6 +15,12 @@ import { map, shareReplay, skip, switchMap } from 'rxjs';
 import { Campaign } from '../../../../core/models/campaign';
 import { CampaignDataService } from '../../../../core/services/campaign-data';
 import { CharacterSheetsService } from '../../../../core/services/character-sheets';
+import { RulesDataService } from '../../../../core/services/rules-data';
+import { RulesCompendium } from '../../../../core/models/rules';
+import { Combatant } from '../../../../core/models/combat';
+import { deriveCombat } from '../../../../core/services/combat-rules';
+import { VttCombat } from '../../../../core/services/vtt-combat';
+import { VttCombatPanel } from './combat-panel';
 import {
   GENERIC_ENCOUNTERS,
   scaledEncounterMonsters,
@@ -106,6 +112,7 @@ interface TokenDrag {
 
 
 interface StoredBoardState {
+  combat?: unknown;
   tokens: BoardToken[];
   fogRects: FogRect[];
   layers: LayerState;
@@ -115,7 +122,7 @@ interface StoredBoardState {
 
 @Component({
   selector: 'app-vtt-board',
-  imports: [AsyncPipe, VttTokenSheet],
+  imports: [AsyncPipe, VttTokenSheet, VttCombatPanel],
   templateUrl: './vtt-board.html',
   styleUrl: './vtt-board.scss',
 })
@@ -145,6 +152,28 @@ export class VttBoard {
   protected readonly diceOpen = signal(false);
   protected readonly diceResult = signal<string>('');
   protected readonly saveStatus = signal('Guardado');
+  protected readonly combatMessage = signal('');
+  private readonly rules = signal<RulesCompendium | undefined>(undefined);
+  protected readonly combatants = computed<Combatant[]>(() => {
+    this.sheetRevision();
+    const campaign = this.currentCampaign;
+    if (!campaign) return [];
+    return this.tokens().map((token) => {
+      const stats = this.resolveTokenSheet(token, campaign).statistics;
+      try { return { id: token.instanceId, actorId: token.actorId, name: token.name, x: token.x, y: token.y, size: token.size,
+        hp: token.hp, maxHp: token.maxHp, armorClass: stats?.armorClass, ...deriveCombat(stats, this.rules()) }; }
+      catch { return { id: token.instanceId, actorId: token.actorId, name: token.name, x: token.x, y: token.y, size: token.size,
+        hp: token.hp, maxHp: token.maxHp, armorClass: undefined, ...deriveCombat(undefined), notes: ['La preparación de esta ficha no es válida. Revisa los datos antes de combatir.'] }; }
+    });
+  });
+  protected readonly combat = new VttCombat(() => this.combatants(), () => this.activeTurnId(), (hp) => {
+    if (hp) this.tokens.update((tokens) => tokens.map((token) => token.instanceId === hp.id ? { ...token, hp: hp.hp } : token));
+    this.persist();
+  }, (id, profile) => {
+    const token = this.tokens().find((t) => t.instanceId === id);
+    if (!token || !this.currentCampaign) throw new Error('La ficha ya no está disponible');
+    this.characterSheets.saveCombatProfile(this.currentCampaign, token.actorId, profile);
+  });
   private readonly openedSheetTokenId = signal<string | undefined>(undefined);
   private readonly sheetRevision = signal(0);
   protected readonly openedTokenSheet = computed(() => {
@@ -184,8 +213,11 @@ export class VttBoard {
   @ViewChild(VttTokenSheet)
   private tokenSheetDialog?: VttTokenSheet;
 
+  @ViewChild(VttCombatPanel) private combatPanel?: VttCombatPanel;
+
   private readonly campaignData = inject(CampaignDataService);
   private readonly characterSheets = inject(CharacterSheetsService);
+  private readonly rulesData = inject(RulesDataService);
   private currentCampaign?: Campaign;
   private readonly route = inject(ActivatedRoute);
   private storageKey = '';
@@ -215,8 +247,11 @@ export class VttBoard {
   );
 
   constructor() {
+    this.rulesData.getRules().pipe(takeUntilDestroyed()).subscribe({ next: (rules) => this.rules.set(rules),
+      error: () => this.combatMessage.set('No se pudo leer el compendio de conjuros. Completa los datos desde la ficha antes de resolver acciones.') });
     this.vm$.pipe(takeUntilDestroyed()).subscribe((vm) => {
       this.closeTokenSheet();
+      this.combatPanel?.close();
       if (!vm) return;
       this.cancelInteraction();
       this.selectedTokenIds.set([]);
@@ -254,6 +289,7 @@ export class VttBoard {
   }
 
   protected addToken(choice: TokenChoice): void {
+    if (this.combat.busy()) return;
     const existing = this.tokens().length;
     const x = ((existing % 10) + 1) * this.gridSize;
     const y = (Math.floor(existing / 10) + 1) * this.gridSize;
@@ -322,6 +358,7 @@ export class VttBoard {
   }
 
   protected tokenPointerDown(token: BoardToken, event: PointerEvent): void {
+    if (this.combat.busy()) { event.stopPropagation(); return; }
     if (this.mode() !== 'select' || event.button !== 0 || this.interactionPointerId !== undefined) return;
     event.stopPropagation();
     const point = this.boardPoint(event);
@@ -341,6 +378,7 @@ export class VttBoard {
   }
 
   protected setSelectedHidden(hidden: boolean): void {
+    if (this.combat.busy()) return;
     const ids = new Set(this.selectedTokenIds());
     this.tokens.update((tokens) => tokens.map((token) => ids.has(token.instanceId) ? { ...token, hidden } : token));
     this.persist();
@@ -350,6 +388,7 @@ export class VttBoard {
     field: 'hp' | 'maxHp' | 'size',
     value: string
   ): void {
+    if (this.combat.busy()) return;
     this.cancelInteraction();
     const token = this.selectedToken();
     if (!token) return;
@@ -363,6 +402,7 @@ export class VttBoard {
   }
 
   protected updateSelectedHidden(hidden: boolean): void {
+    if (this.combat.busy()) return;
     const token = this.selectedToken();
     if (token) this.updateToken(token.instanceId, { hidden });
   }
@@ -373,6 +413,7 @@ export class VttBoard {
   }
 
   protected removeSelectedTokens(): void {
+    if (this.combat.busy()) return;
     const ids = new Set(this.selectedTokenIds());
     if (!ids.size) return;
     if (ids.has(this.openedSheetTokenId() ?? '')) this.closeTokenSheet();
@@ -384,6 +425,7 @@ export class VttBoard {
   }
 
   protected updateInitiative(instanceId: string, value: string): void {
+    if (this.combat.busy()) return;
     const initiative = Number(value);
     if (Number.isFinite(initiative)) {
       this.updateToken(instanceId, { initiative: Math.round(initiative) });
@@ -391,9 +433,13 @@ export class VttBoard {
   }
 
   protected rollAllInitiatives(): void {
-    const rolledTokens = this.tokens().map((token) => ({
+    if (this.combat.busy() || this.combat.state().started) return;
+    const modifiers = this.tokens().map((token) => this.currentCampaign ? this.resolveTokenSheet(token, this.currentCampaign).statistics?.initiative : undefined);
+    if (modifiers.some((v) => v === undefined || !/^[+-]?\d+$/.test(v.trim()))) { this.combatMessage.set('Registra los modificadores de iniciativa en las fichas, o introduce los resultados manualmente e inicia con esa iniciativa.'); return; }
+    this.combatMessage.set('');
+    const rolledTokens = this.tokens().map((token, index) => ({
       ...token,
-      initiative: this.roll(20),
+      initiative: this.roll(20) + Number(modifiers[index]),
     }));
     if (!rolledTokens.length) return;
 
@@ -402,23 +448,46 @@ export class VttBoard {
       .slice()
       .sort((a, b) => b.initiative - a.initiative || a.name.localeCompare(b.name));
     this.activeTurnId.set(firstTurn?.instanceId);
+    if (firstTurn) this.combat.start(firstTurn.instanceId);
     this.diceResult.set(`Iniciativa: ${rolledTokens.length}`);
     this.persist();
   }
 
   protected advanceTurn(): void {
+    if (this.combat.busy()) return;
     const ordered = this.initiativeTokens();
     if (!ordered.length) return;
     const currentIndex = ordered.findIndex(
       (token) => token.instanceId === this.activeTurnId()
     );
     this.activeTurnId.set(ordered[(currentIndex + 1) % ordered.length].instanceId);
+    this.combat.turn(this.activeTurnId()!, currentIndex === ordered.length - 1);
     this.persist();
   }
 
   protected setActiveTurn(instanceId: string): void {
+    if (this.combat.busy()) return;
     this.activeTurnId.set(instanceId);
+    this.combat.turn(instanceId);
     this.persist();
+  }
+
+  protected startCombat(): void {
+    const id = this.activeTurnId() ?? this.initiativeTokens()[0]?.instanceId;
+    if (!id || this.combat.busy() || this.combat.state().started) return;
+    this.cancelInteraction(); this.activeTurnId.set(id); this.combat.start(id);
+  }
+
+  protected prepareCombat(id: string): void { this.cancelInteraction(); this.combatPanel?.open(id); }
+  protected resumeCombat(): void { this.combatPanel?.resume(); }
+  protected endCombat(): void {
+    if (this.combat.busy() || !window.confirm('¿Terminar el combate? Los PG y los recursos gastados se conservan.')) return;
+    this.combat.end();
+  }
+
+  protected resetInvalidCombat(): void {
+    if (!this.combat.error() || !window.confirm('¿Restablecer solo el combate inválido? Se perderán sus recursos y tiradas pendientes; los tokens, PG, mapa y niebla se conservarán.')) return;
+    this.combat.reset();
   }
 
   protected toggleLayer(layer: keyof LayerState): void {
@@ -497,6 +566,7 @@ export class VttBoard {
   }
 
   protected boardPointerDown(event: PointerEvent): void {
+    if (this.combat.busy()) return;
     if (event.button !== 0 || this.interactionPointerId !== undefined) return;
     if ((event.target as HTMLElement).closest('.vtt-token')) return;
 
@@ -656,8 +726,10 @@ export class VttBoard {
   }
 
   protected resetBoard(): void {
+    if (this.combat.busy()) return;
     if (!window.confirm('¿Restablecer tokens, niebla y turnos de este mapa?')) return;
     this.closeTokenSheet();
+    this.combat.restore(undefined);
     this.cancelInteraction();
     this.tokens.set([]);
     this.fogRects.set([]);
@@ -669,7 +741,7 @@ export class VttBoard {
 
   @HostListener('window:keydown', ['$event'])
   protected handleKeyboard(event: KeyboardEvent): void {
-    if (this.tokenSheetDialog?.isOpen) return;
+    if (this.tokenSheetDialog?.isOpen || this.combatPanel?.isOpen || this.combat.busy()) return;
     const target = event.target as HTMLElement;
     if (target.closest('input, textarea, select, [contenteditable="true"]')) return;
     if (event.key === 'Delete' || event.key === 'Backspace') {
@@ -1014,6 +1086,8 @@ export class VttBoard {
   private loadState(): boolean {
     const raw = localStorage.getItem(this.storageKey);
     if (!raw) {
+      this.combat.restore(undefined);
+      this.activeTurnId.set(undefined);
       this.tokens.set([]);
       this.fogRects.set([]);
       return false;
@@ -1035,6 +1109,8 @@ export class VttBoard {
       );
       this.zoom.set(state.zoom ?? 0.65);
       this.activeTurnId.set(state.activeTurnId);
+      this.combat.restore(state.combat);
+      if (this.combat.state().started || this.combat.error()) this.sidebarTab.set('turns');
       return true;
     } catch {
       localStorage.removeItem(this.storageKey);
@@ -1049,6 +1125,7 @@ export class VttBoard {
     // solo se confirman al soltar el puntero, nunca al ocultar o cambiar de turno.
     const origins = new Map(this.tokenDrag?.origins.map((token) => [token.instanceId, token]));
     const state: StoredBoardState = {
+      combat: this.combat.serialized(),
       tokens: this.tokens().map((token) => {
         const origin = origins.get(token.instanceId);
         return origin ? { ...token, x: origin.x, y: origin.y } : token;

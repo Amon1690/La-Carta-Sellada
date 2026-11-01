@@ -1,3 +1,5 @@
+import type { CombatProfile } from './combat';
+
 export interface RulesCompendium {
   source: string;
   edition: string;
@@ -93,6 +95,7 @@ export interface RuleCreatureAbility {
 }
 
 export interface RuleGenericNpc {
+  combat?: CombatProfile;
   id: string;
   name: string;
   category: string;

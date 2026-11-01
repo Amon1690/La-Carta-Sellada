@@ -47,6 +47,7 @@ type EditableSheetKind = 'player' | 'npc' | 'generic-npc';
 type EditableSheetEntity = EditablePlayerSheet | CampaignNpc | RuleGenericNpc;
 
 interface SheetEditorState {
+  original?: EditableSheetEntity;
   kind: EditableSheetKind;
   mode: 'create' | 'edit';
   title: string;
@@ -301,6 +302,7 @@ export class Compendium {
       kind: entry.editableKind,
       mode: 'edit',
       sourceId: entry.editableEntity.id,
+      original: entry.editableEntity,
       title: `Editar ${entry.name}`,
     });
   }
@@ -1221,6 +1223,7 @@ export class Compendium {
   private playerFromDraft(editor: SheetEditorState): EditablePlayerSheet {
     const id = this.draftId(editor);
     return {
+      combat: editor.original && 'className' in editor.original ? editor.original.combat : undefined,
       id,
       showToken: this.draft.showToken,
       statisticsRecorded: this.draft.statisticsRecorded,
@@ -1269,6 +1272,7 @@ export class Compendium {
       reactions: this.linesFromText(this.draft.reactionsText),
       secret: this.optionalText(this.draft.secret),
       statBlock: {
+        combat: editor.original && 'faction' in editor.original ? editor.original.statBlock?.combat : undefined,
         armorClass: this.numberOr(this.draft.armorClass, 10),
         hitPoints: this.numberOr(this.draft.hitPoints, 1),
         speed: this.textOr(this.draft.speed, '9 m'),
@@ -1289,6 +1293,7 @@ export class Compendium {
   private genericNpcFromDraft(editor: SheetEditorState): RuleGenericNpc {
     const id = this.draftId(editor);
     return {
+      combat: editor.original && 'category' in editor.original ? editor.original.combat : undefined,
       id,
       name: this.textOr(this.draft.name, 'Ficha genérica sin nombre'),
       category: this.textOr(this.draft.category, 'Genérico'),

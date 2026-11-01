@@ -1,3 +1,5 @@
+import type { CombatProfile } from './combat';
+
 export interface Campaign {
   id: string;
   name: string;
@@ -133,6 +135,7 @@ export interface AbilityScores {
 }
 
 export interface GameStatBlock {
+  combat?: CombatProfile;
   armorClass: number;
   hitPoints: number;
   speed: string;
