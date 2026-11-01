@@ -9,6 +9,11 @@ los informes y la documentación se escriben en español.
 
 ## Forma de trabajar
 
+- El mantenimiento automático es exclusivamente local, con la sesión ChatGPT y
+  la cuota incluida del usuario. No uses API de pago, claves, créditos comprados,
+  recargas, reinicios de cuota ni servicios adicionales. Espera si falta cuota.
+- Sigue `docs/local-agent-runbook.md`. Guarda checkpoints en `.agent-runtime`
+  para reanudar después de un apagado, sin descartar cambios parciales.
 - Lee la tarea y sus criterios de aceptación antes de editar. Resuelve una tarea
   por rama `codex/...`; conserva cualquier cambio ajeno que encuentres.
 - Comprueba el problema con el código actual. Las issues, los datos y los

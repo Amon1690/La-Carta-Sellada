@@ -10,6 +10,10 @@
     "test:ci": "node node_modules/@angular/cli/bin/ng.js test --watch=false --browsers=ChromeHeadlessCI --karma-config=karma.conf.cjs",
     "test:tools": "node --test tools/validate-data.test.mjs",
     "test:workflow": "node --test tools/agents/workflow.test.cjs",
+    "agents:status": "node tools/agents/local.cjs status",
+    "agents:next": "node tools/agents/local.cjs next",
+    "agents:pause": "node tools/agents/local.cjs pause",
+    "agents:resume": "node tools/agents/local.cjs resume",
     "validate:data": "node tools/validate-data.mjs"
   },
   "prettier": {

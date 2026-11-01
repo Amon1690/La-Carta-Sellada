@@ -1,5 +1,6 @@
-Analiza La Carta Sellada en modo solo lectura. Lee AGENTS.md y el inventario
-de tareas existentes en .agent-runtime/issues.json. No ejecutes scripts,
+Analiza La Carta Sellada en modo local de solo lectura y con la cuota incluida
+de ChatGPT, sin claves ni API de pago. Lee AGENTS.md y la cola e inventario
+de tareas documentados en docs/local-agent-runbook.md. No ejecutes scripts,
 no cambies archivos ni intentes publicar en GitHub.
 
 Busca como máximo tres errores demostrables o mejoras de rendimiento medibles
