@@ -54,6 +54,7 @@ interface TravelMember {
   perceptionBonus: number;
   survivalProficient: boolean;
   perceptionProficient: boolean;
+  statisticsRecorded?: boolean;
 }
 
 interface TravelGroup extends MapPoint {
@@ -618,6 +619,7 @@ export class TravelMap implements AfterViewInit {
   }
 
   protected memberSkillLabel(member: TravelMember, skill: TravelEventSkill): string {
+    if (member.statisticsRecorded === false) return `${skill === 'survival' ? 'Supervivencia' : 'Percepción'} sin registrar`;
     const bonus = skill === 'survival' ? member.survivalBonus : member.perceptionBonus;
     const proficient =
       skill === 'survival' ? member.survivalProficient : member.perceptionProficient;
@@ -625,6 +627,7 @@ export class TravelMap implements AfterViewInit {
   }
 
   protected memberRoleSummary(member: TravelMember): string {
+    if (member.statisticsRecorded === false) return 'Habilidades sin registrar';
     return `Supervivencia ${this.signed(member.survivalBonus)} · Percepción ${this.signed(member.perceptionBonus)}`;
   }
 
@@ -647,6 +650,14 @@ export class TravelMap implements AfterViewInit {
     }
     if (!this.guideMember()) {
       this.status.set('Asigna un guía del grupo antes de resolver la jornada');
+      this.sideTab.set('plan');
+      return;
+    }
+
+    const assigned = new Set([this.plan().guideId, ...this.plan().hunterIds, ...this.plan().watcherIds]);
+    const missing = this.selectedGroupMembers().filter((member) => assigned.has(member.id) && member.statisticsRecorded === false);
+    if (missing.length) {
+      this.status.set(`Registra las habilidades de ${missing.map((member) => member.name).join(', ')} antes de resolver la jornada`);
       this.sideTab.set('plan');
       return;
     }
@@ -791,7 +802,8 @@ export class TravelMap implements AfterViewInit {
       image: this.characterSheets.tokenImage('players', player.id, true, player.gridTokenUrl || player.tokenUrl),
       kind: 'PJ',
       detail: `${player.ancestry} · ${player.className}`,
-      ...this.travelSkillStats(player.skills, player.abilities.wisdom),
+      statisticsRecorded: player.statisticsRecorded !== false,
+      ...this.travelSkillStats(player.statisticsRecorded === false ? [] : player.skills, player.statisticsRecorded === false ? 10 : player.abilities.wisdom),
     }));
     const npcs: TravelMember[] = this.characterSheets.campaignNpcs(campaign.id, campaign.npcs).map((npc) => ({
       id: `npc-${npc.id}`,

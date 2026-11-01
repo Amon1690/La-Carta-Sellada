@@ -97,6 +97,7 @@ interface SheetDraft {
   gridTokenUrl: string;
   affiliation: string;
   showToken: boolean;
+  statisticsRecorded: boolean;
 }
 
 interface CompendiumCard {
@@ -696,6 +697,7 @@ export class Compendium {
     player: EditablePlayerSheet,
     editable = false
   ): CompendiumCard {
+    const hasStatistics = player.statisticsRecorded !== false;
     const tokenUrl =
       player.tokenUrl ??
       (player.showToken !== false && !player.id.startsWith('custom-')
@@ -712,6 +714,7 @@ export class Compendium {
       name: player.name,
       kicker: `${player.className} - ${player.ancestry}`,
       summary: player.hook,
+      description: hasStatistics ? undefined : 'Estadísticas sin registrar. Completa la ficha del personaje para usar sus PG y habilidades.',
       tags: Array.from(
         new Set([
           player.className,
@@ -728,7 +731,7 @@ export class Compendium {
         ...(player.affiliation ? [`Afiliación: ${player.affiliation}`] : []),
       ],
       bullets: [],
-      detailSections: [
+      detailSections: hasStatistics ? [
         {
           title: 'Características',
           compact: true,
@@ -777,14 +780,14 @@ export class Compendium {
             ? player.equipment
             : ['Sin equipo registrado.'],
         },
-      ],
-      stats: [
+      ] : [],
+      stats: hasStatistics ? [
         { label: 'CA', value: String(player.armorClass) },
         { label: 'PG', value: String(player.hitPoints) },
         { label: 'Vel.', value: player.speed },
         { label: 'Init.', value: player.initiative },
         { label: 'Compet.', value: `+${player.proficiencyBonus}` },
-      ],
+      ] : [{ label: 'Estadísticas', value: 'Sin registrar' }],
       ...(tokenUrl ? { tokenUrl } : {}),
       ...(gridTokenUrl ? { gridTokenUrl } : {}),
       ...(editable
@@ -1102,6 +1105,7 @@ export class Compendium {
   private draftFromPlayer(player: EditablePlayerSheet): SheetDraft {
     return {
       ...this.emptyDraft('player'),
+      statisticsRecorded: player.statisticsRecorded !== false,
       id: player.id,
       name: player.name,
       summary: player.hook,
@@ -1219,6 +1223,7 @@ export class Compendium {
     return {
       id,
       showToken: this.draft.showToken,
+      statisticsRecorded: this.draft.statisticsRecorded,
       name: this.textOr(this.draft.name, 'PJ sin nombre'),
       tags: this.tagsFromText(this.draft.tagsText),
       ancestry: this.textOr(this.draft.ancestry, 'Humano'),
@@ -1353,6 +1358,7 @@ export class Compendium {
       gridTokenUrl: '',
       affiliation: '',
       showToken: false,
+      statisticsRecorded: true,
     };
 
     if (kind === 'player') {

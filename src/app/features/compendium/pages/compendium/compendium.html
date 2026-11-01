@@ -38,6 +38,10 @@
               <label>Trasfondo <input name="player-background" [(ngModel)]="draft.background" /></label>
               <label>Nivel <input name="player-level" type="number" min="1" [(ngModel)]="draft.level" /></label>
               <label>Dote <input name="player-feat" [(ngModel)]="draft.feat" /></label>
+              <label class="statistics-confirmation"><input name="player-statistics-recorded" type="checkbox" [(ngModel)]="draft.statisticsRecorded" /> Estadísticas registradas</label>
+              @if (!draft.statisticsRecorded) {
+                <p class="statistics-notice">Este personaje no tiene estadísticas registradas. Completa los valores de su ficha y marca la casilla para usarlos en viajes y combate.</p>
+              }
             </fieldset>
           }
 

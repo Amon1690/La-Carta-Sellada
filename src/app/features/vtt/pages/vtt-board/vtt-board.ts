@@ -602,9 +602,9 @@ export class VttBoard {
       id: `player:${player.id}`,
       name: player.name,
       image: this.characterSheets.tokenImage('players', player.id, false, player.tokenUrl),
-      subtitle: `${player.className} · ${player.subclass}`,
+      subtitle: `${player.className} · ${player.subclass}${player.statisticsRecorded === false ? ' · PG sin registrar' : ''}`,
       group: 'PJ',
-      maxHp: player.hitPoints,
+      maxHp: player.statisticsRecorded === false ? 0 : player.hitPoints,
     }));
     const genericNpcs = this.characterSheets.genericNpcs().map((npc): TokenChoice => ({
       id: `generic:${npc.id}`,
