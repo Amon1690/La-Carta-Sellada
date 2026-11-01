@@ -9,7 +9,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 
 import {
@@ -28,7 +28,7 @@ import {
   FAERUN_LOCATIONS,
   type FaerunTravelLocation,
 } from '../../../../core/data/faerun-locations';
-import { GENERIC_NPCS } from '../../../../core/data/generic-npcs';
+import { CharacterSheetsService } from '../../../../core/services/character-sheets';
 import { Campaign } from '../../../../core/models/campaign';
 import { CampaignDataService } from '../../../../core/services/campaign-data';
 
@@ -177,6 +177,8 @@ export class TravelMap implements AfterViewInit {
   @ViewChild('mapStage') private mapStage?: ElementRef<HTMLElement>;
 
   private readonly campaignData = inject(CampaignDataService);
+  private readonly characterSheets = inject(CharacterSheetsService);
+  private readonly sheetsVersion = toSignal(this.characterSheets.changes$, { initialValue: 0 });
   private dragState?: DragState;
   private suppressMapClick = false;
 
@@ -206,7 +208,10 @@ export class TravelMap implements AfterViewInit {
   protected readonly selectedGroup = computed(() =>
     this.groups().find((group) => group.id === this.selectedGroupId())
   );
-  protected readonly members = computed<TravelMember[]>(() => this.buildMembers(this.campaign()));
+  protected readonly members = computed<TravelMember[]>(() => {
+    this.sheetsVersion();
+    return this.buildMembers(this.campaign());
+  });
   protected readonly filteredMembers = computed(() => {
     const query = this.normalize(this.memberQuery());
     return this.members().filter((member) =>
@@ -259,12 +264,13 @@ export class TravelMap implements AfterViewInit {
       : undefined;
   });
   protected readonly pendingEncounterRoster = computed(() => {
+    this.sheetsVersion();
     const pending = this.pendingEncounter();
     const encounter = this.pendingEncounterDefinition();
     if (!pending || !encounter) return [];
     return scaledEncounterMonsters(encounter, pending.level, pending.partySize).map((monster) => ({
       ...monster,
-      name: GENERIC_NPCS.find((npc) => npc.id === monster.id)?.name ?? monster.id,
+      name: this.characterSheets.genericNpcs().find((npc) => npc.id === monster.id)?.name ?? monster.id,
     }));
   });
   protected readonly pendingEncounterVttUrl = computed(() => {
@@ -777,51 +783,35 @@ export class TravelMap implements AfterViewInit {
 
   private buildMembers(campaign?: Campaign): TravelMember[] {
     if (!campaign) return [];
-    const optionByName = new Map(
-      campaign.playerOptions.map((player) => [this.normalize(player.name), player])
-    );
-    const players: TravelMember[] = [
-      ...campaign.playerCharacters.map((player) => {
-        const sheet = optionByName.get(this.normalize(player.name));
-        return {
-          id: `player-${player.id}`,
-          name: player.name,
-          image: player.gridTokenUrl || player.tokenUrl,
-          kind: 'PJ' as const,
-          detail: `${player.ancestry} · ${player.className}`,
-          ...this.travelSkillStats(sheet?.skills, sheet?.abilities.wisdom),
-        };
-      }),
-      ...campaign.playerOptions
-        .filter((player) => player.showToken !== false)
-        .map((player) => ({
-          id: `player-option-${player.id}`,
-          name: player.name,
-          image: `assets/tokens-grid/players/${player.id}.png`,
-          kind: 'PJ' as const,
-          detail: `${player.ancestry} · ${player.className}`,
-          ...this.travelSkillStats(player.skills, player.abilities.wisdom),
-        })),
-    ];
-    const npcs: TravelMember[] = campaign.npcs.map((npc) => ({
+    const namedIds = new Set(campaign.playerCharacters.map((player) => player.id));
+    const players: TravelMember[] = this.characterSheets.playerSheets(campaign).map((player) => ({
+      // Preserve the IDs referenced by existing groups and role assignments.
+      id: `${namedIds.has(player.id) ? 'player-' : 'player-option-'}${player.id}`,
+      name: player.name,
+      image: this.characterSheets.tokenImage('players', player.id, true, player.gridTokenUrl || player.tokenUrl),
+      kind: 'PJ',
+      detail: `${player.ancestry} · ${player.className}`,
+      ...this.travelSkillStats(player.skills, player.abilities.wisdom),
+    }));
+    const npcs: TravelMember[] = this.characterSheets.campaignNpcs(campaign.id, campaign.npcs).map((npc) => ({
       id: `npc-${npc.id}`,
       name: npc.name,
-      image: `assets/tokens-grid/npcs/${npc.id}.png`,
+      image: this.characterSheets.tokenImage('npcs', npc.id, true),
       kind: 'PNJ' as const,
       detail: npc.role,
       ...this.travelSkillStats(npc.statBlock?.skills, npc.statBlock?.abilities.wisdom),
     }));
-    const generic: TravelMember[] = GENERIC_NPCS.map((npc) => ({
+    const generic: TravelMember[] = this.characterSheets.genericNpcs().map((npc) => ({
       id: `generic-${npc.id}`,
       name: npc.name,
-      image: `assets/tokens-grid/generic/${npc.id}.png`,
+      image: this.characterSheets.tokenImage('generic', npc.id, true),
       kind: 'Genérico' as const,
       detail: npc.role,
       ...this.travelSkillStats(npc.skills, npc.abilities.wisdom),
     }));
     const seen = new Set<string>();
     return [...players, ...npcs, ...generic].filter((member) => {
-      const key = this.normalize(member.name);
+      const key = member.id;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
@@ -1222,13 +1212,11 @@ export class TravelMap implements AfterViewInit {
   private partyLevel(group: TravelGroup): number {
     const campaign = this.campaign();
     if (!campaign) return 1;
+    const sheets = new Map(this.characterSheets.playerSheets(campaign).map((player) => [player.id, player.level]));
     const levels = group.memberIds.flatMap((memberId) => {
-      if (memberId.startsWith('player-option-')) {
-        const playerId = memberId.slice('player-option-'.length);
-        const level = campaign.playerOptions.find((player) => player.id === playerId)?.level;
-        return level ? [level] : [];
-      }
-      return memberId.startsWith('player-') ? [campaign.startingLevel] : [];
+      const prefix = memberId.startsWith('player-option-') ? 'player-option-' : 'player-';
+      if (!memberId.startsWith(prefix)) return [];
+      return [sheets.get(memberId.slice(prefix.length)) ?? campaign.startingLevel];
     });
     if (!levels.length) return campaign.startingLevel;
     return Math.max(1, Math.min(20, Math.round(levels.reduce((sum, level) => sum + level, 0) / levels.length)));
