@@ -1,0 +1,121 @@
+:host { display: contents; }
+
+.token-sheet-header button {
+  padding: 8px 12px;
+  border: 1px solid #a68343;
+  border-radius: 5px;
+  color: #f8e5b8;
+  background: #3d3425;
+  font: inherit;
+  cursor: pointer;
+}
+
+.token-sheet-dialog {
+  width: min(800px, calc(100vw - 40px));
+  max-height: calc(100dvh - 48px);
+  padding: 0;
+  overflow: auto;
+  border: 1px solid #a68343;
+  border-radius: 10px;
+  color: #f4f0e7;
+  background: #24272b;
+  box-shadow: 0 20px 80px #000;
+}
+
+.token-sheet-dialog::backdrop {
+  background: rgb(0 0 0 / 72%);
+}
+
+.token-sheet-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 22px;
+  border-bottom: 1px solid #665435;
+  background: #2c2923;
+}
+
+.token-sheet-header small {
+  color: #d6b675;
+}
+
+.token-sheet-header h2 {
+  margin: 4px 0 0;
+  font-size: 1.3rem;
+}
+
+.token-sheet-header button {
+  flex-shrink: 0;
+}
+
+.token-sheet-content {
+  padding: 20px 22px;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.token-sheet-identity {
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+}
+
+.token-sheet-identity img {
+  width: 80px;
+  height: 80px;
+  border: 2px solid #a68343;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.token-sheet-identity p {
+  margin: 0 0 6px;
+}
+
+.token-sheet-combat,
+.token-sheet-notice {
+  padding: 10px 14px;
+  border: 1px solid #665435;
+  border-radius: 5px;
+  background: #302b23;
+}
+
+.token-sheet-stats,
+.token-sheet-abilities dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(85px, 1fr));
+  gap: 10px;
+}
+
+.token-sheet-dialog dt {
+  color: #c0b8a9;
+  font-size: 0.75rem;
+}
+
+.token-sheet-dialog dd {
+  margin: 0;
+  color: #f8e5b8;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.token-sheet-dialog h3 {
+  margin: 12px 0 8px;
+  color: #e2be7c;
+  font-size: 1rem;
+}
+
+.token-sheet-sections {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 12px 24px;
+}
+
+.token-sheet-sections ul {
+  padding-left: 20px;
+  margin: 0;
+}

@@ -1,0 +1,55 @@
+<dialog #sheetDialog class="token-sheet-dialog" aria-labelledby="token-sheet-title" (close)="closed.emit()">
+  <header class="token-sheet-header">
+    <div><small>Ficha del token</small><h2 id="token-sheet-title">{{ sheet()?.name || 'Ficha del token' }}</h2></div>
+    <button type="button" autofocus aria-label="Cerrar ficha" (click)="close()">Cerrar ×</button>
+  </header>
+  @if (sheet(); as sheet) {
+    <div class="token-sheet-content">
+      <section class="token-sheet-identity">
+        <img [src]="sheet.token.image" alt="" />
+        <div>
+          @for (line of sheet.meta; track $index) { <p>{{ line }}</p> }
+          @if (sheet.summary) { <p>{{ sheet.summary }}</p> }
+        </div>
+      </section>
+      <p class="token-sheet-combat"><b>En este combate:</b> {{ sheet.token.maxHp > 0 ? sheet.token.hp + ' / ' + sheet.token.maxHp + ' PG' : 'PG sin registrar' }} · Iniciativa {{ sheet.token.initiative }}{{ sheet.token.hidden ? ' · Token oculto' : '' }}</p>
+      @if (sheet.missingSource) {
+        <p class="token-sheet-notice">No se encuentra la ficha de origen de este token. Sus datos de combate se conservan.</p>
+      } @else if (!sheet.statistics) {
+        <p class="token-sheet-notice">Estadísticas sin registrar. Completa la ficha en el compendio para poder consultarlas aquí.</p>
+      }
+      @if (sheet.statistics; as stats) {
+        <dl class="token-sheet-stats">
+          <div><dt>CA</dt><dd>{{ stats.armorClass }}</dd></div>
+          <div><dt>PG de ficha</dt><dd>{{ stats.hitPoints }}</dd></div>
+          <div><dt>Velocidad</dt><dd>{{ stats.speed }}</dd></div>
+          <div><dt>Iniciativa</dt><dd>{{ stats.initiative }}</dd></div>
+          <div><dt>Competencia</dt><dd>{{ stats.proficiencyBonus >= 0 ? '+' : '' }}{{ stats.proficiencyBonus }}</dd></div>
+          @if (stats.challenge) { <div><dt>VD</dt><dd>{{ stats.challenge }}</dd></div> }
+        </dl>
+        <section class="token-sheet-abilities" aria-label="Características">
+          <h3>Características</h3>
+          <dl>
+            <div><dt>FUE</dt><dd>{{ stats.abilities.strength }}</dd></div>
+            <div><dt>DES</dt><dd>{{ stats.abilities.dexterity }}</dd></div>
+            <div><dt>CON</dt><dd>{{ stats.abilities.constitution }}</dd></div>
+            <div><dt>INT</dt><dd>{{ stats.abilities.intelligence }}</dd></div>
+            <div><dt>SAB</dt><dd>{{ stats.abilities.wisdom }}</dd></div>
+            <div><dt>CAR</dt><dd>{{ stats.abilities.charisma }}</dd></div>
+          </dl>
+        </section>
+      }
+      <div class="token-sheet-sections">
+        @for (section of sheet.sections; track section.title) {
+          <section>
+            <h3>{{ section.title }}</h3>
+            <ul>
+              @for (entry of section.entries; track $index) { <li>{{ entry }}</li> }
+              @empty { <li>Sin datos registrados.</li> }
+            </ul>
+          </section>
+        }
+      </div>
+    </div>
+  }
+</dialog>

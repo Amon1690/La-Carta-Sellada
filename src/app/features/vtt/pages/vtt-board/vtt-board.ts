@@ -20,6 +20,8 @@ import {
   scaledEncounterMonsters,
 } from '../../../../core/data/generic-encounters';
 
+import { TokenSheet, VttTokenSheet } from './token-sheet';
+
 type VttEntryKind = 'scene' | 'encounter' | 'location' | 'generic';
 type ToolMode = 'select' | 'pan' | 'fog' | 'reveal' | 'measure';
 type SidebarTab = 'tokens' | 'layers' | 'turns';
@@ -102,6 +104,7 @@ interface TokenDrag {
   moved: boolean;
 }
 
+
 interface StoredBoardState {
   tokens: BoardToken[];
   fogRects: FogRect[];
@@ -112,7 +115,7 @@ interface StoredBoardState {
 
 @Component({
   selector: 'app-vtt-board',
-  imports: [AsyncPipe],
+  imports: [AsyncPipe, VttTokenSheet],
   templateUrl: './vtt-board.html',
   styleUrl: './vtt-board.scss',
 })
@@ -142,6 +145,13 @@ export class VttBoard {
   protected readonly diceOpen = signal(false);
   protected readonly diceResult = signal<string>('');
   protected readonly saveStatus = signal('Guardado');
+  private readonly openedSheetTokenId = signal<string | undefined>(undefined);
+  private readonly sheetRevision = signal(0);
+  protected readonly openedTokenSheet = computed(() => {
+    this.sheetRevision();
+    const token = this.tokens().find((item) => item.instanceId === this.openedSheetTokenId());
+    return token && this.currentCampaign ? this.resolveTokenSheet(token, this.currentCampaign) : undefined;
+  });
 
   protected readonly filteredTokenChoices = computed(() => {
     const query = this.normalize(this.tokenQuery());
@@ -171,6 +181,9 @@ export class VttBoard {
   @ViewChild('board')
   private board?: ElementRef<HTMLDivElement>;
 
+  @ViewChild(VttTokenSheet)
+  private tokenSheetDialog?: VttTokenSheet;
+
   private readonly campaignData = inject(CampaignDataService);
   private readonly characterSheets = inject(CharacterSheetsService);
   private currentCampaign?: Campaign;
@@ -179,6 +192,10 @@ export class VttBoard {
   private drawStart?: { x: number; y: number };
   private panStart?: { x: number; y: number; left: number; top: number };
   private interactionPointerId?: number;
+  private pointerCaptureElement?: HTMLElement;
+  private lastTokenClickId?: string;
+  private doubleClickTokenId?: string;
+  private sheetReturnFocus?: HTMLElement;
   private tokenDrag?: TokenDrag;
   private selectionStart?: { point: BoardPoint; previous: string[]; additive: boolean };
 
@@ -199,6 +216,7 @@ export class VttBoard {
 
   constructor() {
     this.vm$.pipe(takeUntilDestroyed()).subscribe((vm) => {
+      this.closeTokenSheet();
       if (!vm) return;
       this.cancelInteraction();
       this.selectedTokenIds.set([]);
@@ -215,11 +233,13 @@ export class VttBoard {
     });
     this.characterSheets.changes$.pipe(skip(1), takeUntilDestroyed()).subscribe(() => {
       if (this.currentCampaign) this.tokenChoices.set(this.buildTokenChoices(this.currentCampaign));
+      this.sheetRevision.update((revision) => revision + 1);
     });
   }
 
   protected setMode(mode: ToolMode): void {
     this.cancelInteraction();
+    this.lastTokenClickId = this.doubleClickTokenId = undefined;
     this.mode.set(mode);
     this.draftFog.set(undefined);
     this.measureLine.set(undefined);
@@ -263,6 +283,30 @@ export class VttBoard {
     this.chooseToken(instanceId, event.shiftKey || event.ctrlKey || event.metaKey);
   }
 
+  protected openTokenSheet(instanceId: string, event: MouseEvent): void {
+    event.stopPropagation();
+    if ((event.type === 'dblclick' && this.mode() !== 'select') || event.shiftKey || event.ctrlKey || event.metaKey) return;
+    if (event.type === 'dblclick' && this.doubleClickTokenId !== instanceId) return;
+    const dialog = this.tokenSheetDialog;
+    if (!dialog || !this.tokens().some((token) => token.instanceId === instanceId)) return;
+    this.cancelInteraction();
+    this.sheetReturnFocus = Array.from(this.board?.nativeElement.querySelectorAll<HTMLElement>('.vtt-token') ?? [])
+      .find((element) => element.dataset['tokenInstance'] === instanceId);
+    this.openedSheetTokenId.set(instanceId);
+    dialog.open();
+  }
+
+  protected closeTokenSheet(): void {
+    this.tokenSheetDialog?.close();
+    this.openedSheetTokenId.set(undefined);
+  }
+
+  protected tokenSheetClosed(): void {
+    this.openedSheetTokenId.set(undefined);
+    if (this.sheetReturnFocus?.isConnected) this.sheetReturnFocus.focus({ preventScroll: true });
+    this.sheetReturnFocus = undefined;
+  }
+
   protected isTokenSelected(instanceId: string): boolean {
     return this.selectedTokenIds().includes(instanceId);
   }
@@ -293,7 +337,7 @@ export class VttBoard {
       collapseOnClick: wasSelected && !additive,
       moved: false,
     };
-    this.capturePointer(event);
+    this.capturePointer(event, event.currentTarget as HTMLElement);
   }
 
   protected setSelectedHidden(hidden: boolean): void {
@@ -331,6 +375,7 @@ export class VttBoard {
   protected removeSelectedTokens(): void {
     const ids = new Set(this.selectedTokenIds());
     if (!ids.size) return;
+    if (ids.has(this.openedSheetTokenId() ?? '')) this.closeTokenSheet();
     this.cancelInteraction();
     this.tokens.update((tokens) => tokens.filter((token) => !ids.has(token.instanceId)));
     if (ids.has(this.activeTurnId() ?? '')) this.activeTurnId.set(undefined);
@@ -456,6 +501,7 @@ export class VttBoard {
     if ((event.target as HTMLElement).closest('.vtt-token')) return;
 
     if (this.mode() === 'select') {
+      this.lastTokenClickId = this.doubleClickTokenId = undefined;
       const point = this.boardPoint(event);
       if (!point) return;
       this.selectionStart = {
@@ -542,8 +588,14 @@ export class VttBoard {
       const point = this.boardPoint(event);
       if (point) this.moveTokenSelection(drag, point, true);
       this.tokenDrag = undefined;
-      if (drag.moved) this.persist();
-      else if (drag.collapseOnClick) this.selectedTokenIds.set([drag.clickedId]);
+      if (drag.moved) {
+        this.lastTokenClickId = this.doubleClickTokenId = undefined;
+        this.persist();
+      } else {
+        this.doubleClickTokenId = this.lastTokenClickId === drag.clickedId ? drag.clickedId : undefined;
+        this.lastTokenClickId = drag.clickedId;
+        if (drag.collapseOnClick) this.selectedTokenIds.set([drag.clickedId]);
+      }
       this.releasePointer();
       return;
     }
@@ -605,6 +657,7 @@ export class VttBoard {
 
   protected resetBoard(): void {
     if (!window.confirm('¿Restablecer tokens, niebla y turnos de este mapa?')) return;
+    this.closeTokenSheet();
     this.cancelInteraction();
     this.tokens.set([]);
     this.fogRects.set([]);
@@ -616,6 +669,7 @@ export class VttBoard {
 
   @HostListener('window:keydown', ['$event'])
   protected handleKeyboard(event: KeyboardEvent): void {
+    if (this.tokenSheetDialog?.isOpen) return;
     const target = event.target as HTMLElement;
     if (target.closest('input, textarea, select, [contenteditable="true"]')) return;
     if (event.key === 'Delete' || event.key === 'Backspace') {
@@ -694,6 +748,59 @@ export class VttBoard {
     return entry
       ? { id, name: entry.name, mapUrl: entry.mapUrl, kind, kindLabel: 'Lugar' }
       : undefined;
+  }
+
+  private resolveTokenSheet(token: BoardToken, campaign: Campaign): TokenSheet {
+    const sheet: TokenSheet = { token, name: token.name, summary: '', meta: [], sections: [], missingSource: true };
+    if (token.actorId.startsWith('player:')) {
+      const player = this.characterSheets.playerSheets(campaign).find((entry) => entry.id === token.actorId.slice(7));
+      if (player) {
+        sheet.missingSource = false;
+        sheet.name = player.name;
+        sheet.summary = player.hook;
+        sheet.meta = [`PJ · ${player.ancestry} · ${player.className} · ${player.subclass}`,
+          `Nivel ${player.level} · Trasfondo: ${player.background}`, `Dote: ${player.feat}`,
+          ...(player.affiliation ? [`Afiliación: ${player.affiliation}`] : [])];
+        if (player.statisticsRecorded !== false) sheet.statistics = player;
+      }
+    } else if (token.actorId.startsWith('npc:')) {
+      const npc = this.characterSheets.campaignNpcs(campaign.id, campaign.npcs).find((entry) => entry.id === token.actorId.slice(4));
+      if (npc) {
+        sheet.missingSource = false;
+        sheet.name = npc.name;
+        sheet.summary = npc.summary;
+        sheet.meta = [`PNJ · ${npc.role}`, `Facción: ${npc.faction}`, `Motivación: ${npc.motivation}`,
+          ...(npc.ancestry ? [`Linaje: ${npc.ancestry}`] : []), ...(npc.age ? [`Edad: ${npc.age}`] : [])];
+        sheet.statistics = npc.statBlock;
+        sheet.sections = [
+          { title: 'Descripción', entries: npc.description ? [npc.description] : [] },
+          { title: 'Personalidad', entries: npc.personality ?? [] },
+          { title: 'Conocimientos', entries: npc.knowledge ?? [] },
+          { title: 'Reacciones', entries: npc.reactions ?? [] },
+          { title: 'Secreto', entries: npc.secret ? [npc.secret] : [] },
+        ].filter((section) => section.entries.length);
+      }
+    } else if (token.actorId.startsWith('generic:')) {
+      const npc = this.characterSheets.genericNpcs().find((entry) => entry.id === token.actorId.slice(8));
+      if (npc) {
+        sheet.missingSource = false;
+        sheet.name = npc.name;
+        sheet.summary = npc.summary;
+        sheet.meta = [`Ficha genérica · ${npc.category}`, `Linaje: ${npc.lineage}`, `Función: ${npc.role}`];
+        sheet.statistics = { ...npc, features: npc.traits };
+        if (npc.personality?.length) sheet.sections.push({ title: 'Personalidad', entries: npc.personality });
+      }
+    }
+    const stats = sheet.statistics;
+    if (stats) sheet.sections.push(
+      { title: 'Salvaciones', entries: stats.saves ?? [] },
+      { title: 'Habilidades', entries: stats.skills ?? [] },
+      { title: 'Rasgos', entries: stats.features ?? [] },
+      { title: 'Ataques', entries: stats.attacks ?? [] },
+      { title: 'Conjuros', entries: stats.spells ?? [] },
+      { title: 'Equipo', entries: stats.equipment ?? [] },
+    );
+    return sheet;
   }
 
   private buildTokenChoices(campaign: Campaign): TokenChoice[] {
@@ -782,16 +889,18 @@ export class VttBoard {
       : [instanceId]);
   }
 
-  private capturePointer(event: PointerEvent): void {
+  private capturePointer(event: PointerEvent, element: HTMLElement | undefined = this.board?.nativeElement): void {
     this.interactionPointerId = event.pointerId;
-    this.board?.nativeElement.setPointerCapture(event.pointerId);
+    this.pointerCaptureElement = element;
+    element?.setPointerCapture(event.pointerId);
   }
 
   private releasePointer(): void {
     const pointerId = this.interactionPointerId;
     this.interactionPointerId = undefined;
-    const board = this.board?.nativeElement;
-    if (pointerId !== undefined && board?.hasPointerCapture(pointerId)) board.releasePointerCapture(pointerId);
+    const element = this.pointerCaptureElement;
+    this.pointerCaptureElement = undefined;
+    if (pointerId !== undefined && element?.hasPointerCapture(pointerId)) element.releasePointerCapture(pointerId);
   }
 
   private cancelInteraction(): void {
