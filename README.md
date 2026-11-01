@@ -26,9 +26,10 @@ npm run test:ci
 La CI comprueba herramientas, coordinación de agentes, datos, recursos,
 compilación y pruebas de Angular. Requiere Node 22 y Chrome.
 
-El piloto de mejora continua incluye una cola priorizada, desarrollo acotado,
-verificación y revisión independientes y PRs en borrador. Permanece pausado hasta
-configurar la clave y las variables de GitHub. Consulta la
+El mantenimiento continuo usa la sesión local de ChatGPT y su cuota incluida,
+sin claves ni llamadas a la API de pago. Conserva checkpoints para reanudar tras
+un apagado, con revisión independiente y PRs en borrador. GitHub mantiene la cola
+y las comprobaciones convencionales, sin ejecutar agentes. Consulta la
 [guía de activación y operación](docs/agents-workflow.md).
 
 ## Build

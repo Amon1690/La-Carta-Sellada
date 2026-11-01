@@ -9,7 +9,7 @@ function allowedPath(file) {
     !file.split('/').some((part) => !part || part === '.' || part === '..' || part.startsWith('.')) &&
     (file === 'README.md' || /^(src|public|docs)\//.test(file)) &&
     !/(^|\/)AGENTS(?:\.override)?\.md$/i.test(file) &&
-    file !== 'docs/agents-workflow.md';
+    !['docs/agents-workflow.md', 'docs/local-agent-runbook.md'].includes(file);
 }
 
 function git(args, options = {}) {
