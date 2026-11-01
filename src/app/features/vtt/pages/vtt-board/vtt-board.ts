@@ -1,4 +1,3 @@
-import { CdkDrag, CdkDragEnd } from '@angular/cdk/drag-drop';
 import { AsyncPipe } from '@angular/common';
 import {
   Component,
@@ -90,6 +89,19 @@ interface MeasureLine {
   y2: number;
 }
 
+interface BoardPoint {
+  x: number;
+  y: number;
+}
+
+interface TokenDrag {
+  start: BoardPoint;
+  origins: Pick<BoardToken, 'instanceId' | 'x' | 'y' | 'size'>[];
+  clickedId: string;
+  collapseOnClick: boolean;
+  moved: boolean;
+}
+
 interface StoredBoardState {
   tokens: BoardToken[];
   fogRects: FogRect[];
@@ -100,7 +112,7 @@ interface StoredBoardState {
 
 @Component({
   selector: 'app-vtt-board',
-  imports: [AsyncPipe, CdkDrag],
+  imports: [AsyncPipe],
   templateUrl: './vtt-board.html',
   styleUrl: './vtt-board.scss',
 })
@@ -122,7 +134,8 @@ export class VttBoard {
   });
   protected readonly tokenChoices = signal<TokenChoice[]>([]);
   protected readonly tokenQuery = signal('');
-  protected readonly selectedTokenId = signal<string | undefined>(undefined);
+  protected readonly selectedTokenIds = signal<string[]>([]);
+  protected readonly selectionRect = signal<FogRect | undefined>(undefined);
   protected readonly activeTurnId = signal<string | undefined>(undefined);
   protected readonly draftFog = signal<FogRect | undefined>(undefined);
   protected readonly measureLine = signal<MeasureLine | undefined>(undefined);
@@ -139,8 +152,11 @@ export class VttBoard {
     );
   });
 
+  protected readonly selectedTokens = computed(() =>
+    this.tokens().filter((token) => this.selectedTokenIds().includes(token.instanceId))
+  );
   protected readonly selectedToken = computed(() =>
-    this.tokens().find((token) => token.instanceId === this.selectedTokenId())
+    this.selectedTokens().length === 1 ? this.selectedTokens()[0] : undefined
   );
 
   protected readonly initiativeTokens = computed(() =>
@@ -162,6 +178,9 @@ export class VttBoard {
   private storageKey = '';
   private drawStart?: { x: number; y: number };
   private panStart?: { x: number; y: number; left: number; top: number };
+  private interactionPointerId?: number;
+  private tokenDrag?: TokenDrag;
+  private selectionStart?: { point: BoardPoint; previous: string[]; additive: boolean };
 
   protected readonly vm$ = this.route.paramMap.pipe(
     switchMap((params) => {
@@ -181,6 +200,8 @@ export class VttBoard {
   constructor() {
     this.vm$.pipe(takeUntilDestroyed()).subscribe((vm) => {
       if (!vm) return;
+      this.cancelInteraction();
+      this.selectedTokenIds.set([]);
       this.currentCampaign = vm.campaign;
       const runId = this.route.snapshot.queryParamMap.get('run');
       const runSuffix = runId ? `:${runId.replace(/[^a-zA-Z0-9_-]/g, '')}` : '';
@@ -198,6 +219,7 @@ export class VttBoard {
   }
 
   protected setMode(mode: ToolMode): void {
+    this.cancelInteraction();
     this.mode.set(mode);
     this.draftFog.set(undefined);
     this.measureLine.set(undefined);
@@ -230,38 +252,61 @@ export class VttBoard {
     };
 
     this.tokens.update((tokens) => [...tokens, token]);
-    this.selectedTokenId.set(token.instanceId);
+    this.selectedTokenIds.set([token.instanceId]);
     this.persist();
   }
 
   protected selectToken(instanceId: string, event: MouseEvent): void {
     event.stopPropagation();
-    this.selectedTokenId.set(instanceId);
+    // El puntero selecciona antes de arrastrar; los clics con detail 0 vienen del teclado.
+    if (this.mode() !== 'select' || event.detail !== 0) return;
+    this.chooseToken(instanceId, event.shiftKey || event.ctrlKey || event.metaKey);
   }
 
-  protected tokenDragEnded(token: BoardToken, event: CdkDragEnd): void {
-    const scale = Math.max(0.1, this.zoom());
-    const size = this.gridSize * token.size;
-    const snapped = {
-      x: this.clamp(
-        Math.round((token.x + event.distance.x / scale) / this.gridSize) * this.gridSize,
-        0,
-        this.mapWidth - size
-      ),
-      y: this.clamp(
-        Math.round((token.y + event.distance.y / scale) / this.gridSize) * this.gridSize,
-        0,
-        this.mapHeight - size
-      ),
+  protected isTokenSelected(instanceId: string): boolean {
+    return this.selectedTokenIds().includes(instanceId);
+  }
+
+  protected selectAllTokens(): void {
+    this.cancelInteraction();
+    this.selectedTokenIds.set(this.layers().tokens ? this.tokens().map((token) => token.instanceId) : []);
+  }
+
+  protected clearSelection(): void {
+    this.cancelInteraction();
+    this.selectedTokenIds.set([]);
+  }
+
+  protected tokenPointerDown(token: BoardToken, event: PointerEvent): void {
+    if (this.mode() !== 'select' || event.button !== 0 || this.interactionPointerId !== undefined) return;
+    event.stopPropagation();
+    const point = this.boardPoint(event);
+    if (!point) return;
+    const additive = event.shiftKey || event.ctrlKey || event.metaKey;
+    const wasSelected = this.isTokenSelected(token.instanceId);
+    if (additive || !wasSelected) this.chooseToken(token.instanceId, additive);
+    if (!this.isTokenSelected(token.instanceId)) return;
+    this.tokenDrag = {
+      start: point,
+      origins: this.selectedTokens().map(({ instanceId, x, y, size }) => ({ instanceId, x, y, size })),
+      clickedId: token.instanceId,
+      collapseOnClick: wasSelected && !additive,
+      moved: false,
     };
-    event.source.reset();
-    this.updateToken(token.instanceId, { x: snapped.x, y: snapped.y });
+    this.capturePointer(event);
+  }
+
+  protected setSelectedHidden(hidden: boolean): void {
+    const ids = new Set(this.selectedTokenIds());
+    this.tokens.update((tokens) => tokens.map((token) => ids.has(token.instanceId) ? { ...token, hidden } : token));
+    this.persist();
   }
 
   protected updateSelectedNumber(
     field: 'hp' | 'maxHp' | 'size',
     value: string
   ): void {
+    this.cancelInteraction();
     const token = this.selectedToken();
     if (!token) return;
     const numericValue = Number(value);
@@ -283,12 +328,13 @@ export class VttBoard {
     return this.clamp((token.hp / token.maxHp) * 100, 0, 100);
   }
 
-  protected removeSelectedToken(): void {
-    const id = this.selectedTokenId();
-    if (!id) return;
-    this.tokens.update((tokens) => tokens.filter((token) => token.instanceId !== id));
-    if (this.activeTurnId() === id) this.activeTurnId.set(undefined);
-    this.selectedTokenId.set(undefined);
+  protected removeSelectedTokens(): void {
+    const ids = new Set(this.selectedTokenIds());
+    if (!ids.size) return;
+    this.cancelInteraction();
+    this.tokens.update((tokens) => tokens.filter((token) => !ids.has(token.instanceId)));
+    if (ids.has(this.activeTurnId() ?? '')) this.activeTurnId.set(undefined);
+    this.selectedTokenIds.set([]);
     this.persist();
   }
 
@@ -332,6 +378,7 @@ export class VttBoard {
 
   protected toggleLayer(layer: keyof LayerState): void {
     this.layers.update((layers) => ({ ...layers, [layer]: !layers[layer] }));
+    if (layer === 'tokens' && !this.layers().tokens) this.clearSelection();
     this.persist();
   }
 
@@ -405,11 +452,19 @@ export class VttBoard {
   }
 
   protected boardPointerDown(event: PointerEvent): void {
-    if (event.button !== 0) return;
+    if (event.button !== 0 || this.interactionPointerId !== undefined) return;
     if ((event.target as HTMLElement).closest('.vtt-token')) return;
 
     if (this.mode() === 'select') {
-      this.selectedTokenId.set(undefined);
+      const point = this.boardPoint(event);
+      if (!point) return;
+      this.selectionStart = {
+        point,
+        previous: this.selectedTokenIds().slice(),
+        additive: event.shiftKey || event.ctrlKey || event.metaKey,
+      };
+      this.board?.nativeElement.focus({ preventScroll: true });
+      this.capturePointer(event);
       return;
     }
 
@@ -422,14 +477,14 @@ export class VttBoard {
         left: viewport.scrollLeft,
         top: viewport.scrollTop,
       };
-      this.board?.nativeElement.setPointerCapture(event.pointerId);
+      this.capturePointer(event);
       return;
     }
 
     const point = this.boardPoint(event);
     if (!point) return;
     this.drawStart = this.snapPoint(point, this.mode() === 'measure');
-    this.board?.nativeElement.setPointerCapture(event.pointerId);
+    this.capturePointer(event);
 
     if (this.mode() === 'measure') {
       this.measureLine.set({
@@ -444,6 +499,17 @@ export class VttBoard {
   }
 
   protected boardPointerMove(event: PointerEvent): void {
+    if (event.pointerId !== this.interactionPointerId) return;
+    if (this.tokenDrag) {
+      const point = this.boardPoint(event);
+      if (point) this.moveTokenSelection(this.tokenDrag, point, false);
+      return;
+    }
+    if (this.selectionStart) {
+      const point = this.boardPoint(event);
+      if (point) this.selectionRect.set(this.selectionBounds(this.selectionStart.point, point));
+      return;
+    }
     if (this.panStart && this.mode() === 'pan') {
       const viewport = this.viewport?.nativeElement;
       if (!viewport) return;
@@ -470,9 +536,35 @@ export class VttBoard {
   }
 
   protected boardPointerUp(event: PointerEvent): void {
+    if (event.pointerId !== this.interactionPointerId) return;
+    if (this.tokenDrag) {
+      const drag = this.tokenDrag;
+      const point = this.boardPoint(event);
+      if (point) this.moveTokenSelection(drag, point, true);
+      this.tokenDrag = undefined;
+      if (drag.moved) this.persist();
+      else if (drag.collapseOnClick) this.selectedTokenIds.set([drag.clickedId]);
+      this.releasePointer();
+      return;
+    }
+    if (this.selectionStart) {
+      const { point: start, previous, additive } = this.selectionStart;
+      const point = this.boardPoint(event) ?? start;
+      const rect = this.selectionBounds(start, point);
+      const moved = Math.hypot(rect.width, rect.height) * this.zoom() >= 4;
+      const hits = moved && this.layers().tokens ? this.tokens().filter((token) =>
+        token.x < rect.x + rect.width && token.x + token.size * this.gridSize > rect.x &&
+        token.y < rect.y + rect.height && token.y + token.size * this.gridSize > rect.y
+      ).map((token) => token.instanceId) : [];
+      this.selectedTokenIds.set([...new Set([...(additive ? previous : []), ...hits])]);
+      this.selectionStart = undefined;
+      this.selectionRect.set(undefined);
+      this.releasePointer();
+      return;
+    }
     if (this.panStart) {
       this.panStart = undefined;
-      this.board?.nativeElement.releasePointerCapture(event.pointerId);
+      this.releasePointer();
       return;
     }
 
@@ -494,7 +586,14 @@ export class VttBoard {
 
     this.drawStart = undefined;
     this.draftFog.set(undefined);
-    this.board?.nativeElement.releasePointerCapture(event.pointerId);
+    this.releasePointer();
+  }
+
+  protected boardPointerCancel(event: PointerEvent): void {
+    if (event.pointerId === this.interactionPointerId) {
+      this.cancelInteraction();
+      this.measureLine.set(undefined);
+    }
   }
 
   protected measureLabel(): string {
@@ -506,9 +605,10 @@ export class VttBoard {
 
   protected resetBoard(): void {
     if (!window.confirm('¿Restablecer tokens, niebla y turnos de este mapa?')) return;
+    this.cancelInteraction();
     this.tokens.set([]);
     this.fogRects.set([]);
-    this.selectedTokenId.set(undefined);
+    this.selectedTokenIds.set([]);
     this.activeTurnId.set(undefined);
     this.layers.set({ grid: false, fog: true, tokens: true, labels: true });
     this.persist();
@@ -517,12 +617,19 @@ export class VttBoard {
   @HostListener('window:keydown', ['$event'])
   protected handleKeyboard(event: KeyboardEvent): void {
     const target = event.target as HTMLElement;
-    if (target.matches('input, textarea, select')) return;
+    if (target.closest('input, textarea, select, [contenteditable="true"]')) return;
     if (event.key === 'Delete' || event.key === 'Backspace') {
-      this.removeSelectedToken();
+      if (this.selectedTokens().length) {
+        event.preventDefault();
+        this.removeSelectedTokens();
+      }
     } else if (event.key === 'Escape') {
       this.setMode('select');
-      this.selectedTokenId.set(undefined);
+      this.clearSelection();
+    } else if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a' &&
+      this.mode() === 'select' && this.board?.nativeElement.contains(target)) {
+      event.preventDefault();
+      this.selectAllTokens();
     } else if (event.key === '0') {
       this.fitMap();
     }
@@ -656,7 +763,7 @@ export class VttBoard {
     });
 
     this.tokens.set(tokens);
-    this.selectedTokenId.set(tokens[0]?.instanceId);
+    this.selectedTokenIds.set(tokens.length ? [tokens[0].instanceId] : []);
     this.persist();
   }
 
@@ -667,6 +774,65 @@ export class VttBoard {
       )
     );
     this.persist();
+  }
+
+  private chooseToken(instanceId: string, additive: boolean): void {
+    this.selectedTokenIds.update((ids) => additive
+      ? ids.includes(instanceId) ? ids.filter((id) => id !== instanceId) : [...ids, instanceId]
+      : [instanceId]);
+  }
+
+  private capturePointer(event: PointerEvent): void {
+    this.interactionPointerId = event.pointerId;
+    this.board?.nativeElement.setPointerCapture(event.pointerId);
+  }
+
+  private releasePointer(): void {
+    const pointerId = this.interactionPointerId;
+    this.interactionPointerId = undefined;
+    const board = this.board?.nativeElement;
+    if (pointerId !== undefined && board?.hasPointerCapture(pointerId)) board.releasePointerCapture(pointerId);
+  }
+
+  private cancelInteraction(): void {
+    const origins = new Map(this.tokenDrag?.origins.map((token) => [token.instanceId, token]));
+    if (origins.size) this.tokens.update((tokens) => tokens.map((token) => {
+      const origin = origins.get(token.instanceId);
+      return origin ? { ...token, x: origin.x, y: origin.y } : token;
+    }));
+    this.tokenDrag = undefined;
+    this.selectionStart = undefined;
+    this.selectionRect.set(undefined);
+    this.panStart = undefined;
+    this.drawStart = undefined;
+    this.draftFog.set(undefined);
+    this.releasePointer();
+  }
+
+  private selectionBounds(start: BoardPoint, end: BoardPoint): FogRect {
+    return { id: 'selection', x: Math.min(start.x, end.x), y: Math.min(start.y, end.y),
+      width: Math.abs(end.x - start.x), height: Math.abs(end.y - start.y) };
+  }
+
+  private moveTokenSelection(drag: TokenDrag, point: BoardPoint, snap: boolean): void {
+    let dx = point.x - drag.start.x;
+    let dy = point.y - drag.start.y;
+    drag.moved ||= Math.hypot(dx, dy) * this.zoom() >= 4;
+    if (!drag.moved) return;
+    if (snap) {
+      dx = Math.round(dx / this.gridSize) * this.gridSize;
+      dy = Math.round(dy / this.gridSize) * this.gridSize;
+    }
+    // Un único desplazamiento limitado conserva la formación y el tamaño de cada ficha.
+    dx = this.clamp(dx, -Math.min(...drag.origins.map((t) => t.x)),
+      this.mapWidth - Math.max(...drag.origins.map((t) => t.x + t.size * this.gridSize)));
+    dy = this.clamp(dy, -Math.min(...drag.origins.map((t) => t.y)),
+      this.mapHeight - Math.max(...drag.origins.map((t) => t.y + t.size * this.gridSize)));
+    const positions = new Map(drag.origins.map((t) => [t.instanceId, { x: t.x + dx, y: t.y + dy }]));
+    this.tokens.update((tokens) => tokens.map((token) => {
+      const position = positions.get(token.instanceId);
+      return position ? { ...token, ...position } : token;
+    }));
   }
 
   private boardPoint(event: PointerEvent): { x: number; y: number } | undefined {
@@ -731,6 +897,7 @@ export class VttBoard {
   }
 
   private setZoom(value: number): void {
+    this.cancelInteraction();
     this.zoom.set(this.clamp(value, 0.2, 2));
     this.persist();
   }
@@ -769,8 +936,14 @@ export class VttBoard {
   private persist(): void {
     if (!this.storageKey) return;
     this.saveStatus.set('Guardando');
+    // Otras acciones pueden guardar durante un gesto: las posiciones provisionales
+    // solo se confirman al soltar el puntero, nunca al ocultar o cambiar de turno.
+    const origins = new Map(this.tokenDrag?.origins.map((token) => [token.instanceId, token]));
     const state: StoredBoardState = {
-      tokens: this.tokens(),
+      tokens: this.tokens().map((token) => {
+        const origin = origins.get(token.instanceId);
+        return origin ? { ...token, x: origin.x, y: origin.y } : token;
+      }),
       fogRects: this.fogRects(),
       layers: this.layers(),
       zoom: this.zoom(),

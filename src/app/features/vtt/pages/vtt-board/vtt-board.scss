@@ -354,6 +354,69 @@ button {
   outline-offset: 2px;
 }
 
+.selection-rect {
+  position: absolute;
+  z-index: 50;
+  border: 2px dashed #ffe19a;
+  background: rgb(226 182 93 / 20%);
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.selection-tools {
+  padding: 12px 14px;
+  border-bottom: 1px solid #41444a;
+}
+
+.selection-tools p,
+.selection-help {
+  margin: 0 0 10px;
+  color: #c0b9ad;
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+.selection-tools small {
+  display: block;
+  margin-top: 8px;
+  color: #f2cf87;
+}
+
+.selection-help {
+  margin-top: 10px;
+}
+
+.selection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.selection-actions button {
+  min-height: 32px;
+  padding: 4px 9px;
+  border: 1px solid #6c6250;
+  border-radius: 4px;
+  color: #f4f0e7;
+  background: #36322b;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.selection-actions button:hover {
+  border-color: #e2b65d;
+}
+
+.selection-actions button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.selection-actions .remove-selection {
+  border-color: #865a5b;
+  background: #392729;
+}
+
 .vtt-token.active-turn {
   box-shadow: 0 0 0 6px #62c99a, 0 2px 7px rgb(0 0 0 / 70%);
 }
