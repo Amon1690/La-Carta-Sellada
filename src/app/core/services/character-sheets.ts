@@ -8,6 +8,7 @@ export interface EditablePlayerSheet extends PlayerOption {
   tokenUrl?: string;
   gridTokenUrl?: string;
   affiliation?: string;
+  statisticsRecorded?: boolean;
 }
 
 interface EditableCollection<T extends { id: string }> {
@@ -67,7 +68,7 @@ export class CharacterSheetsService {
     }
 
     const namedPlayers = campaign.playerCharacters.map((player) =>
-      this.playerCharacterToSheet(player, campaign.playerOptions)
+      this.playerCharacterToSheet(player, campaign.startingLevel)
     );
     const visibleOptions = campaign.playerOptions
       .filter((player) => player.showToken !== false)
@@ -93,12 +94,13 @@ export class CharacterSheetsService {
 
   private playerCharacterToSheet(
     player: CampaignPlayerCharacter,
-    templates: PlayerOption[]
+    startingLevel: number
   ): EditablePlayerSheet {
-    const template =
-      this.findPlayerTemplate(player, templates) ?? this.defaultPlayerTemplate();
+    const template = this.defaultPlayerTemplate();
     return {
       ...template,
+      statisticsRecorded: false,
+      level: startingLevel,
       id: player.id,
       showToken: true,
       name: player.name,
@@ -114,23 +116,6 @@ export class CharacterSheetsService {
     };
   }
 
-  private findPlayerTemplate(
-    player: CampaignPlayerCharacter,
-    templates: PlayerOption[]
-  ): PlayerOption | undefined {
-    const className = this.normalize(player.className);
-    const subclass = this.normalize(player.subclass);
-    return (
-      templates.find(
-        (template) =>
-          this.normalize(template.className) === className &&
-          this.normalize(template.subclass) === subclass
-      ) ??
-      templates.find((template) => this.normalize(template.subclass) === subclass) ??
-      templates.find((template) => this.normalize(template.className) === className)
-    );
-  }
-
   private defaultPlayerTemplate(): PlayerOption {
     return {
       id: 'template',
@@ -142,18 +127,18 @@ export class CharacterSheetsService {
       hook: 'Pendiente de definir.',
       level: 5,
       feat: 'A elegir',
-      armorClass: 12,
-      hitPoints: 38,
-      speed: '9 m',
-      initiative: '+0',
-      proficiencyBonus: 3,
+      armorClass: 0,
+      hitPoints: 0,
+      speed: '',
+      initiative: '',
+      proficiencyBonus: 0,
       abilities: {
-        strength: 10,
-        dexterity: 10,
-        constitution: 10,
-        intelligence: 10,
-        wisdom: 10,
-        charisma: 10,
+        strength: 0,
+        dexterity: 0,
+        constitution: 0,
+        intelligence: 0,
+        wisdom: 0,
+        charisma: 0,
       },
       saves: [],
       skills: [],
@@ -257,8 +242,5 @@ export class CharacterSheetsService {
   }
   private gridTokenPath(group: 'npcs' | 'players', id: string): string {
     return `assets/tokens-grid/${group}/${id}.png`;
-  }
-  private normalize(value: string): string {
-    return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
   }
 }

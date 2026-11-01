@@ -103,9 +103,11 @@ describe('CharacterSheetsService y consumidores', () => {
     expect(storage.getItem(PLAYER_KEY)).toBe('{ilegible');
   });
 
-  it('usa la misma ficha y los mismos retratos para personajes principales', () => {
+  it('conserva retratos e identidad sin tomar estadísticas de una plantilla ajena', () => {
     const named = sheets.playerSheets(adventure).find((p) => p.id === 'named-player');
-    expect(named?.hitPoints).toBe(player().hitPoints);
+    expect(named?.statisticsRecorded).toBeFalse();
+    expect(named?.hitPoints).toBe(0);
+    expect(named?.skills).toEqual([]);
     expect(named?.tokenUrl).toBe(adventure.playerCharacters[0].tokenUrl);
     expect(sheets.tokenImage('players', 'custom-new')).toBe('assets/tokens/generic/aldeano.png');
     expect(sheets.tokenImage('npcs', 'custom-new', true)).toBe('assets/tokens-grid/generic/aldeano.png');
@@ -214,5 +216,68 @@ describe('CharacterSheetsService y consumidores', () => {
       if (original === null) localStorage.removeItem(key);
       else localStorage.setItem(key, original);
     }
+  });
+
+  it('muestra ausencia explícita para los cuatro PJs principales sin ficha', () => {
+    const base = adventure.playerCharacters[0];
+    adventure.playerCharacters = ['valian', 'erwan', 'megara', 'durgan'].map((id) => ({ ...base, id, name: id }));
+    const cards = compendiumCards();
+    const board = TestBed.runInInjectionContext(() => new VttBoard()) as unknown as { tokenChoices(): { id: string; maxHp: number; subtitle: string }[] };
+    for (const main of adventure.playerCharacters) {
+      expect(cards.find((c) => c.key === `player:${main.id}`)?.stats).toEqual([{ label: 'Estadísticas', value: 'Sin registrar' }]);
+      const choice = board.tokenChoices().find((c) => c.id === `player:${main.id}`);
+      expect(choice?.maxHp).toBe(0);
+      expect(choice?.subtitle).toContain('PG sin registrar');
+    }
+  });
+
+  it('conserva fichas antiguas de PJs principales y propaga PG y habilidades propios al editarlas', () => {
+    const old = { ...player(), id: 'named-player', name: 'Principal con ficha', hitPoints: 67, skills: ['Supervivencia +8', 'Percepción +7'], abilities: { ...player().abilities, wisdom: 18 } };
+    storage.setItem(PLAYER_KEY, JSON.stringify({ edited: { 'named-player': old }, created: [] }));
+    const travel = TestBed.runInInjectionContext(() => new TravelMap()) as unknown as { members(): { id: string; survivalBonus: number; perceptionBonus: number }[] };
+    const board = TestBed.runInInjectionContext(() => new VttBoard()) as unknown as { tokenChoices(): { id: string; maxHp: number }[] };
+    expect(board.tokenChoices().find((p) => p.id === 'player:named-player')?.maxHp).toBe(67);
+    expect(travel.members().find((p) => p.id === 'player-named-player')?.survivalBonus).toBe(8);
+    expect(storage.getItem(PLAYER_KEY)).toContain('Principal con ficha');
+    sheets.savePlayer({ ...old, hitPoints: 72, skills: ['Supervivencia +10', 'Percepción +9'] }, 'edit');
+    expect(compendiumCards().find((c) => c.key === 'player:named-player')?.stats).toContain({ label: 'PG', value: '72' });
+    expect(board.tokenChoices().find((p) => p.id === 'player:named-player')?.maxHp).toBe(72);
+    expect(travel.members().find((p) => p.id === 'player-named-player')?.survivalBonus).toBe(10);
+    expect(travel.members().find((p) => p.id === 'player-named-player')?.perceptionBonus).toBe(9);
+  });
+
+  it('no resuelve tiradas ni consume recursos de un guía con habilidades sin registrar', () => {
+    const travel = TestBed.runInInjectionContext(() => new TravelMap()) as unknown as {
+      groups: { set(value: unknown): void }; route: { set(value: unknown): void }; selectedGroupId: { set(value: string): void };
+      plan: { (): { foodKg: number; guideId: string }; set(value: unknown): void };
+      members(): { id: string }[]; memberRoleSummary(member: unknown): string; memberSkillLabel(member: unknown, skill: string): string;
+      logs(): unknown[]; status(): string; resolveDay(): void;
+    };
+    travel.groups.set([{ id: 'test-group', name: 'Grupo', color: '#000', x: 44, y: 37, memberIds: ['player-named-player'] }]);
+    travel.selectedGroupId.set('test-group'); travel.route.set([{ x: 44, y: 37 }, { x: 45, y: 37 }]);
+    travel.plan.set({ ...travel.plan(), guideId: 'player-named-player' });
+    const member = travel.members().find((p) => p.id === 'player-named-player')!;
+    expect(travel.memberRoleSummary(member)).toBe('Habilidades sin registrar');
+    expect(travel.memberSkillLabel(member, 'survival')).toBe('Supervivencia sin registrar');
+    const food = travel.plan().foodKg;
+    travel.resolveDay();
+    expect(travel.status()).toContain('Registra las habilidades');
+    expect(travel.logs()).toEqual([]);
+    expect(travel.plan().foodKg).toBe(food);
+  });
+
+  it('editar identidad no confirma estadísticas ausentes; la confirmación explícita habilita la ficha', () => {
+    const editor = TestBed.runInInjectionContext(() => new Compendium()) as unknown as {
+      startEdit(entry: unknown): void; draft: { name: string; hitPoints: number; statisticsRecorded: boolean }; saveDraft(event: Event): void;
+    };
+    editor.startEdit(compendiumCards().find((c) => c.key === 'player:named-player'));
+    expect(editor.draft.statisticsRecorded).toBeFalse();
+    editor.draft.name = 'Identidad editada'; editor.saveDraft(new Event('submit'));
+    expect(sheets.playerSheets(adventure).find((p) => p.id === 'named-player')?.statisticsRecorded).toBeFalse();
+    expect(compendiumCards().find((c) => c.key === 'player:named-player')?.stats).toEqual([{ label: 'Estadísticas', value: 'Sin registrar' }]);
+    editor.startEdit(compendiumCards().find((c) => c.key === 'player:named-player'));
+    editor.draft.hitPoints = 53; editor.draft.statisticsRecorded = true; editor.saveDraft(new Event('submit'));
+    expect(sheets.playerSheets(adventure).find((p) => p.id === 'named-player')?.hitPoints).toBe(53);
+    expect(sheets.playerSheets(adventure).find((p) => p.id === 'named-player')?.statisticsRecorded).toBeTrue();
   });
 });

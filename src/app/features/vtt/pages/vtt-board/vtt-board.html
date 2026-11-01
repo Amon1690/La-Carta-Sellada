@@ -194,6 +194,9 @@
                     <div><small>Ficha seleccionada</small><h2>{{ token.name }}</h2></div>
                     <button type="button" class="danger-icon" title="Eliminar ficha" (click)="removeSelectedToken()">×</button>
                   </header>
+                  @if (token.maxHp <= 0) {
+                    <p>PG sin registrar. Introduce los PG máximos para este combate. Completar la ficha del personaje se aplicará a las nuevas fichas que añadas.</p>
+                  }
                   <div class="field-grid">
                     <label>PG <input type="number" min="0" [value]="token.hp" (input)="updateSelectedNumber('hp', $any($event.target).value)" /></label>
                     <label>Máx. <input type="number" min="0" [value]="token.maxHp" (input)="updateSelectedNumber('maxHp', $any($event.target).value)" /></label>
@@ -253,7 +256,7 @@
                     <li [class.active]="activeTurnId() === token.instanceId">
                       <button type="button" class="turn-select" title="Marcar turno activo" (click)="setActiveTurn(token.instanceId)">{{ position + 1 }}</button>
                       <img [src]="token.image" alt="" />
-                      <span><b>{{ token.name }}</b><small>{{ token.hp }}/{{ token.maxHp }} PG</small></span>
+                      <span><b>{{ token.name }}</b><small>{{ token.maxHp > 0 ? token.hp + '/' + token.maxHp + ' PG' : 'PG sin registrar' }}</small></span>
                       <input type="number" aria-label="Iniciativa" [value]="token.initiative" (change)="updateInitiative(token.instanceId, $any($event.target).value)" />
                     </li>
                   } @empty {
