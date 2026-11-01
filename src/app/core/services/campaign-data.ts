@@ -42,6 +42,15 @@ export class CampaignDataService {
     );
   }
 
+  getDefaultCampaign(): Observable<Campaign> {
+    return this.campaigns$.pipe(
+      map((campaigns) => campaigns[0]),
+      filter((campaign): campaign is CampaignIndexEntry => Boolean(campaign)),
+      switchMap((campaign) => this.http.get<Campaign>(campaign.dataPath)),
+      shareReplay({ bufferSize: 1, refCount: true })
+    );
+  }
+
   getCampaignById(id: string): Observable<Campaign> {
     return this.campaigns$.pipe(
       map((campaigns) => campaigns.find((campaign) => campaign.id === id)),

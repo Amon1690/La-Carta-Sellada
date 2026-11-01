@@ -37,7 +37,10 @@ export class SidebarComponent {
     { label: 'Equipo', path: 'equipo' },
     { label: 'Rasgos de clase', path: 'rasgos-clase' },
     { label: 'Criaturas', path: 'criaturas' },
+    { label: 'Fichas PJs', path: 'fichas-pjs' },
     { label: 'Fichas genéricas', path: 'fichas-genericas' },
+    { label: 'Encuentros genéricos', path: 'encuentros-genericos' },
+    { label: 'Viajes', path: 'viajes' },
   ];
 
   constructor() {

@@ -1,0 +1,24 @@
+name: Tarea para agentes
+description: Problema acotado con criterios comprobables
+title: "[Mejora] "
+labels: ["agent:backlog"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema y evidencia
+      description: Pasos para reproducir, archivos afectados e impacto.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Criterios de aceptación
+      description: Comportamientos concretos que permiten dar la tarea por terminada.
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Dependencias y límites
+      description: Tareas previas, datos que conservar y decisiones de producto pendientes.

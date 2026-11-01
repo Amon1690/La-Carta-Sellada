@@ -13,6 +13,261 @@ html {
   ));
 }
 
+.travel-page .travel-roles {
+  display: grid;
+  gap: 9px;
+  padding-top: 12px;
+  border-top: 1px solid #45494f;
+}
+
+.travel-page .travel-roles > header small,
+.travel-page .travel-roles > header h3 {
+  display: block;
+  margin: 0;
+}
+
+.travel-page .travel-roles > header small {
+  color: #b79b62;
+  font-size: 9px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.travel-page .travel-roles > header h3 {
+  margin-top: 2px;
+  color: #eee7dc;
+  font-size: 14px;
+}
+
+.travel-page .role-assignment {
+  display: grid;
+  gap: 8px;
+  padding: 9px;
+  border: 1px solid #474c53;
+  border-radius: 4px;
+  background: #212429;
+}
+
+.travel-page .role-title {
+  display: grid;
+  grid-template-columns: 27px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.travel-page .role-title > span {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  place-items: center;
+  border: 1px solid #9b7639;
+  border-radius: 50%;
+  color: #fff1cc;
+  background: #4b3a24;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.travel-page .role-title b,
+.travel-page .role-title small {
+  display: block;
+}
+
+.travel-page .role-title b {
+  color: #eee8df;
+  font-size: 11px;
+}
+
+.travel-page .role-title small {
+  margin-top: 1px;
+  color: #9f9990;
+  font-size: 9px;
+}
+
+.travel-page .role-title i {
+  padding: 3px 5px;
+  border: 1px solid #765e35;
+  border-radius: 3px;
+  color: #e4c583;
+  background: #332b20;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 750;
+}
+
+.travel-page .guide-role p,
+.travel-page .guide-role > strong {
+  margin: 0;
+  font-size: 9px;
+}
+
+.travel-page .guide-role p {
+  color: #aaa39a;
+}
+
+.travel-page .guide-role > strong {
+  color: #eca8a4;
+}
+
+.travel-page .role-member-list {
+  display: grid;
+  max-height: 164px;
+  overflow-y: auto;
+  border-top: 1px solid #3d4147;
+}
+
+.travel-page .role-member-list label {
+  display: grid;
+  grid-template-columns: 17px 30px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  min-height: 41px;
+  border-bottom: 1px solid #393d42;
+  cursor: pointer;
+}
+
+.travel-page .role-member-list label:has(input:disabled) {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.travel-page .role-member-list input {
+  width: 15px;
+  min-height: 15px;
+  padding: 0;
+  accent-color: #c99d4d;
+}
+
+.travel-page .role-member-list img {
+  width: 28px;
+  height: 28px;
+  border: 1px solid #806b43;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.travel-page .role-member-list b,
+.travel-page .role-member-list small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.travel-page .role-member-list b {
+  color: #ded8cf;
+  font-size: 10px;
+}
+
+.travel-page .role-member-list small {
+  margin-top: 2px;
+  color: #9f9990;
+  font-size: 8px;
+}
+
+.travel-page .day-summary span:nth-child(n + 3) {
+  border-top: 1px solid #44484e;
+}
+
+.travel-page .role-event-list {
+  display: grid;
+  gap: 9px;
+  margin-top: 11px;
+}
+
+.travel-page .role-event {
+  display: grid;
+  gap: 7px;
+  padding: 9px 9px 9px 11px;
+  border-left: 3px solid #a55e58;
+  background: #202327;
+}
+
+.travel-page .role-event.positive {
+  border-left-color: #688d66;
+}
+
+.travel-page .role-event > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.travel-page .role-event > header span,
+.travel-page .role-event > header i {
+  color: #aaa39a;
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.travel-page .role-event h3,
+.travel-page .role-event p,
+.travel-page .role-event blockquote {
+  margin: 0;
+}
+
+.travel-page .role-event h3 {
+  color: #eee7dc;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 13px;
+}
+
+.travel-page .role-event p {
+  color: #bbb4aa;
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.travel-page .event-check {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 7px;
+  border: 1px solid #454a50;
+  border-radius: 3px;
+  background: #191b1e;
+}
+
+.travel-page .event-check span,
+.travel-page .event-check i {
+  color: #aaa39a;
+  font-size: 8px;
+  font-style: normal;
+}
+
+.travel-page .event-check b {
+  color: #e8ca89;
+  font-size: 9px;
+}
+
+.travel-page .role-event > strong {
+  color: #efb3ad;
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.travel-page .role-event.success > strong {
+  color: #b7d8ad;
+}
+
+.travel-page .role-event > small {
+  color: #d6b66f;
+  font-size: 8px;
+}
+
+.travel-page .role-event blockquote {
+  padding: 7px 8px;
+  border-left: 2px solid #8471a1;
+  color: #c9badc;
+  background: #292431;
+  font-size: 8px;
+  line-height: 1.4;
+}
+
 body {
   color-scheme: dark;
 
@@ -26,4 +281,323 @@ body {
 html,
 body {
   height: 100%;
+}
+
+.travel-encounter-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(8 10 13 / 82%);
+}
+
+.travel-encounter-dialog {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.8fr) minmax(360px, 1.2fr);
+  width: min(940px, 100%);
+  max-height: calc(100dvh - 48px);
+  overflow: hidden;
+  border: 1px solid #655634;
+  border-radius: 8px;
+  background: #1c1f22;
+  box-shadow: 0 24px 70px rgb(0 0 0 / 48%);
+  color: #f4efe3;
+}
+
+.travel-encounter-map {
+  position: relative;
+  min-height: 430px;
+  background: #111316;
+}
+
+.travel-encounter-map img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.travel-encounter-map span {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  padding: 7px 10px;
+  border: 1px solid rgb(220 181 105 / 55%);
+  border-radius: 4px;
+  background: rgb(15 17 20 / 90%);
+  color: #e6c886;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.travel-encounter-content {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 28px;
+}
+
+.travel-encounter-content header small {
+  color: #d6b56d;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.travel-encounter-content h2 {
+  margin: 6px 0 8px;
+  font-family: var(--font-display);
+  font-size: clamp(1.55rem, 3vw, 2.25rem);
+  letter-spacing: 0;
+}
+
+.travel-encounter-content header p,
+.travel-encounter-objective {
+  margin: 0;
+  color: #c9c4b9;
+  line-height: 1.55;
+}
+
+.travel-encounter-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 22px 0 0;
+  border-block: 1px solid #3b3f43;
+}
+
+.travel-encounter-facts div {
+  padding: 12px 0;
+}
+
+.travel-encounter-facts dt {
+  color: #92989f;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.travel-encounter-facts dd {
+  margin: 3px 0 0;
+  font-weight: 700;
+}
+
+.travel-encounter-roster {
+  padding: 18px 0;
+}
+
+.travel-encounter-roster h3 {
+  margin: 0 0 10px;
+  font-size: 0.92rem;
+}
+
+.travel-encounter-roster ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.travel-encounter-roster li {
+  padding: 7px 9px;
+  border: 1px solid #484c50;
+  border-radius: 4px;
+  background: #272a2e;
+  font-size: 0.82rem;
+}
+
+.travel-encounter-content footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 24px;
+}
+
+.travel-encounter-content footer button,
+.travel-encounter-content footer a {
+  display: inline-grid;
+  place-items: center;
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: 4px;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.travel-encounter-skip {
+  border: 1px solid #555a60;
+  background: transparent;
+  color: #e5e1d8;
+}
+
+.travel-encounter-play {
+  border: 1px solid #d0a955;
+  background: #9d722d;
+  color: #fffaf0;
+}
+
+@media (max-width: 720px) {
+  .travel-encounter-backdrop {
+    padding: 10px;
+  }
+
+  .travel-encounter-dialog {
+    grid-template-columns: 1fr;
+    max-height: calc(100dvh - 20px);
+    overflow-y: auto;
+  }
+
+  .travel-encounter-map {
+    min-height: 0;
+    aspect-ratio: 16 / 7;
+  }
+
+  .travel-encounter-content {
+    overflow: visible;
+    padding: 20px;
+  }
+
+  .travel-encounter-content footer {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+}
+
+.map-location {
+  position: absolute;
+  z-index: 10;
+  display: grid;
+  width: 12px;
+  height: 12px;
+  padding: 3px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  color: #2d2519;
+  background: transparent;
+  font: 700 10px Georgia, serif;
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+}
+
+.map-location i {
+  display: block;
+  width: 5px;
+  height: 5px;
+  border: 1px solid rgb(242 230 189 / 85%);
+  border-radius: 50%;
+  background: #15120f;
+  box-shadow: 0 0 0 1px #463826;
+}
+
+.map-location.major-location i {
+  width: 7px;
+  height: 7px;
+}
+
+.map-location.geographic-location i {
+  width: 6px;
+  height: 6px;
+  border-color: rgb(255 248 218 / 92%);
+  background: #684f2c;
+}
+
+.map-location[data-category='water'] i {
+  background: #245b75;
+}
+
+.map-location[data-category='forest'] i {
+  background: #35613a;
+}
+
+.map-location[data-category='mountain'] i {
+  background: #5d5b59;
+}
+
+.map-location[data-category='plain'] i {
+  background: #7a6b2e;
+}
+
+.map-location[data-category='desert'] i {
+  background: #8b592e;
+}
+
+.location-tooltip {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 6px);
+  display: none;
+  width: 260px;
+  padding: 10px 12px;
+  border: 1px solid #8b7245;
+  border-radius: 5px;
+  color: #2b241a;
+  background: #fff0c7;
+  box-shadow: 0 8px 20px rgb(37 25 12 / 38%);
+  text-align: left;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.location-tooltip b,
+.location-tooltip small,
+.location-tooltip p,
+.location-tooltip em {
+  display: block;
+}
+
+.location-tooltip b {
+  font-size: 14px;
+}
+
+.location-tooltip small {
+  margin-top: 2px;
+  color: #765d32;
+  font: 700 9px Arial, sans-serif;
+  text-transform: uppercase;
+}
+
+.location-tooltip p {
+  margin: 7px 0 0;
+  font: 12px/1.4 Arial, sans-serif;
+}
+
+.location-tooltip em {
+  margin-top: 7px;
+  padding-top: 6px;
+  border-top: 1px solid rgb(118 93 50 / 32%);
+  color: #765d32;
+  font: 600 9px/1.3 Arial, sans-serif;
+  font-style: normal;
+}
+
+.map-location.edge-right .location-tooltip {
+  right: calc(100% + 6px);
+  left: auto;
+}
+
+.map-location.edge-bottom .location-tooltip {
+  top: auto;
+  bottom: calc(100% + 6px);
+  transform: none;
+}
+
+.map-location:hover,
+.map-location.selected {
+  z-index: 13;
+  background: rgb(255 234 176 / 72%);
+  box-shadow: 0 0 0 2px #8c522b;
+}
+
+.map-location:hover i,
+.map-location:focus-visible i,
+.map-location.selected i {
+  border-color: #fff0b5;
+  background: #7b342b;
+}
+
+.map-location:hover .location-tooltip {
+  display: block;
 }

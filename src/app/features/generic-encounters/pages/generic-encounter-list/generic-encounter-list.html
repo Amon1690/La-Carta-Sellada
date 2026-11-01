@@ -1,0 +1,64 @@
+<section class="encounters-page">
+  <header class="page-header">
+    <div>
+      <p>Reglas 2024</p>
+      <h1>Encuentros genéricos</h1>
+      <span>Tableros preparados para usar en cualquier campaña.</span>
+    </div>
+    <strong>{{ encounters.length }} encuentros</strong>
+  </header>
+
+  <section class="party-controls" aria-label="Ajuste del grupo">
+    <label>
+      <span>Nivel del grupo</span>
+      <input
+        type="number"
+        min="1"
+        max="20"
+        [value]="level()"
+        (change)="updateLevel($any($event.target).value)"
+      />
+    </label>
+    <label>
+      <span>Personajes</span>
+      <input
+        type="number"
+        min="1"
+        max="10"
+        [value]="partySize()"
+        (change)="updatePartySize($any($event.target).value)"
+      />
+    </label>
+    <p>Las fichas enemigas se ajustan automáticamente a estos valores.</p>
+  </section>
+
+  <div class="encounter-list">
+    @for (encounter of encounters; track encounter.id) {
+      <a
+        class="encounter-row"
+        [href]="vttUrl(encounter)"
+        target="_blank"
+        rel="noopener"
+        [attr.aria-label]="'Abrir ' + encounter.name + ' en el VTT'"
+      >
+        <img [src]="encounter.mapUrl" [alt]="'Mapa de ' + encounter.name" />
+        <div class="encounter-copy">
+          <span>{{ encounter.environmentLabel }}</span>
+          <h2>{{ encounter.name }}</h2>
+          <p>{{ encounter.summary }}</p>
+          <div class="tags">
+            <i>{{ encounter.type }}</i>
+            <i>{{ difficulty(encounter) }}</i>
+            <i>Nivel {{ level() }}</i>
+            <i>{{ partySize() }} personajes</i>
+          </div>
+        </div>
+        <div class="roster">
+          <small>Participantes sugeridos</small>
+          <p>{{ roster(encounter) }}</p>
+          <b>Abrir VTT <span aria-hidden="true">↗</span></b>
+        </div>
+      </a>
+    }
+  </div>
+</section>

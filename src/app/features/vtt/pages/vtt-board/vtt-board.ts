@@ -16,8 +16,12 @@ import { map, shareReplay, switchMap } from 'rxjs';
 import { Campaign } from '../../../../core/models/campaign';
 import { CampaignDataService } from '../../../../core/services/campaign-data';
 import { GENERIC_NPCS } from '../../../../core/data/generic-npcs';
+import {
+  GENERIC_ENCOUNTERS,
+  scaledEncounterMonsters,
+} from '../../../../core/data/generic-encounters';
 
-type VttEntryKind = 'scene' | 'encounter' | 'location';
+type VttEntryKind = 'scene' | 'encounter' | 'location' | 'generic';
 type ToolMode = 'select' | 'pan' | 'fog' | 'reveal' | 'measure';
 type SidebarTab = 'tokens' | 'layers' | 'turns';
 
@@ -27,6 +31,13 @@ interface VttEntry {
   mapUrl: string;
   kind: VttEntryKind;
   kindLabel: string;
+  seedTokens?: EncounterSeedToken[];
+}
+
+interface EncounterSeedToken {
+  actorId: string;
+  side: 'party' | 'enemy';
+  size?: number;
 }
 
 interface VttViewModel {
@@ -168,9 +179,14 @@ export class VttBoard {
   constructor() {
     this.vm$.pipe(takeUntilDestroyed()).subscribe((vm) => {
       if (!vm) return;
-      this.storageKey = `la-carta-sellada:vtt:${vm.campaign.id}:${vm.entry.kind}:${vm.entry.id}`;
+      const runId = this.route.snapshot.queryParamMap.get('run');
+      const runSuffix = runId ? `:${runId.replace(/[^a-zA-Z0-9_-]/g, '')}` : '';
+      this.storageKey = `la-carta-sellada:vtt:${vm.campaign.id}:${vm.entry.kind}:${vm.entry.id}${runSuffix}`;
       this.tokenChoices.set(this.buildTokenChoices(vm.campaign));
       const restored = this.loadState();
+      if (!restored && vm.entry.seedTokens?.length) {
+        this.seedEncounterTokens(vm.entry.seedTokens);
+      }
       if (!restored) setTimeout(() => this.fitMap(), 0);
     });
   }
@@ -218,21 +234,21 @@ export class VttBoard {
   }
 
   protected tokenDragEnded(token: BoardToken, event: CdkDragEnd): void {
-    const position = event.source.getFreeDragPosition();
+    const scale = Math.max(0.1, this.zoom());
     const size = this.gridSize * token.size;
     const snapped = {
       x: this.clamp(
-        Math.round(position.x / this.gridSize) * this.gridSize,
+        Math.round((token.x + event.distance.x / scale) / this.gridSize) * this.gridSize,
         0,
         this.mapWidth - size
       ),
       y: this.clamp(
-        Math.round(position.y / this.gridSize) * this.gridSize,
+        Math.round((token.y + event.distance.y / scale) / this.gridSize) * this.gridSize,
         0,
         this.mapHeight - size
       ),
     };
-    event.source.setFreeDragPosition(snapped);
+    event.source.reset();
     this.updateToken(token.instanceId, { x: snapped.x, y: snapped.y });
   }
 
@@ -277,6 +293,22 @@ export class VttBoard {
     }
   }
 
+  protected rollAllInitiatives(): void {
+    const rolledTokens = this.tokens().map((token) => ({
+      ...token,
+      initiative: this.roll(20),
+    }));
+    if (!rolledTokens.length) return;
+
+    this.tokens.set(rolledTokens);
+    const [firstTurn] = rolledTokens
+      .slice()
+      .sort((a, b) => b.initiative - a.initiative || a.name.localeCompare(b.name));
+    this.activeTurnId.set(firstTurn?.instanceId);
+    this.diceResult.set(`Iniciativa: ${rolledTokens.length}`);
+    this.persist();
+  }
+
   protected advanceTurn(): void {
     const ordered = this.initiativeTokens();
     if (!ordered.length) return;
@@ -319,6 +351,32 @@ export class VttBoard {
     this.setZoom(this.zoom() + delta);
   }
 
+  protected zoomWithWheel(event: WheelEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.deltaY === 0) return;
+
+    const viewport = this.viewport?.nativeElement;
+    if (!viewport) return;
+
+    const oldZoom = this.zoom();
+    const factor = event.deltaY < 0 ? 1.12 : 1 / 1.12;
+    const bounds = viewport.getBoundingClientRect();
+    const pointerX = event.clientX - bounds.left;
+    const pointerY = event.clientY - bounds.top;
+    const mapX = (viewport.scrollLeft + pointerX) / oldZoom;
+    const mapY = (viewport.scrollTop + pointerY) / oldZoom;
+
+    this.setZoom(oldZoom * factor);
+    const newZoom = this.zoom();
+    if (newZoom === oldZoom) return;
+
+    requestAnimationFrame(() => {
+      viewport.scrollLeft = mapX * newZoom - pointerX;
+      viewport.scrollTop = mapY * newZoom - pointerY;
+    });
+  }
+
   protected fitMap(): void {
     const viewport = this.viewport?.nativeElement;
     if (!viewport) return;
@@ -331,7 +389,7 @@ export class VttBoard {
   }
 
   protected rollDie(sides: number): void {
-    const result = Math.floor(Math.random() * sides) + 1;
+    const result = this.roll(sides);
     this.diceResult.set(`d${sides}: ${result}`);
     this.diceOpen.set(false);
   }
@@ -469,6 +527,38 @@ export class VttBoard {
     kind: VttEntryKind,
     id: string
   ): VttEntry | undefined {
+    if (kind === 'generic') {
+      const entry = GENERIC_ENCOUNTERS.find((encounter) => encounter.id === id);
+      if (!entry) return undefined;
+
+      const level = this.queryNumber('level', campaign.startingLevel, 1, 20);
+      const partySize = this.queryNumber('partySize', 4, 1, 10);
+      const partyTokens = (this.route.snapshot.queryParamMap.get('members') ?? '')
+        .split(',')
+        .map((actorId) => actorId.trim())
+        .filter(Boolean)
+        .map((actorId): EncounterSeedToken => ({ actorId, side: 'party' }));
+      const enemyTokens = scaledEncounterMonsters(entry, level, partySize).flatMap(
+        (monster) =>
+          Array.from(
+            { length: monster.count },
+            (): EncounterSeedToken => ({
+              actorId: `generic:${monster.id}`,
+              side: 'enemy',
+              size: monster.size,
+            })
+          )
+      );
+
+      return {
+        id,
+        name: entry.name,
+        mapUrl: entry.mapUrl,
+        kind,
+        kindLabel: `Encuentro genérico · Nivel ${level}`,
+        seedTokens: [...partyTokens, ...enemyTokens],
+      };
+    }
     if (kind === 'scene') {
       const entry = campaign.scenes.find((scene) => scene.id === id);
       return entry
@@ -535,6 +625,49 @@ export class VttBoard {
       })
     );
     return [...namedPlayers, ...players, ...npcs, ...genericNpcs];
+  }
+
+  private seedEncounterTokens(seedTokens: EncounterSeedToken[]): void {
+    const choices = new Map(
+      this.tokenChoices().map((choice) => [choice.id, choice])
+    );
+    let partyIndex = 0;
+    let enemyIndex = 0;
+    const tokens = seedTokens.flatMap((seed): BoardToken[] => {
+      const choice = choices.get(seed.actorId);
+      if (!choice) return [];
+      const index = seed.side === 'party' ? partyIndex++ : enemyIndex++;
+      const column = index % 7;
+      const row = Math.floor(index / 7);
+      const size = this.clamp(Math.round(seed.size ?? 1), 1, 4);
+      const x =
+        seed.side === 'party'
+          ? (2 + column) * this.gridSize
+          : (20 + column) * this.gridSize;
+      const y =
+        seed.side === 'party'
+          ? (15 + row * 2) * this.gridSize
+          : (3 + row * 2) * this.gridSize;
+      return [
+        {
+          instanceId: this.newId(seed.side),
+          actorId: choice.id,
+          name: choice.name,
+          image: choice.image,
+          x: this.clamp(x, 0, this.mapWidth - this.gridSize * size),
+          y: this.clamp(y, 0, this.mapHeight - this.gridSize * size),
+          size,
+          hp: choice.maxHp,
+          maxHp: choice.maxHp,
+          initiative: 0,
+          hidden: false,
+        },
+      ];
+    });
+
+    this.tokens.set(tokens);
+    this.selectedTokenId.set(tokens[0]?.instanceId);
+    this.persist();
   }
 
   private updateToken(instanceId: string, patch: Partial<BoardToken>): void {
@@ -665,11 +798,25 @@ export class VttBoard {
       .trim();
   }
 
+  private queryNumber(
+    key: string,
+    fallback: number,
+    min: number,
+    max: number
+  ): number {
+    const value = Number(this.route.snapshot.queryParamMap.get(key));
+    return this.clamp(Number.isFinite(value) && value > 0 ? Math.round(value) : fallback, min, max);
+  }
+
   private clamp(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, value));
   }
 
   private newId(prefix: string): string {
     return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  }
+
+  private roll(sides: number): number {
+    return Math.floor(Math.random() * sides) + 1;
   }
 }

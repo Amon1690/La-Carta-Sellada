@@ -1,0 +1,73 @@
+[
+  {
+    "id": "shared-character-sheets",
+    "title": "Compartir las fichas editadas entre compendio, viajes y VTT",
+    "priority": 1,
+    "dependsOn": [],
+    "acceptance": [
+      "Centralizar lectura y combinación de fichas originales y ediciones locales en un servicio compartido.",
+      "Los PJs, PNJs y genéricos creados o editados están disponibles en compendio, viajes y VTT.",
+      "Conservar claves y contenido local existentes sin borrar partidas.",
+      "Cubrir con pruebas una ficha editada y otra creada, incluidas las tres pantallas consumidoras."
+    ]
+  },
+  {
+    "id": "named-player-stats",
+    "title": "Unificar PG y habilidades de los cuatro PJs principales",
+    "priority": 2,
+    "dependsOn": ["shared-character-sheets"],
+    "acceptance": [
+      "El VTT usa los PG de la ficha compartida en lugar de asignar siempre 10 PG.",
+      "Viajes obtiene Supervivencia y Percepción de la misma ficha, sin buscar por nombre en plantillas ajenas.",
+      "No inventar estadísticas: mantener la ficha actual como fuente y mostrar ausencias explícitas.",
+      "Añadir regresiones para un PJ principal y una ficha editada."
+    ]
+  },
+  {
+    "id": "journey-per-group",
+    "title": "Separar ruta, provisiones y jornadas por grupo de viaje",
+    "priority": 3,
+    "dependsOn": [],
+    "acceptance": [
+      "Cambiar de grupo restaura su ruta, plan, jornadas y encuentro pendiente.",
+      "Resolver una jornada de un grupo no mueve ni consume provisiones de otro.",
+      "Migrar el estado guardado actual sin perder su registro.",
+      "Probar dos grupos, cambio de selección y recuperación del estado anterior."
+    ]
+  },
+  {
+    "id": "save-backups",
+    "title": "Permitir exportar e importar partidas y fichas locales",
+    "priority": 4,
+    "dependsOn": ["shared-character-sheets", "journey-per-group"],
+    "acceptance": [
+      "Exportar un archivo versionado que incluya fichas, viajes y tableros.",
+      "Validar por completo la importación antes de escribir y explicar qué se reemplazará.",
+      "Los archivos inválidos no alteran datos existentes.",
+      "Probar exportación/importación, versión no admitida y fallo de almacenamiento."
+    ]
+  },
+  {
+    "id": "unknown-campaign",
+    "title": "Mostrar un error recuperable para campañas inexistentes",
+    "priority": 5,
+    "dependsOn": [],
+    "acceptance": [
+      "Una URL con campaña inexistente termina en un mensaje claro y permite volver al catálogo.",
+      "Distinguir carga, ausencia y error HTTP; no mantener una carga infinita.",
+      "Probar campaña válida, identificador desconocido y error de lectura."
+    ]
+  },
+  {
+    "id": "travel-map-performance",
+    "title": "Medir y reducir la carga del mapa de viajes",
+    "priority": 6,
+    "dependsOn": [],
+    "acceptance": [
+      "Medir tamaño de recursos y carga antes y después.",
+      "Reducir código o elementos renderizados innecesariamente conservando las 1456 localizaciones y sus coordenadas.",
+      "No borrar ni sustituir imágenes o atribuciones sin decisión humana; proponer esas acciones aparte.",
+      "Actualizar README para reflejar viajes y VTT y documentar la comprobación visual."
+    ]
+  }
+]

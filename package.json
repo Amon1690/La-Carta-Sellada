@@ -6,7 +6,11 @@
     "start": "ng serve",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test"
+    "test": "ng test",
+    "test:ci": "node node_modules/@angular/cli/bin/ng.js test --watch=false --browsers=ChromeHeadlessCI --karma-config=karma.conf.cjs",
+    "test:tools": "node --test tools/validate-data.test.mjs",
+    "test:workflow": "node --test tools/agents/workflow.test.cjs",
+    "validate:data": "node tools/validate-data.mjs"
   },
   "prettier": {
     "overrides": [
