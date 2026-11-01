@@ -835,6 +835,18 @@ button {
   text-align: center;
 }
 
+.open-token-sheet {
+  width: 100%;
+  margin-top: 12px;
+  padding: 8px 12px;
+  border: 1px solid #a68343;
+  border-radius: 5px;
+  color: #f8e5b8;
+  background: #3d3425;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
 .vtt-missing h1,
 .vtt-missing p {
   margin: 4px;

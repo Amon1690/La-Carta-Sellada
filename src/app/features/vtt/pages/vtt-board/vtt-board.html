@@ -162,8 +162,11 @@
                     [style.top.px]="token.y"
                     [attr.aria-label]="token.name"
                     [attr.aria-pressed]="isTokenSelected(token.instanceId)"
+                    [attr.data-token-instance]="token.instanceId"
+                    title="Doble clic para abrir la ficha"
                     (pointerdown)="tokenPointerDown(token, $event)"
                     (click)="selectToken(token.instanceId, $event)"
+                    (dblclick)="openTokenSheet(token.instanceId, $event)"
                   >
                     <img [src]="token.image" alt="" draggable="false" />
                     @if (token.maxHp > 0) {
@@ -220,6 +223,7 @@
                     <div><small>Ficha seleccionada</small><h2>{{ token.name }}</h2></div>
                     <button type="button" class="danger-icon" title="Eliminar ficha" (click)="removeSelectedTokens()">×</button>
                   </header>
+                  <button type="button" class="open-token-sheet" (click)="openTokenSheet(token.instanceId, $event)">Ver ficha completa</button>
                   @if (token.maxHp <= 0) {
                     <p>PG sin registrar. Introduce los PG máximos para este combate. Completar la ficha del personaje se aplicará a las nuevas fichas que añadas.</p>
                   }
@@ -294,6 +298,7 @@
           </div>
         </aside>
       </div>
+      <app-vtt-token-sheet [sheet]="openedTokenSheet()" (closed)="tokenSheetClosed()" />
     </main>
   } @else {
     <main class="vtt-missing"><h1>Mapa no encontrado</h1><p>Este tablero no está disponible en la campaña.</p></main>

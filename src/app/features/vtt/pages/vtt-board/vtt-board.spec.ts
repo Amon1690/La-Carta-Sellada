@@ -2,9 +2,9 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Signal, WritableSignal, provideZonelessChangeDetection } from '@angular/core';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { BehaviorSubject, of } from 'rxjs';
-import { Campaign } from '../../../../core/models/campaign';
+import { Campaign, GameStatBlock } from '../../../../core/models/campaign';
 import { CampaignDataService } from '../../../../core/services/campaign-data';
-import { CharacterSheetsService } from '../../../../core/services/character-sheets';
+import { CHARACTER_SHEET_STORAGE, CharacterSheetsService, EditablePlayerSheet } from '../../../../core/services/character-sheets';
 import { VttBoard } from './vtt-board';
 
 interface Token {
@@ -40,6 +40,7 @@ describe('Multiselección de fichas en VTT', () => {
   let map: HTMLElement;
   let routeParams: BehaviorSubject<ReturnType<typeof params>>;
   let previous: Map<string, string | null>;
+  let sheets: CharacterSheetsService;
 
   beforeEach(async () => {
     previous = new Map([key(), key('other-selection-test')].map((k) => [k, localStorage.getItem(k)]));
@@ -48,13 +49,15 @@ describe('Multiselección de fichas en VTT', () => {
     TestBed.configureTestingModule({ providers: [
       provideZonelessChangeDetection(),
       { provide: CampaignDataService, useValue: { getCampaignById: (id: string) => of(campaign(id)) } },
-      { provide: CharacterSheetsService, useValue: {
-        changes$: of(0), campaignNpcs: () => [], playerSheets: () => [], genericNpcs: () => [],
-      } },
+      { provide: CHARACTER_SHEET_STORAGE, useValue: (() => {
+        const values = new Map<string, string>();
+        return { getItem: (k: string) => values.get(k) ?? null, setItem: (k: string, value: string) => values.set(k, value) };
+      })() },
       { provide: ActivatedRoute, useValue: {
         paramMap: routeParams, snapshot: { queryParamMap: convertToParamMap({ run: 'spec' }) },
       } },
     ] });
+    sheets = TestBed.inject(CharacterSheetsService);
     fixture = TestBed.createComponent(VttBoard);
     fixture.detectChanges();
     await fixture.whenStable();
@@ -63,8 +66,8 @@ describe('Multiselección de fichas en VTT', () => {
     board.tokens.set([token('A', GRID * 2, GRID * 2), token('B', GRID * 4, GRID * 2), token('C', GRID * 8, GRID * 6, 2)]);
     fixture.detectChanges();
     map = fixture.nativeElement.querySelector('.map-board');
-    spyOn(map, 'setPointerCapture').and.stub();
-    spyOn(map, 'hasPointerCapture').and.returnValue(false);
+    spyOn(HTMLElement.prototype, 'setPointerCapture').and.stub();
+    spyOn(HTMLElement.prototype, 'hasPointerCapture').and.returnValue(false);
   });
 
   afterEach(() => {
@@ -91,6 +94,111 @@ describe('Multiselección de fichas en VTT', () => {
     pointer(map, 'pointermove', x2, y2, options);
     pointer(map, 'pointerup', x2, y2, options);
   }
+
+  function doubleClickToken(id: string, options: PointerEventInit = {}): HTMLDialogElement {
+    clickToken(id, options); clickToken(id, options);
+    button(id).dispatchEvent(new MouseEvent('dblclick', { bubbles: true, detail: 2, ...options }));
+    fixture.detectChanges();
+    return fixture.nativeElement.querySelector('.token-sheet-dialog');
+  }
+
+  function actorFor(id: string, actorId: string): void {
+    board.tokens.update((tokens) => tokens.map((t) => t.instanceId === id ? { ...t, actorId } : t));
+    fixture.detectChanges();
+  }
+
+  function playerSheet(): EditablePlayerSheet {
+    const generic = sheets.genericNpcs()[0];
+    return { ...generic, id: 'custom-pj', name: 'PJ editado', ancestry: 'Humana', className: 'Exploradora',
+      subclass: 'Cazadora', background: 'Viajera', hook: 'Ficha compartida', level: 5, feat: 'Alerta',
+      features: ['Rasgo propio'], hitPoints: 53, skills: ['Supervivencia +8'] };
+  }
+
+  it('abre la ficha genérica por doble clic, separa PG de combate y devuelve el foco al cerrar', async () => {
+    const generic = sheets.genericNpcs()[0];
+    actorFor('A', `generic:${generic.id}`);
+    const before = board.tokens().map((t) => ({ ...t }));
+    const write = spyOn(localStorage, 'setItem').and.callThrough();
+    const dialog = doubleClickToken('A');
+    expect(dialog.open).toBeTrue();
+    expect(dialog.textContent).toContain(generic.name);
+    expect(dialog.textContent).toContain('Ataques');
+    expect(dialog.querySelector('.token-sheet-combat')!.textContent).toContain('7 / 20 PG');
+    expect(dialog.querySelector('.token-sheet-stats')!.textContent).toContain(String(generic.hitPoints));
+    expect(board.tokens()).toEqual(before);
+    expect(write).not.toHaveBeenCalled();
+    const closed = new Promise<void>((resolve) => dialog.addEventListener('close', () => resolve(), { once: true }));
+    (dialog.querySelector('[aria-label="Cerrar ficha"]') as HTMLButtonElement).click();
+    await closed;
+    expect(dialog.open).toBeFalse();
+    expect(document.activeElement).toBe(button('A'));
+    expect(board.selectedTokenIds()).toEqual(['A']);
+  });
+
+  it('consulta la ficha de PJ editada y la actualiza sin alterar los PG del token colocado', () => {
+    const player = playerSheet();
+    sheets.savePlayer(player, 'create');
+    actorFor('A', 'player:custom-pj');
+    const dialog = doubleClickToken('A');
+    expect(dialog.textContent).toContain('PJ editado');
+    expect(dialog.textContent).toContain('Supervivencia +8');
+    expect(dialog.querySelector('.token-sheet-stats')!.textContent).toContain('53');
+    sheets.savePlayer({ ...player, hitPoints: 72, skills: ['Percepción +9'] }, 'edit');
+    fixture.detectChanges();
+    expect(dialog.querySelector('.token-sheet-stats')!.textContent).toContain('72');
+    expect(dialog.textContent).toContain('Percepción +9');
+    expect(dialog.querySelector('.token-sheet-combat')!.textContent).toContain('7 / 20 PG');
+    expect(board.tokens()[0].hp).toBe(7);
+  });
+
+  it('muestra ausencia de estadísticas sin presentar ceros como datos de la ficha', () => {
+    sheets.savePlayer({ ...playerSheet(), statisticsRecorded: false, hitPoints: 0 }, 'create');
+    actorFor('A', 'player:custom-pj');
+    const dialog = doubleClickToken('A');
+    expect(dialog.textContent).toContain('Estadísticas sin registrar');
+    expect(dialog.querySelector('.token-sheet-stats')).toBeNull();
+    expect(dialog.querySelector('.token-sheet-abilities')).toBeNull();
+  });
+
+  it('resuelve PNJs por campaña y cierra la ficha al cambiar de tablero', async () => {
+    const stats: GameStatBlock = { ...playerSheet(), hitPoints: 41 };
+    sheets.saveCampaignNpc('vtt-selection-test', { id: 'custom-guide', name: 'Guía propio', summary: 'De esta campaña',
+      tags: [], role: 'Guía', faction: 'Libre', motivation: 'Viajar', statBlock: stats }, 'create');
+    sheets.saveCampaignNpc('other-selection-test', { id: 'custom-guide', name: 'Guía ajeno', summary: '',
+      tags: [], role: 'Guía', faction: '', motivation: '' }, 'create');
+    actorFor('A', 'npc:custom-guide');
+    const dialog = doubleClickToken('A');
+    expect(dialog.textContent).toContain('Guía propio');
+    expect(dialog.textContent).not.toContain('Guía ajeno');
+    expect(dialog.querySelector('.token-sheet-stats')!.textContent).toContain('41');
+    routeParams.next(params('other-selection-test'));
+    fixture.detectChanges(); await fixture.whenStable();
+    expect(dialog.open).toBeFalse();
+  });
+
+  it('informa de una ficha de origen ausente y bloquea los atajos destructivos del tablero en el diálogo', () => {
+    const dialog = doubleClickToken('A');
+    expect(dialog.textContent).toContain('No se encuentra la ficha de origen');
+    expect(dialog.querySelector('.token-sheet-stats')).toBeNull();
+    dialog.querySelector('button')!.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Delete' }));
+    expect(board.tokens().length).toBe(3);
+    expect(board.selectedTokenIds()).toEqual(['A']);
+  });
+
+  it('no abre con modificadores, tras un arrastre ni con las herramientas de dibujo; ofrece botón accesible', () => {
+    expect(doubleClickToken('A', { ctrlKey: true }).open).toBeFalse();
+    pointer(button('A'), 'pointerdown', GRID * 2 + 10, GRID * 2 + 10);
+    pointer(map, 'pointerup', GRID * 3 + 10, GRID * 3 + 10);
+    clickToken('A');
+    button('A').dispatchEvent(new MouseEvent('dblclick', { bubbles: true, detail: 2 }));
+    expect((fixture.nativeElement.querySelector('dialog') as HTMLDialogElement).open).toBeFalse();
+    (fixture.nativeElement.querySelector('button[title="Medir distancias"]') as HTMLButtonElement).click();
+    expect(doubleClickToken('A').open).toBeFalse();
+    (fixture.nativeElement.querySelector('button[title="Seleccionar y mover fichas"]') as HTMLButtonElement).click();
+    clickToken('A');
+    (fixture.nativeElement.querySelector('.open-token-sheet') as HTMLButtonElement).click();
+    expect((fixture.nativeElement.querySelector('dialog') as HTMLDialogElement).open).toBeTrue();
+  });
 
   it('añade y quita con Mayús, Ctrl o Meta; el clic simple vuelve a una ficha', () => {
     clickToken('A'); clickToken('B', { shiftKey: true });
