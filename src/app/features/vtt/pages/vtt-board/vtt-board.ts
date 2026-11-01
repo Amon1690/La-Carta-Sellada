@@ -11,11 +11,11 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute } from '@angular/router';
-import { map, shareReplay, switchMap } from 'rxjs';
+import { map, shareReplay, skip, switchMap } from 'rxjs';
 
 import { Campaign } from '../../../../core/models/campaign';
 import { CampaignDataService } from '../../../../core/services/campaign-data';
-import { GENERIC_NPCS } from '../../../../core/data/generic-npcs';
+import { CharacterSheetsService } from '../../../../core/services/character-sheets';
 import {
   GENERIC_ENCOUNTERS,
   scaledEncounterMonsters,
@@ -156,6 +156,8 @@ export class VttBoard {
   private board?: ElementRef<HTMLDivElement>;
 
   private readonly campaignData = inject(CampaignDataService);
+  private readonly characterSheets = inject(CharacterSheetsService);
+  private currentCampaign?: Campaign;
   private readonly route = inject(ActivatedRoute);
   private storageKey = '';
   private drawStart?: { x: number; y: number };
@@ -179,6 +181,7 @@ export class VttBoard {
   constructor() {
     this.vm$.pipe(takeUntilDestroyed()).subscribe((vm) => {
       if (!vm) return;
+      this.currentCampaign = vm.campaign;
       const runId = this.route.snapshot.queryParamMap.get('run');
       const runSuffix = runId ? `:${runId.replace(/[^a-zA-Z0-9_-]/g, '')}` : '';
       this.storageKey = `la-carta-sellada:vtt:${vm.campaign.id}:${vm.entry.kind}:${vm.entry.id}${runSuffix}`;
@@ -188,6 +191,9 @@ export class VttBoard {
         this.seedEncounterTokens(vm.entry.seedTokens);
       }
       if (!restored) setTimeout(() => this.fitMap(), 0);
+    });
+    this.characterSheets.changes$.pipe(skip(1), takeUntilDestroyed()).subscribe(() => {
+      if (this.currentCampaign) this.tokenChoices.set(this.buildTokenChoices(this.currentCampaign));
     });
   }
 
@@ -584,47 +590,31 @@ export class VttBoard {
   }
 
   private buildTokenChoices(campaign: Campaign): TokenChoice[] {
-    const npcs = campaign.npcs.map((npc): TokenChoice => ({
+    const npcs = this.characterSheets.campaignNpcs(campaign.id, campaign.npcs).map((npc): TokenChoice => ({
       id: `npc:${npc.id}`,
       name: npc.name,
-      image: `assets/tokens/npcs/${npc.id}.png`,
+      image: this.characterSheets.tokenImage('npcs', npc.id),
       subtitle: npc.role,
       group: 'PNJ',
       maxHp: npc.statBlock?.hitPoints ?? 10,
     }));
-    const namedPlayers = campaign.playerCharacters.map(
-      (player): TokenChoice => ({
-        id: `player:${player.id}`,
-        name: player.name,
-        image: player.tokenUrl,
-        subtitle: `${player.className} · ${player.subclass}`,
-        group: 'PJ',
-        maxHp: 10,
-      })
-    );
-    const players = campaign.playerOptions
-      .filter((player) => player.showToken !== false)
-      .map(
-        (player): TokenChoice => ({
-          id: `player:${player.id}`,
-          name: player.name,
-          image: `assets/tokens/players/${player.id}.png`,
-          subtitle: `${player.className} · ${player.subclass}`,
-          group: 'PJ',
-          maxHp: player.hitPoints,
-        })
-      );
-    const genericNpcs = GENERIC_NPCS.map(
-      (npc): TokenChoice => ({
-        id: `generic:${npc.id}`,
-        name: npc.name,
-        image: `assets/tokens/generic/${npc.id}.png`,
-        subtitle: `${npc.category} · ${npc.role}`,
-        group: 'Genérico',
-        maxHp: npc.hitPoints,
-      })
-    );
-    return [...namedPlayers, ...players, ...npcs, ...genericNpcs];
+    const players = this.characterSheets.playerSheets(campaign).map((player): TokenChoice => ({
+      id: `player:${player.id}`,
+      name: player.name,
+      image: this.characterSheets.tokenImage('players', player.id, false, player.tokenUrl),
+      subtitle: `${player.className} · ${player.subclass}`,
+      group: 'PJ',
+      maxHp: player.hitPoints,
+    }));
+    const genericNpcs = this.characterSheets.genericNpcs().map((npc): TokenChoice => ({
+      id: `generic:${npc.id}`,
+      name: npc.name,
+      image: this.characterSheets.tokenImage('generic', npc.id),
+      subtitle: `${npc.category} · ${npc.role}`,
+      group: 'Genérico',
+      maxHp: npc.hitPoints,
+    }));
+    return [...players, ...npcs, ...genericNpcs];
   }
 
   private seedEncounterTokens(seedTokens: EncounterSeedToken[]): void {

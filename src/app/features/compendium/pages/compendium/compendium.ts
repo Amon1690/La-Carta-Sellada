@@ -2,7 +2,7 @@ import { AsyncPipe } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
-import { BehaviorSubject, combineLatest, map, of } from 'rxjs';
+import { combineLatest, map, of } from 'rxjs';
 
 import {
   Campaign,
@@ -11,12 +11,10 @@ import {
   CampaignLocation,
   CampaignNpc,
   CampaignOption,
-  CampaignPlayerCharacter,
   CampaignScene,
-  PlayerOption,
 } from '../../../../core/models/campaign';
 import { CampaignDataService } from '../../../../core/services/campaign-data';
-import { GENERIC_NPCS } from '../../../../core/data/generic-npcs';
+import { CharacterSheetsService, EditablePlayerSheet } from '../../../../core/services/character-sheets';
 import {
   RuleEquipment,
   RuleFeat,
@@ -47,17 +45,6 @@ type CompendiumSection =
 
 type EditableSheetKind = 'player' | 'npc' | 'generic-npc';
 type EditableSheetEntity = EditablePlayerSheet | CampaignNpc | RuleGenericNpc;
-
-interface EditablePlayerSheet extends PlayerOption {
-  tokenUrl?: string;
-  gridTokenUrl?: string;
-  affiliation?: string;
-}
-
-interface EditableCollection<T extends { id: string }> {
-  edited: Record<string, T>;
-  created: T[];
-}
 
 interface SheetEditorState {
   kind: EditableSheetKind;
@@ -225,7 +212,7 @@ export class Compendium {
   private readonly campaignData = inject(CampaignDataService);
   private readonly rulesData = inject(RulesDataService);
   private readonly route = inject(ActivatedRoute);
-  private readonly editableVersion = new BehaviorSubject(0);
+  private readonly characterSheets = inject(CharacterSheetsService);
   private readonly campaignId =
     this.route.snapshot.paramMap.get('campaignId') ?? '';
   private readonly section = this.route.snapshot.data[
@@ -245,7 +232,7 @@ export class Compendium {
     this.rulesData.getRules(),
     this.route.data,
     this.route.queryParamMap,
-    this.editableVersion,
+    this.characterSheets.changes$,
   ]).pipe(
     map(([campaign, rules, data, queryParams]) => {
       const query = queryParams.get('q') ?? '';
@@ -327,26 +314,23 @@ export class Compendium {
     if (!editor) return;
 
     if (editor.kind === 'player') {
-      this.saveEditableEntity(
-        this.playerSheetsStoreKey(),
+      this.characterSheets.savePlayer(
         this.playerFromDraft(editor),
         editor.mode
       );
     } else if (editor.kind === 'generic-npc') {
-      this.saveEditableEntity(
-        this.genericNpcsStoreKey(),
+      this.characterSheets.saveGenericNpc(
         this.genericNpcFromDraft(editor),
         editor.mode
       );
     } else {
-      this.saveEditableEntity(
-        this.campaignNpcsStoreKey(this.campaignId),
+      this.characterSheets.saveCampaignNpc(
+        this.campaignId,
         this.campaignNpcFromDraft(editor),
         editor.mode
       );
     }
 
-    this.editableVersion.next(this.editableVersion.getValue() + 1);
     this.cancelEditor();
   }
 
@@ -454,7 +438,7 @@ export class Compendium {
           title: 'Fichas genéricas',
           description:
             'Perfiles originales compatibles con D&D 2024 para improvisar aliados, habitantes, adversarios y encuentros en cualquier campaña.',
-          entries: this.withEditableGenericNpcs(GENERIC_NPCS).map((npc) =>
+          entries: this.characterSheets.genericNpcs().map((npc) =>
             this.genericNpcCard(npc, true)
           ),
           editableKind: 'generic-npc',
@@ -485,7 +469,7 @@ export class Compendium {
           title: 'Fichas de PNJ',
           description:
             'Aliados, ausentes y figuras que empujan el misterio inicial.',
-          entries: this.withEditableCampaignNpcs(campaign.id, campaign.npcs).map(
+          entries: this.characterSheets.campaignNpcs(campaign.id, campaign.npcs).map(
             (npc) => this.npcCard(npc, true)
           ),
           editableKind: 'npc',
@@ -497,13 +481,8 @@ export class Compendium {
           description:
             'Tokens circulares de una casilla para los PNJ y personajes jugables de la campaña.',
           entries: [
-            ...campaign.npcs.map((npc) => this.npcTokenCard(npc)),
-            ...campaign.playerCharacters.map((player) =>
-              this.namedPlayerTokenCard(player)
-            ),
-            ...campaign.playerOptions
-              .filter((player) => player.showToken !== false)
-              .map((player) => this.playerTokenCard(player)),
+            ...this.characterSheets.campaignNpcs(campaign.id, campaign.npcs).map((npc) => this.npcTokenCard(npc)),
+            ...this.playerSheets(campaign).map((player) => this.playerTokenCard(player)),
           ],
         };
       case 'players':
@@ -584,7 +563,7 @@ export class Compendium {
     rules: RulesCompendium
   ): CompendiumCard[] {
     return [
-      ...this.withEditableCampaignNpcs(campaign.id, campaign.npcs).map((npc) =>
+      ...this.characterSheets.campaignNpcs(campaign.id, campaign.npcs).map((npc) =>
         this.npcCard(npc, true)
       ),
       ...this.playerSheets(campaign).map((player) =>
@@ -912,13 +891,13 @@ export class Compendium {
       tags: ['PNJ', ...npc.tags],
       meta: [npc.faction],
       bullets: [],
-      tokenUrl: this.tokenPath('npcs', npc.id),
-      gridTokenUrl: this.gridTokenPath('npcs', npc.id),
+      tokenUrl: this.characterSheets.tokenImage('npcs', npc.id),
+      gridTokenUrl: this.characterSheets.tokenImage('npcs', npc.id, true),
       tokenPreview: true,
     };
   }
 
-  private playerTokenCard(player: PlayerOption): CompendiumCard {
+  private playerTokenCard(player: EditablePlayerSheet): CompendiumCard {
     return {
       key: `token:player:${player.id}`,
       name: player.name,
@@ -931,38 +910,8 @@ export class Compendium {
         `Trasfondo: ${player.background}`,
       ],
       bullets: [],
-      tokenUrl: this.tokenPath('players', player.id),
-      gridTokenUrl: this.gridTokenPath('players', player.id),
-      tokenPreview: true,
-    };
-  }
-
-  private namedPlayerTokenCard(
-    player: CampaignPlayerCharacter
-  ): CompendiumCard {
-    return {
-      key: `token:named-player:${player.id}`,
-      name: player.name,
-      kicker: `PJ - ${player.className}`,
-      summary: player.summary,
-      tags: Array.from(
-        new Set([
-          'PJ',
-          player.className,
-          player.ancestry,
-          player.subclass,
-          ...player.tags,
-        ])
-      ),
-      meta: [
-        `Linaje: ${player.ancestry}`,
-        `Subclase: ${player.subclass}`,
-        `Trasfondo: ${player.background}`,
-        `Afiliación: ${player.affiliation}`,
-      ],
-      bullets: [],
-      tokenUrl: player.tokenUrl,
-      gridTokenUrl: player.gridTokenUrl,
+      tokenUrl: this.characterSheets.tokenImage('players', player.id, false, player.tokenUrl),
+      gridTokenUrl: this.characterSheets.tokenImage('players', player.id, true, player.gridTokenUrl),
       tokenPreview: true,
     };
   }
@@ -1134,180 +1083,7 @@ export class Compendium {
   }
 
   private playerSheets(campaign: Campaign | undefined): EditablePlayerSheet[] {
-    if (!campaign) {
-      return this.withEditablePlayerSheets([]);
-    }
-
-    const namedPlayers = campaign.playerCharacters.map((player) =>
-      this.playerCharacterToSheet(player, campaign.playerOptions)
-    );
-    const visibleOptions = campaign.playerOptions
-      .filter((player) => player.showToken !== false)
-      .map((player) => this.playerOptionToSheet(player));
-
-    return this.withEditablePlayerSheets([...namedPlayers, ...visibleOptions]);
-  }
-
-  private withEditablePlayerSheets(
-    base: EditablePlayerSheet[]
-  ): EditablePlayerSheet[] {
-    return this.applyEditableCollection(base, this.playerSheetsStoreKey());
-  }
-
-  private playerOptionToSheet(player: PlayerOption): EditablePlayerSheet {
-    const hasToken = player.showToken !== false && !player.id.startsWith('custom-');
-    return {
-      ...player,
-      tokenUrl: hasToken ? this.tokenPath('players', player.id) : undefined,
-      gridTokenUrl: hasToken ? this.gridTokenPath('players', player.id) : undefined,
-    };
-  }
-
-  private playerCharacterToSheet(
-    player: CampaignPlayerCharacter,
-    templates: PlayerOption[]
-  ): EditablePlayerSheet {
-    const template =
-      this.findPlayerTemplate(player, templates) ?? this.defaultPlayerTemplate();
-    return {
-      ...template,
-      id: player.id,
-      showToken: true,
-      name: player.name,
-      tags: player.tags,
-      ancestry: player.ancestry,
-      className: player.className,
-      subclass: player.subclass,
-      background: player.background,
-      hook: player.summary,
-      tokenUrl: player.tokenUrl,
-      gridTokenUrl: player.gridTokenUrl,
-      affiliation: player.affiliation,
-    };
-  }
-
-  private findPlayerTemplate(
-    player: CampaignPlayerCharacter,
-    templates: PlayerOption[]
-  ): PlayerOption | undefined {
-    const className = this.normalize(player.className);
-    const subclass = this.normalize(player.subclass);
-    return (
-      templates.find(
-        (template) =>
-          this.normalize(template.className) === className &&
-          this.normalize(template.subclass) === subclass
-      ) ??
-      templates.find((template) => this.normalize(template.subclass) === subclass) ??
-      templates.find((template) => this.normalize(template.className) === className)
-    );
-  }
-
-  private defaultPlayerTemplate(): PlayerOption {
-    return {
-      id: 'template',
-      name: 'PJ',
-      ancestry: 'Humano',
-      className: 'Clase',
-      subclass: 'A elegir',
-      background: 'A elegir',
-      hook: 'Pendiente de definir.',
-      level: 5,
-      feat: 'A elegir',
-      armorClass: 12,
-      hitPoints: 38,
-      speed: '9 m',
-      initiative: '+0',
-      proficiencyBonus: 3,
-      abilities: {
-        strength: 10,
-        dexterity: 10,
-        constitution: 10,
-        intelligence: 10,
-        wisdom: 10,
-        charisma: 10,
-      },
-      saves: [],
-      skills: [],
-      attacks: [],
-      features: [],
-      spells: [],
-      equipment: [],
-    };
-  }
-
-  private withEditableGenericNpcs(base: RuleGenericNpc[]): RuleGenericNpc[] {
-    return this.applyEditableCollection(base, this.genericNpcsStoreKey());
-  }
-
-  private withEditableCampaignNpcs(
-    campaignId: string,
-    base: CampaignNpc[]
-  ): CampaignNpc[] {
-    return this.applyEditableCollection(base, this.campaignNpcsStoreKey(campaignId));
-  }
-
-  private applyEditableCollection<T extends { id: string }>(
-    base: T[],
-    key: string
-  ): T[] {
-    const collection = this.loadEditableCollection<T>(key);
-    const baseIds = new Set(base.map((entry) => entry.id));
-    const edited = base.map((entry) => collection.edited[entry.id] ?? entry);
-    const created = collection.created.filter((entry) => !baseIds.has(entry.id));
-    return [...edited, ...created];
-  }
-
-  private saveEditableEntity<T extends { id: string }>(
-    key: string,
-    entity: T,
-    mode: 'create' | 'edit'
-  ): void {
-    const collection = this.loadEditableCollection<T>(key);
-    const createdIndex = collection.created.findIndex(
-      (entry) => entry.id === entity.id
-    );
-
-    if (mode === 'create' || entity.id.startsWith('custom-') || createdIndex >= 0) {
-      if (createdIndex >= 0) {
-        collection.created[createdIndex] = entity;
-      } else {
-        collection.created.push(entity);
-      }
-      delete collection.edited[entity.id];
-    } else {
-      collection.edited[entity.id] = entity;
-    }
-
-    this.saveEditableCollection(key, collection);
-  }
-
-  private loadEditableCollection<T extends { id: string }>(
-    key: string
-  ): EditableCollection<T> {
-    if (typeof localStorage === 'undefined') {
-      return { edited: {}, created: [] };
-    }
-
-    try {
-      const raw = localStorage.getItem(key);
-      if (!raw) return { edited: {}, created: [] };
-      const parsed = JSON.parse(raw) as Partial<EditableCollection<T>>;
-      return {
-        edited: parsed.edited ?? {},
-        created: Array.isArray(parsed.created) ? parsed.created : [],
-      };
-    } catch {
-      return { edited: {}, created: [] };
-    }
-  }
-
-  private saveEditableCollection<T extends { id: string }>(
-    key: string,
-    collection: EditableCollection<T>
-  ): void {
-    if (typeof localStorage === 'undefined') return;
-    localStorage.setItem(key, JSON.stringify(collection));
+    return this.characterSheets.playerSheets(campaign);
   }
 
   private draftFromEntity(
@@ -1636,18 +1412,6 @@ export class Compendium {
       wisdom: this.numberOr(this.draft.wisdom, 10),
       charisma: this.numberOr(this.draft.charisma, 10),
     };
-  }
-
-  private playerSheetsStoreKey(): string {
-    return 'la-carta-sellada:editable:fichas-pjs';
-  }
-
-  private genericNpcsStoreKey(): string {
-    return 'la-carta-sellada:editable:fichas-genericas';
-  }
-
-  private campaignNpcsStoreKey(campaignId: string): string {
-    return `la-carta-sellada:editable:${campaignId || 'sin-campana'}:pnjs`;
   }
 
   private sheetKindLabel(kind: EditableSheetKind): string {
