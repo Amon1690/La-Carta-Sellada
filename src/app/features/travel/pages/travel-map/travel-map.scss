@@ -530,6 +530,7 @@ button {
 }
 
 .panel-section input,
+.encounter-group-switch select,
 .panel-section select,
 .panel-section textarea {
   width: 100%;
@@ -1146,4 +1147,11 @@ button {
   .compact-fields {
     grid-template-columns: 1fr;
   }
+}
+
+.encounter-group-switch {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0;
+  font-size: 13px;
 }
