@@ -4,7 +4,7 @@ import { actionProblem, combatDistance, diceParts, normalizeCombat, reactionProb
 
 const fresh = (): CombatState => ({ version: 1, started: false, round: 1, usedAttacks: 0, spellUsed: false,
   reactionUsed: [], armorEffects: {}, resources: {}, log: [], queue: [], slotsSpent: [] });
-export interface AttackContext { advantage: boolean; disadvantage: boolean; armorAdjustment: number; damageFactor: number; confirmed: boolean }
+export interface AttackContext { advantage: boolean; disadvantage: boolean; armorAdjustment: number; damageFactor: number; confirmed: boolean; rangeResolved?: boolean }
 
 /** Estado independiente por tablero. Los dados pendientes se conservan antes de aplicar daño. */
 export class VttCombat {
@@ -62,7 +62,7 @@ export class VttCombat {
   }
   canAttack(id: string): boolean {
     const actor = this.find(id), s = this.state();
-    return !!actor && s.started && s.turnId === id && this.activeId() === id && !this.busy() && actor.hp > 0 && actor.maxHp > 0 && actor.armorClass !== undefined && !s.spellUsed && s.usedAttacks < actor.attacksPerTurn;
+    return !!actor && s.started && s.turnId === id && this.activeId() === id && !this.busy() && actor.hp > 0 && !actor.conditions?.includes('incapacitated') && actor.maxHp > 0 && actor.armorClass !== undefined && !s.spellUsed && s.usedAttacks < actor.attacksPerTurn;
   }
   available(owner: Combatant, cost: CombatCost | undefined): number {
     if (!cost) return Infinity;
@@ -125,17 +125,18 @@ export class VttCombat {
     if (!job) { this.state.update((s) => ({ ...s, pending: undefined, queue: [] })); this.commit(hp); return; }
     const actor = this.find(job.attackerId), target = this.find(job.targetId);
     if (!actor || !target || target.armorClass === undefined) throw new Error('Falta la ficha de una acción pendiente');
-    const context = job.reactionAttack ? { advantage: false, disadvantage: false, armorAdjustment: 0, damageFactor: 1 } : this.context;
+    const context: Omit<AttackContext, 'confirmed'> = job.reactionAttack ? { advantage: false, disadvantage: false, armorAdjustment: 0, damageFactor: 1 } : this.context;
     const long = combatDistance(actor, target) > job.action.range! + 0.001;
-    const casting = job.action.kind === 'spell' && !job.castApproved;
-    const roll = !casting && job.action.resolution === 'attack' ? this.attackRoll(job.action.bonus!, context.advantage, context.disadvantage || long) : undefined;
-    const save = !casting && job.action.resolution === 'save' ? this.attackRoll(target.saves[job.action.saveAbility!], false, false) : undefined;
+    const response = !!job.reactionAttack;
+    const casting = response || (job.action.kind === 'spell' && !job.castApproved);
+    const roll = !casting && job.action.resolution === 'attack' ? this.attackRoll(job.action.bonus!, context.advantage, context.disadvantage || (!context.rangeResolved && long)) : undefined;
+    const save = !casting && job.action.resolution === 'save' ? this.attackRoll(target.saves[job.action.saveAbility!], false, job.action.saveAbility === 'dexterity' && !!target.conditions?.includes('restrained')) : undefined;
     const factor = (save && save.total >= job.action.dc! ? job.action.halfOnSave ? 0.5 : 0 : 1) * context.damageFactor;
     const damage = (casting ? [] : job.action.damage).map((part) => {
       const rolled = rollDice(part.dice, this.die, roll?.natural === 20 && part.critical !== false);
       return { type: part.type, rolled: rolled.total, dice: rolled.dice, bonus: rolled.bonus };
     });
-    const pending: CombatPending = { context: { ...context }, phase: casting ? 'casting' : 'defense', attackerId: actor.id, targetId: target.id, action: job.action, roll, save,
+    const pending: CombatPending = { context: { ...context }, phase: response ? 'response' : casting ? 'casting' : 'defense', attackerId: actor.id, targetId: target.id, action: job.action, roll, save,
       baseAc: target.armorClass + context.armorAdjustment, extraAc: 0, damage, factor, reduction: 0,
       cancelled: false, redirected: false, manual: !!job.action.effectOnly || !!job.action.manualEffects, effectsConfirmed: false, reactions: [] };
     this.state.update((s) => ({ ...s, pending, queue })); this.commit(hp);
@@ -143,7 +144,7 @@ export class VttCombat {
   armor(p = this.state().pending): number { return p ? p.baseAc + p.extraAc + (this.state().armorEffects[p.targetId] ?? 0) : 0; }
   hit(p = this.state().pending): boolean {
     if (!p || p.cancelled) return false;
-    if (p.phase === 'casting') return false;
+    if (p.phase === 'casting' || p.phase === 'response') return false;
     if (isMagicMissile(p.action) && (this.state().armorEffects[p.targetId] ?? 0) >= 5) return false;
     return !p.roll || (p.roll.natural !== 1 && (p.roll.natural === 20 || p.roll.total >= this.armor(p)));
   }
@@ -152,11 +153,11 @@ export class VttCombat {
     return Math.floor(Math.max(0, p.damage.reduce((sum, d) => sum + d.rolled, 0) - p.reduction) * p.factor);
   }
   reactions(): { owner: Combatant; reaction: CombatReaction; problem?: string }[] {
-    const p = this.state().pending; if (!p) return [];
+    const p = this.state().pending; if (!p || p.phase === 'response') return [];
     const target = this.find(p.targetId); if (!target) return [];
     const result: ReturnType<VttCombat['reactions']> = [];
     for (const owner of this.combatants()) {
-      if (owner.hp <= 0 || this.state().reactionUsed.includes(owner.id)) continue;
+      if (owner.hp <= 0 || owner.conditions?.includes('incapacitated') || this.state().reactionUsed.includes(owner.id)) continue;
       for (const reaction of owner.reactions) {
         if (p.phase === 'casting' ? reaction.trigger !== 'spell' : reaction.trigger === 'spell') continue;
         if (reaction.trigger === 'spell') {
@@ -191,7 +192,7 @@ export class VttCombat {
     this.state.update((s) => ({ ...s, reactionUsed: [...s.reactionUsed, owner.id] }));
     let effectApplies = true;
     if (r.saveAbility && r.dc) {
-      const save = this.attackRoll(attacker.saves[r.saveAbility], false, false);
+      const save = this.attackRoll(attacker.saves[r.saveAbility], false, r.saveAbility === 'dexterity' && !!attacker.conditions?.includes('restrained'));
       effectApplies = save.total < r.dc;
       p.reactions.push(`${attacker.name}: salvación ${save.natural}${signed(save.bonus)} = ${save.total} contra CD ${r.dc}.`);
     }
@@ -228,18 +229,13 @@ export class VttCombat {
   finish(effectsConfirmed: boolean, manualDamage?: number, manualNote = ''): void {
     const p = this.state().pending, target = p && this.find(p.targetId);
     if (!p || !target) throw new Error('No hay un resultado pendiente válido');
+    if (p.phase === 'response') throw new Error('Revisa la situación antes de lanzar el ataque de respuesta');
     if (!effectsConfirmed) throw new Error('Confirma los efectos adicionales de las fichas antes de aplicar el resultado');
     if (p.phase === 'casting' && !p.cancelled) {
       const actor = this.find(p.attackerId); if (!actor) throw new Error('No se encuentra al lanzador');
-      const context = p.context ?? this.context;
-      const long = combatDistance(actor, target) > p.action.range! + 0.001;
-      const roll = p.action.resolution === 'attack' ? this.attackRoll(p.action.bonus!, context.advantage, context.disadvantage || long) : undefined;
-      const save = p.action.resolution === 'save' ? this.attackRoll(target.saves[p.action.saveAbility!], false, false) : undefined;
-      const damage = p.action.damage.map((part) => { const d = rollDice(part.dice, this.die, roll?.natural === 20 && part.critical !== false); return { type: part.type, rolled: d.total, dice: d.dice, bonus: d.bonus }; });
-      const factor = (save && save.total >= p.action.dc! ? p.action.halfOnSave ? 0.5 : 0 : 1) * context.damageFactor;
-      this.state.update((s) => ({ ...s, pending: { ...p, phase: 'defense', roll, save, damage, factor } })); this.commit(); return;
+      this.state.update((s) => ({ ...s, pending: this.rollDefense(p, p.context ?? this.context) })); this.commit(); return;
     }
-    const manual = p.manual || (new Set(p.damage.map((d) => d.type)).size > 1 && (p.factor !== 1 || p.reduction > 0)) || manualDamage !== undefined;
+    const manual = p.manual || p.manualRequested || (new Set(p.damage.map((d) => d.type)).size > 1 && (p.factor !== 1 || p.reduction > 0)) || manualDamage !== undefined;
     if (manual && (!Number.isInteger(manualDamage) || manualDamage! < 0 || manualDamage! > 10000 || !manualNote.trim())) throw new Error('Indica el daño final y cómo se resolvieron las defensas o efectos especiales');
     const damage = manual ? manualDamage! : this.damage(p);
     const attack = p.roll ? `d20 [${p.roll.dice.join(', ')}]${signed(p.roll.bonus)} = ${p.roll.total}; CA ${this.armor(p)}${p.roll.natural === 20 ? ' (crítico)' : ''}` : p.save ? `salvación ${p.save.natural}${signed(p.save.bonus)} = ${p.save.total}; CD ${p.action.dc}` : 'impacto automático';
@@ -247,6 +243,46 @@ export class VttCombat {
     const message = `${this.find(p.attackerId)?.name ?? p.attackerId} → ${target.name}, ${p.action.name}: ${attack}. ${this.hit(p) ? 'Impacto' : 'Fallo'}. ${dice}. Daño final ${damage}. ${p.reactions.join(' ')} ${manualNote}`;
     this.state.update((s) => ({ ...s, pending: undefined, log: this.log(message, s.log) }));
     this.next({ id: target.id, hp: Math.max(0, target.hp - damage) });
+  }
+  private rollDefense(p: CombatPending, context: Omit<AttackContext, 'confirmed'>): CombatPending {
+    const actor = this.find(p.attackerId), target = this.find(p.targetId);
+    if (!actor || !target) throw new Error('No se encuentran las fichas del ataque');
+    const long = combatDistance(actor, target) > p.action.range! + .001;
+    const roll = p.action.resolution === 'attack' ? this.attackRoll(p.action.bonus!, context.advantage, context.disadvantage || (!context.rangeResolved && long)) : undefined;
+    const save = p.action.resolution === 'save' ? this.attackRoll(target.saves[p.action.saveAbility!], false, p.action.saveAbility === 'dexterity' && !!target.conditions?.includes('restrained')) : undefined;
+    const damage = p.action.damage.map((part) => { const d = rollDice(part.dice, this.die, roll?.natural === 20 && part.critical !== false); return { type: part.type, rolled: d.total, dice: d.dice, bonus: d.bonus }; });
+    const factor = (save && save.total >= p.action.dc! ? p.action.halfOnSave ? .5 : 0 : 1) * context.damageFactor;
+    return { ...p, context: { ...context }, phase: 'defense', roll, save, damage, factor };
+  }
+  cancelResponse(): void {
+    const p = this.state().pending; if (!p || p.phase !== 'response') return;
+    this.state.update((s) => ({ ...s, pending: { ...p, phase: 'defense', cancelled: true, manual: false, manualRequested: false, damage: [], reactions: [...p.reactions, 'Ataque de respuesta omitido; la reacción gastada se conserva.'] } }));
+    this.finish(true);
+  }
+  resolveResponse(context: AttackContext): void {
+    const p = this.state().pending;
+    if (!p || p.phase !== 'response' || !context.confirmed || !Number.isFinite(context.armorAdjustment) || ![0, .5, 1, 2].includes(context.damageFactor)) throw new Error('Confirma la situación del ataque de respuesta');
+    const target = this.find(p.targetId); if (!target || target.armorClass === undefined) throw new Error('Falta la ficha del objetivo');
+    const reviewed = { ...p, context: { ...context }, baseAc: target.armorClass + context.armorAdjustment };
+    this.state.update((s) => ({ ...s, pending: p.action.kind === 'spell' ? { ...reviewed, phase: 'casting' } : this.rollDefense(reviewed, context) })); this.commit();
+  }
+  requestManualResolution(requested: boolean): void {
+    if (!this.state().pending) return;
+    this.state.update((s) => ({ ...s, pending: { ...s.pending!, manualRequested: requested } })); this.commit();
+  }
+  /** Solo avanza cuando no existe una decisión de reacción o efecto pendiente. */
+  settleAutomatic(): void {
+    while (this.state().pending) {
+      const p = this.state().pending!;
+      if (p.phase === 'response') {
+        const responder = this.find(p.attackerId);
+        if (!responder || responder.hp <= 0 || responder.conditions?.includes('incapacitated')) { this.cancelResponse(); continue; }
+        return;
+      }
+      const mixed = new Set(p.damage.map((part) => part.type)).size > 1 && (p.factor !== 1 || p.reduction > 0);
+      if ((p.phase !== 'casting' && (p.manual || p.manualRequested || mixed)) || this.reactions().some((candidate) => candidate.problem !== 'Recurso agotado')) return;
+      this.finish(true);
+    }
   }
   private spend(owner: Combatant, cost: CombatCost | undefined): void {
     if (!cost) return;
@@ -287,6 +323,7 @@ function validState(value: unknown): value is CombatState {
   if (!value || typeof value !== 'object') return false;
   const s = value as CombatState;
   if (!Array.isArray(s.slotsSpent) || s.slotsSpent.some((id) => typeof id !== 'string') || (s.started && typeof s.turnId !== 'string')) return false;
+  if (s.context?.rangeResolved !== undefined && typeof s.context.rangeResolved !== 'boolean') return false;
   if (s.context && (typeof s.context.advantage !== 'boolean' || typeof s.context.disadvantage !== 'boolean' || !Number.isFinite(s.context.armorAdjustment) || ![0, .5, 1, 2].includes(s.context.damageFactor))) return false;
   if (s.version !== 1 || typeof s.started !== 'boolean' || !Number.isInteger(s.round) || s.round < 1 || !Number.isInteger(s.usedAttacks) || s.usedAttacks < 0 || typeof s.spellUsed !== 'boolean' || !Array.isArray(s.log) || s.log.some((v) => typeof v !== 'string') || !Array.isArray(s.reactionUsed) || s.reactionUsed.some((v) => typeof v !== 'string') || !Array.isArray(s.queue) || !s.armorEffects || !s.resources) return false;
   if (Object.values(s.armorEffects).some((v) => !Number.isFinite(v) || v < 0) || Object.values(s.resources).some((pool) => !pool || Object.values(pool).some((v) => !Number.isInteger(v) || v < 0 || v > 999))) return false;
@@ -294,8 +331,10 @@ function validState(value: unknown): value is CombatState {
   if (s.queue.length > 400 || s.log.length > 200) return false;
   const p = s.pending;
   if (p && (typeof p.attackerId !== 'string' || typeof p.targetId !== 'string' || !p.action || actionProblem(p.action) || !Number.isFinite(p.baseAc) || !Number.isFinite(p.extraAc) || !Number.isFinite(p.factor) || !Number.isFinite(p.reduction) || !Array.isArray(p.reactions) || !Array.isArray(p.damage) || p.damage.some((d) => !Number.isFinite(d.rolled) || !Number.isFinite(d.bonus) || !Array.isArray(d.dice)) || (p.roll && (!Number.isFinite(p.roll.total) || !Number.isInteger(p.roll.natural) || p.roll.natural < 1 || p.roll.natural > 20 || !Array.isArray(p.roll.dice))) || (p.save && !Number.isFinite(p.save.total)))) return false;
-  if (p && (p.phase !== undefined && !['casting', 'defense'].includes(p.phase))) return false;
+  if (p && p.manualRequested !== undefined && typeof p.manualRequested !== 'boolean') return false;
+  if (p && (p.phase !== undefined && !['casting', 'defense', 'response'].includes(p.phase))) return false;
   if (p && ([p.cancelled, p.redirected, p.manual, p.effectsConfirmed].some((v) => typeof v !== 'boolean') || p.factor < 0 || p.factor > 2 || p.reduction < 0 || p.damage.some((d) => d.rolled < 0 || d.dice.some((n) => !Number.isInteger(n) || n < 1 || n > 100)) || p.reactions.some((line) => typeof line !== 'string'))) return false;
+  if (p?.context?.rangeResolved !== undefined && typeof p.context.rangeResolved !== 'boolean') return false;
   if (p?.context && (typeof p.context.advantage !== 'boolean' || typeof p.context.disadvantage !== 'boolean' || !Number.isFinite(p.context.armorAdjustment) || ![0, .5, 1, 2].includes(p.context.damageFactor))) return false;
   return true;
 }

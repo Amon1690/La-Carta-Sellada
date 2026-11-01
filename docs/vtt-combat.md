@@ -3,15 +3,22 @@
 ## Uso
 
 1. Abre **Turnos** y tira iniciativa. También puedes introducirla y pulsar **Iniciar con esta iniciativa**. La tirada usa el modificador de la ficha; si falta, hay que completar la iniciativa manualmente.
-2. Marca el token al que le toca y pulsa **Atacar**. Las demás filas permiten preparar sus fichas y recursos.
-3. Revisa el ataque o conjuro antes del primer uso: tipo de resolución, bonificador o salvación/CD, alcance, daño, número de objetivos y condiciones. La preparación muestra el texto original y la descripción del compendio.
-4. Si consume espacios, cargas o usos, crea o elige una reserva e indica su capacidad, disponibilidad actual y coste. Reutiliza la misma reserva para opciones que comparten recursos. Una cantidad ausente exige completarla; no se deduce por nivel o nombre.
-5. Elige los objetivos disponibles por distancia. Cada casilla equivale a 1,5 m; las diagonales adyacentes cuentan una casilla y se considera el tamaño del token. El alcance largo impone desventaja. Confirma visibilidad, cobertura, área y condiciones de las fichas.
-6. Lanza. El resultado queda pendiente: todavía no se descuentan PG. Los conjuros tienen una primera ventana para interrupciones antes de tirar ataque, salvación o daño.
-7. Las reacciones de las fichas que cumplen su disparador se ofrecen de forma opcional. Puedes preparar una reacción y su recurso desde esa misma ventana. Usarla consume su reacción y recursos; el cálculo se actualiza antes de aplicar daño.
-8. Confirma que no se usan más reacciones y aplica el resultado. Los efectos especiales requieren una cantidad final y una explicación cuando no pueden resolverse de forma completa.
+2. Marca el token al que le toca y pulsa **Atacar**. El mapa queda libre: clica directamente el token objetivo. Ese clic no mueve ni multiselecciona fichas; Esc o **Cancelar** termina la selección de ataque.
+3. Elige el arma o conjuro en el lateral. Se muestran sus valores y las opciones fuera de alcance se desactivan. Una espada con datos completos puede usarse directamente; los alcances, costes o fórmulas dudosos se completan con **Completar datos**. **Preparar ficha** permite revisar recursos sin iniciar un ataque.
+4. El VTT calcula ventaja/desventaja a partir de distancia, bandos y condiciones registradas. Si no conoce visión, cobertura o efectos de las fichas, pregunta en el lateral. **Hay condiciones o efectos adicionales** permite aclararlos, elegir una tirada final por un rasgo especial o exigir una resolución manual antes de aplicar daño.
+5. Solo se recuerda una aclaración normal en esta sesión mientras no cambien posiciones, fichas o condiciones. Las excepciones de visión, CA, defensas y ventaja adicional se preguntan de nuevo. **Revisar situación antes de este ataque** fuerza una nueva aclaración.
+6. Dados, resultado y PG se resuelven sin ventana adicional cuando no hay decisiones pendientes. La última acción queda visible sobre el registro. Un conjuro permite interrupciones antes de sus dados si hay una reacción que pueda aplicarse.
+7. Si existe una reacción aplicable, aparece la ventana con las opciones del personaje y sus recursos. Se puede usar una o **Continuar sin más reacciones**. Al resolverlas se vuelve al mapa automáticamente. Los espacios, cargas y usos se descuentan; las cantidades ausentes se completan y las reservas compartidas se configuran explícitamente.
+8. Si una reacción permite un ataque de respuesta, se calcula la situación de quien responde y se confirma antes de lanzar sus dados. Un efecto especial o la opción de resolución manual mantiene los PG pendientes hasta introducir cantidad final y explicación. La decisión manual se conserva al recargar.
+9. Para opciones con varios objetivos, **Distribuir entre varios objetivos** mantiene la selección avanzada y revisión de área. Los impactos repetidos sobre un mismo token se eligen en el lateral cuando la ficha los permite.
 
 Cerrar la ventana o recargar conserva la tirada pendiente, el gasto y las decisiones. **Continuar ataque pendiente** permite retomarla. Mientras está pendiente se bloquean movimientos, cambios de turno y ediciones de PG que podrían invalidarla. El registro conserva las últimas 200 entradas.
+
+## Condiciones en el mapa
+
+En **Fichas → Estado de combate** se registran bando y condiciones por instancia del token: tumbado, cegado, restringido, envenenado e incapacitado. Los tokens nuevos comienzan sin condiciones activas; los antiguos conservan sus datos y las ausencias se consultan. La ocultación visual del token en el tablero no equivale a invisibilidad reglamentaria.
+
+La inferencia contempla alcance largo, enemigos próximos en ataques a distancia, visión declarada y las condiciones admitidas; ventaja y desventaja se anulan. Restringido también impone desventaja en salvaciones de DES. Incapacitado bloquea ataques y reacciones. Sentidos especiales, otras condiciones y excepciones de rasgos necesitan aclaración; no se deducen de un texto ambiguo. La elección de tirada final es una decisión explícita para esos casos, no una regla inventada.
 
 ## Ejemplo: Guardia veterano y Aprendiz arcano
 
@@ -35,7 +42,7 @@ Se añade una preparación estructurada opcional a las fichas sin sustituir los 
 
 El cálculo admite ataques contra CA, críticos y fallos naturales, ventaja/desventaja, salvaciones y mitad de daño, impactos automáticos, varios objetivos/impactos y distintos componentes de daño. Permite configurar reacciones de CA, reducción, mitad de daño, desventaja, interrupción, redirección, respuesta y resolución explícita.
 
-La preparación expresa reglas comprobadas por la persona que dirige. No convierte cualquier descripción libre en una regla automática. Las condiciones, inmunidades, resistencias de distinto tipo, concentración, duraciones especiales, restricciones de objetivos y combinaciones de efectos requieren revisión. Cuando hay daño mixto con defensas o reducciones que no admiten un cálculo único, se exige la cantidad final comprobada y una nota. Los cambios de estado que no son PG se anotan y se resuelven manualmente.
+La preparación expresa reglas comprobadas por la persona que dirige. No convierte cualquier descripción libre en una regla automática. Las condiciones, inmunidades, resistencias de distinto tipo, concentración, duraciones especiales, restricciones de objetivos y combinaciones de efectos requieren revisión. Cuando hay daño mixto con defensas o reducciones que no admiten un cálculo único, se exige la cantidad final comprobada y una nota. Los efectos que no se representen entre las condiciones del mapa se anotan y se resuelven manualmente.
 
 El tablero no determina bandos, obstáculos, áreas o línea de visión. La selección de objetivos muestra tokens dentro del alcance; hay que comprobar que el objetivo cumple las condiciones de la opción. El flujo está orientado a acciones entre tokens; no crea objetivos de terreno ni automatiza conjuros personales o descansos.
 

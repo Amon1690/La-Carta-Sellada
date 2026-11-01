@@ -1,0 +1,50 @@
+@if (actor(); as attacker) {
+  @if (combat().canAttack(attacker.id)) {
+    <section class="attack-picker" aria-label="Elegir ataque en el mapa">
+      <header><b>{{ attacker.name }} · Atacar</b><button type="button" (click)="cancel.emit()">Cancelar</button></header>
+      @if (error()) { <p role="alert">{{ error() }}</p> }
+      @if (target(); as victim) {
+        <h3>Objetivo: {{ victim.name }}</h3><p>{{ distance(attacker, victim).toFixed(1) }} m · Clica otra ficha para cambiar.</p>
+        <label class="check"><input type="checkbox" [(ngModel)]="forceReview" /> Revisar situación antes de este ataque</label>
+        @for (action of choices(); track action.source) {
+          <article>
+            <button type="button" [disabled]="!!problem(action)" (click)="choose(action)">{{ action.name }} · {{ label(action) }}</button>
+            <small>{{ action.range ?? '?' }} m · @for (damage of action.damage; track $index) { {{ damage.dice }} {{ damage.type }} }{{ resourceLabel(action, attacker) }}</small>
+            @if (problem(action); as issue) { <small>{{ issue }}</small>@if (issue !== 'Fuera de alcance' && issue !== 'Recurso agotado') { <button type="button" class="secondary" (click)="prepare.emit({owner: attacker, action: action})">Completar datos</button> } }
+          </article>
+        } @empty { <p>La ficha no tiene ataques registrados.</p> }
+        @if (selected(); as action) {
+          @if (situation(); as info) {
+            <div class="situation">
+              <b>{{ info.context.advantage === info.context.disadvantage ? 'Tirada normal' : info.context.advantage ? 'Ventaja' : 'Desventaja' }}</b>
+              @for (reason of info.reasons; track $index) { <p>{{ reason }}</p> }
+              @if (info.context.advantage && info.context.disadvantage) { <p>Ventaja y desventaja se anulan.</p> }
+              @if (!facts.reviewed) { <p>¿Se ven, no hay cobertura ni otros efectos que cambien el resultado?</p> }
+              @for (doubt of info.doubts; track $index) { <small>{{ doubt }}</small> }
+              @if (info.threatUnknown) { <label>¿Hay un enemigo cercano que pueda verte y actuar?<select [(ngModel)]="facts.nearbyThreat"><option [ngValue]="undefined">Seleccionar</option><option [ngValue]="true">Sí</option><option [ngValue]="false">No</option></select></label> }
+              @if (info.spellTypeUnknown) { <label>Tipo de ataque del conjuro<select [(ngModel)]="facts.spellAttackType"><option [ngValue]="undefined">Seleccionar</option><option value="melee">Cuerpo a cuerpo</option><option value="ranged">A distancia</option></select></label> }
+              @if (action.targets > 1) { <button type="button" class="secondary" (click)="multiple.emit({owner: attacker, action: action})">Distribuir entre varios objetivos</button> }
+              @if (action.targets > 1 && action.repeatTargets) { <label>Impactos dirigidos a este objetivo<input type="number" min="1" [max]="action.targets" [(ngModel)]="count" /></label> }
+              @if (action.targets > 1 && !action.repeatTargets) { <button type="button" (click)="multiple.emit({owner: attacker, action: action})">Elegir varios objetivos y revisar el área</button> }
+              <button type="button" class="secondary" (click)="customizing.set(!customizing())">Hay condiciones o efectos adicionales</button>
+              @if (customizing()) {
+                <label class="check"><input type="checkbox" [(ngModel)]="facts.attackerSeesTarget" /> El atacante ve al objetivo</label>
+                <label class="check"><input type="checkbox" [(ngModel)]="facts.targetSeesAttacker" /> El objetivo ve al atacante</label>
+                <label class="check"><input type="checkbox" [(ngModel)]="facts.canTarget" /> Objetivo permitido y sin cobertura total</label>
+                <label class="check"><input type="checkbox" [(ngModel)]="facts.extraAdvantage" /> Otra fuente de ventaja</label>
+                <label class="check"><input type="checkbox" [(ngModel)]="facts.extraDisadvantage" /> Otra fuente de desventaja</label>
+                <label>Tirada final si un rasgo cambia las reglas<select [(ngModel)]="facts.finalRoll"><option [ngValue]="undefined">Calcular automáticamente</option><option value="normal">Normal, comprobada en la ficha</option><option value="advantage">Ventaja, comprobada en la ficha</option><option value="disadvantage">Desventaja, comprobada en la ficha</option></select></label>
+                <label class="check"><input type="checkbox" [(ngModel)]="facts.manualEffects" /> Resolver efectos adicionales antes de aplicar daño</label>
+                <label>Ajuste de CA por cobertura o rasgos<input type="number" [(ngModel)]="facts.armorAdjustment" /></label>
+                <label>Defensa al daño<select [(ngModel)]="facts.damageFactor"><option [ngValue]="1">Normal</option><option [ngValue]="0.5">Resistencia</option><option [ngValue]="0">Inmunidad</option><option [ngValue]="2">Vulnerabilidad</option></select></label>
+                <details><summary>Texto de las fichas</summary>@for (who of [attacker, victim]; track who.id) { <b>{{ who.name }}</b>@for (note of who.notes; track $index) { <p>{{ note }}</p> } }<p>{{ action.notes }}</p></details>
+              }
+              <p>Solo se recuerda la situación normal mientras no cambien posiciones, fichas o condiciones. Los efectos temporales se revisan de nuevo.</p>
+              <button type="button" (click)="confirm()">{{ customizing() ? 'Aplicar estas condiciones y atacar' : 'Confirmar situación y atacar' }}</button>
+            </div>
+          }
+        }
+      } @else { <p role="status">Clica el token al que quieres atacar. Esc cancela.</p> }
+    </section>
+  }
+}

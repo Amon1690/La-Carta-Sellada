@@ -1,0 +1,15 @@
+:host { display: block; }
+.attack-picker { padding: 12px; border: 1px solid #ac8748; border-radius: 6px; background: #28251f; font-size: 13px; }
+header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+h3 { margin: 12px 0 6px; font-size: 15px; }
+button { padding: 7px 9px; border: 1px solid #987a46; border-radius: 4px; color: #f6dfb1; background: #493a25; cursor: pointer; font: inherit; }
+button:disabled { opacity: .45; cursor: default; }
+.secondary { background: #292a2c; margin-top: 5px; }
+article { border-bottom: 1px solid #575044; padding: 9px 0; }
+small { display: block; margin-top: 5px; color: #c9c2b4; }
+label { display: grid; gap: 5px; margin: 9px 0; }
+input, select { width: 100%; box-sizing: border-box; padding: 7px; font: inherit; color: #eee; background: #1b1d20; border: 1px solid #665f52; border-radius: 4px; }
+.check { display: flex; align-items: center; gap: 7px; }
+.check input { width: 17px; height: 17px; }
+.situation { padding-top: 12px; }
+[role=alert] { color: #ffbcb3; }

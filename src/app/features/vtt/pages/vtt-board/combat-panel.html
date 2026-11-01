@@ -22,7 +22,7 @@
           <label>Alcance largo, si existe (m)<input type="number" min="0" step="1.5" [(ngModel)]="d.longRange" /></label>
           <label>Máximo de objetivos o impactos<input type="number" min="1" max="20" [(ngModel)]="d.targets" /></label>
           <label class="check"><input type="checkbox" [(ngModel)]="d.repeatTargets" /> Puede dirigir varios impactos al mismo objetivo</label>
-          @if (d.kind === 'spell') { <label>Nivel del conjuro o de esta versión<input type="number" min="0" max="9" [(ngModel)]="d.spellLevel" /></label> }
+          @if (d.kind === 'spell') { @if (d.resolution === 'attack') { <label>Tipo de ataque del conjuro<select [(ngModel)]="d.attackType"><option [ngValue]="undefined">Sin confirmar</option><option value="melee">Cuerpo a cuerpo</option><option value="ranged">A distancia</option></select></label> }<label>Nivel del conjuro o de esta versión<input type="number" min="0" max="9" [(ngModel)]="d.spellLevel" /></label> }
         </div>
         <label>Daño: una línea por tipo; 1d8+2 | cortante. Añade | no si esos dados no se duplican en crítico<textarea rows="3" [(ngModel)]="damageText"></textarea></label>
         <label class="check"><input type="checkbox" [(ngModel)]="d.effectOnly" /> Solo aplica un efecto, sin daño; exige anotar su resolución.</label>
@@ -62,6 +62,26 @@
       <label class="check"><input type="checkbox" [(ngModel)]="dataConfirmed" /> He comprobado alcance, daño y condiciones en la ficha; los efectos especiales se resolverán antes de aplicar PG.</label>
       <div class="actions"><button type="button" (click)="save()">Guardar preparación</button><button type="button" (click)="actionDraft = undefined; reactionDraft = undefined">Volver sin guardar</button></div>
     } @else if (combat().state().pending; as p) {
+      @if (p.phase === 'response') {
+        <h3>Ataque de respuesta · {{ combat().find(p.attackerId)?.name }} → {{ combat().find(p.targetId)?.name }}</h3>
+        <p>Revisa la situación de quien responde antes de lanzar sus dados.</p>
+        @if (responseSituation(); as info) {
+          <b>{{ info.context.advantage === info.context.disadvantage ? 'Tirada normal' : info.context.advantage ? 'Ventaja' : 'Desventaja' }}</b>
+          @for (reason of info.reasons; track $index) { <p>{{ reason }}</p> }
+          <label class="check"><input type="checkbox" [(ngModel)]="responseFacts.attackerSeesTarget" /> Quien responde ve a su objetivo</label>
+          <label class="check"><input type="checkbox" [(ngModel)]="responseFacts.targetSeesAttacker" /> Su objetivo puede verlo</label>
+          @if (info.threatUnknown) { <label>¿Hay enemigo cercano que pueda verlo y actuar?<select [(ngModel)]="responseFacts.nearbyThreat"><option [ngValue]="undefined">Seleccionar</option><option [ngValue]="true">Sí</option><option [ngValue]="false">No</option></select></label> }
+          @if (info.spellTypeUnknown) { <label>Tipo de ataque del conjuro<select [(ngModel)]="responseFacts.spellAttackType"><option [ngValue]="undefined">Seleccionar</option><option value="melee">Cuerpo a cuerpo</option><option value="ranged">A distancia</option></select></label> }
+          <label class="check"><input type="checkbox" [(ngModel)]="responseFacts.extraAdvantage" /> Otra fuente de ventaja</label>
+          <label class="check"><input type="checkbox" [(ngModel)]="responseFacts.extraDisadvantage" /> Otra fuente de desventaja</label>
+          <label>Tirada final si un rasgo cambia las reglas<select [(ngModel)]="responseFacts.finalRoll"><option [ngValue]="undefined">Calcular automáticamente</option><option value="normal">Normal, comprobada</option><option value="advantage">Ventaja, comprobada</option><option value="disadvantage">Desventaja, comprobada</option></select></label>
+          <label class="check"><input type="checkbox" [(ngModel)]="responseFacts.manualEffects" /> Resolver efectos adicionales antes de aplicar daño</label>
+          <label>Ajuste de CA por cobertura o rasgos<input type="number" [(ngModel)]="responseFacts.armorAdjustment" /></label>
+          <label>Defensa al daño<select [(ngModel)]="responseFacts.damageFactor"><option [ngValue]="1">Normal</option><option [ngValue]="0.5">Resistencia</option><option [ngValue]="0">Inmunidad</option><option [ngValue]="2">Vulnerabilidad</option></select></label>
+          <label class="check"><input type="checkbox" [(ngModel)]="responseFacts.reviewed" /> Objetivo permitido, sin cobertura total y efectos de las fichas comprobados</label>
+          <button type="button" (click)="resolveResponse()">Confirmar situación y lanzar respuesta</button><button type="button" (click)="cancelResponse()">Cancelar ataque de respuesta</button>
+        }
+      } @else {
       <h3>{{ combat().find(p.attackerId)?.name }} → {{ combat().find(p.targetId)?.name }} · {{ p.action.name }}</h3>
       @if (p.phase === 'casting') { <p class="result">Anuncio del conjuro: decide las interrupciones antes de tirar ataque, salvación o daño.</p> }
       @if (p.roll; as roll) { <p class="result">d20 [{{ roll.dice.join(', ') }}] + {{ roll.bonus }} = <b>{{ roll.total }}</b> · CA {{ combat().armor(p) }} {{ roll.natural === 20 ? '· Crítico natural' : roll.natural === 1 ? '· Fallo natural' : '' }}</p> }
@@ -71,7 +91,7 @@
       @for (part of p.damage; track $index) { <p>{{ part.type }}: [{{ part.dice.join(', ') }}] + {{ part.bonus }} = {{ part.rolled }}</p> }
       <h3>Reacciones disponibles</h3>
       @for (candidate of combat().reactions(); track candidate.owner.id + candidate.reaction.source) {
-        <article><b>{{ candidate.owner.name }} · {{ candidate.reaction.name }}</b><p class="source">{{ candidate.reaction.source }}</p><p>{{ combat().resourceStatus(candidate.owner, candidate.reaction.cost) }}</p>
+        <article><b>{{ candidate.owner.name }} · {{ candidate.reaction.name }}</b><p class="source">{{ candidate.reaction.source }}</p><p>{{ candidate.reaction.resourceConfirmed ? combat().resourceStatus(candidate.owner, candidate.reaction.cost) : 'Coste y recursos por completar' }}</p>
           @if (candidate.reaction.effect === 'redirect') { <label>Redirigir hacia<select [(ngModel)]="redirectId"><option value="">Seleccionar</option>@for (t of combat().combatants(); track t.id) { <option [value]="t.id">{{ t.name }}</option> }</select></label> }
           @if (candidate.problem) { <p>{{ candidate.problem }}</p><button type="button" (click)="edit(candidate.owner, candidate.reaction)">Preparar reacción y recursos</button> }
           @else { <button type="button" (click)="react(candidate.owner.id, candidate.reaction.source)">Usar {{ candidate.reaction.name }}</button> }
@@ -79,11 +99,12 @@
       } @empty { <p>No hay más reacciones disponibles de las fichas.</p> }
       @for (message of p.reactions; track $index) { <p class="result">{{ message }}</p> }
       <details><summary>Rasgos y equipo que deben revisarse</summary>@for (t of [combat().find(p.attackerId), combat().find(p.targetId)]; track $index) { <h4>{{ t?.name }}</h4><ul>@for (note of t?.notes; track $index) { <li>{{ note }}</li> }</ul> }</details>
-      <label class="check"><input type="checkbox" [(ngModel)]="manualResolution" /> Resolver otro efecto o daño mixto con una cantidad final comprobada</label>
-      @if (manualResolution || p.manual) { <p>El efecto requiere una decisión explícita. No se aplicará un cálculo parcial.</p><label>Daño final<input type="number" min="0" [(ngModel)]="manualDamage" /></label><label>Resolución del efecto<textarea [(ngModel)]="manualNote"></textarea></label> }
-      <label class="check"><input type="checkbox" [(ngModel)]="effectsConfirmed" /> No se usan más reacciones; se han comprobado los rasgos, resistencias y demás efectos.</label>
-      <button type="button" (click)="finish()">{{ p.phase === 'casting' && !p.cancelled ? 'Continuar y lanzar dados' : 'Aplicar resultado y continuar' }}</button>
+      <label class="check"><input type="checkbox" [ngModel]="manualResolution || p.manualRequested" (ngModelChange)="requestManual($event)" /> Resolver otro efecto o daño mixto con una cantidad final comprobada</label>
+      @if (manualResolution || p.manual || p.manualRequested) { <p>El efecto requiere una decisión explícita. No se aplicará un cálculo parcial.</p><label>Daño final<input type="number" min="0" [(ngModel)]="manualDamage" /></label><label>Resolución del efecto<textarea [(ngModel)]="manualNote"></textarea></label> }
+      @if (!quick) { <label class="check"><input type="checkbox" [(ngModel)]="effectsConfirmed" /> No se usan más reacciones; se han comprobado los rasgos, resistencias y demás efectos.</label> }
+      <button type="button" (click)="finish()">{{ quick && !p.manual && !p.manualRequested && !manualResolution ? 'Continuar sin más reacciones' : p.phase === 'casting' && !p.cancelled ? 'Continuar y lanzar dados' : 'Aplicar resultado y continuar' }}</button>
       <p>Cerrar o recargar conserva esta tirada pendiente; no repite los dados ni devuelve recursos gastados.</p>
+      }
     } @else if (owner(); as actor) {
       <h3>{{ actor.name }}</h3>
       @if (selectedAction(); as action) {
@@ -105,7 +126,7 @@
         <p>{{ actor.attacksPerTurn }} ataque(s) de arma por acción; utilizados {{ combat().state().usedAttacks }}. Un conjuro de acción sustituye esta acción. Revisa restricciones de multiataque y efectos indicados en la ficha.</p>
         <label>Confirmar ataques de arma por acción según la ficha<input type="number" min="1" max="10" [value]="actor.attacksPerTurn" (change)="adjustAttacks(actor, $any($event.target).value)" /></label>
         <h4>Ataques y conjuros de la ficha</h4>
-        @for (action of actor.actions; track action.source) { <article><b>{{ action.name }}</b><p class="source">{{ action.source }}</p><p>{{ problem(action) || combat().resourceStatus(actor, action.cost) }}</p><div class="actions"><button type="button" (click)="edit(actor, action)">Preparar / revisar</button><button type="button" [disabled]="!!problem(action) || !combat().canAttack(actor.id)" (click)="choose(action)">Elegir ataque</button></div></article> } @empty { <p>No hay ataques registrados. Añádelos a la ficha del compendio.</p> }
+        @for (action of actor.actions; track action.source) { <article><b>{{ action.name }}</b><p class="source">{{ action.source }}</p><p>{{ problem(action) || combat().resourceStatus(actor, action.cost) }}</p><div class="actions"><button type="button" (click)="edit(actor, action)">Preparar / revisar</button></div></article> } @empty { <p>No hay ataques registrados. Añádelos a la ficha del compendio.</p> }
         <h4>Reacciones</h4>@for (reaction of actor.reactions; track reaction.source) { <article><b>{{ reaction.name }}</b><p>{{ reaction.source }}</p><button type="button" (click)="edit(actor, reaction)">Preparar reacción</button></article> }
         <h4>Recursos por token</h4>@for (r of actor.resources; track r.id) { <label>{{ r.name }} (máximo {{ r.maximum }})<input type="number" min="0" [max]="r.maximum" [value]="balance(actor, r)" (change)="adjustResource(actor, r.id, $any($event.target).value)" /></label> }
         <details><summary>Rasgos y equipo</summary><ul>@for (note of actor.notes; track $index) { <li>{{ note }}</li> }</ul></details>

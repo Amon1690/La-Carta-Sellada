@@ -1,6 +1,7 @@
 import { CombatAction, Combatant, CombatReaction, CombatState } from '../models/combat';
 import { GENERIC_NPCS } from '../data/generic-npcs';
 import { actionProblem, combatDistance, deriveCombat, diceParts, reactionProblem, rollDice } from './combat-rules';
+import { attackSituation, normalAttackFacts } from './attack-situation';
 import { AttackContext, VttCombat } from './vtt-combat';
 const context: AttackContext = { advantage: false, disadvantage: false, armorAdjustment: 0, damageFactor: 1, confirmed: true };
 function actor(id: string, sourceId: string, x: number): Combatant {
@@ -193,4 +194,53 @@ describe('Combate VTT, reglas y recuperación', () => {
     expect(engine.damage()).toBe(3);
     expect(() => engine.finish(true, 2)).toThrowError(); engine.finish(true, 2, 'Defensa especial revisada'); expect(learner().hp).toBe(12);
   });
+  it('resuelve sin ventana cuando no hay reacciones ni efectos pendientes', () => {
+    learner().reactions = []; start(); attack(); engine.settleAutomatic();
+    expect(engine.state().pending).toBeUndefined(); expect(learner().hp).toBe(7);
+    expect(engine.state().log.at(-1)).toContain('Daño final 7');
+  });
+  it('espera ante Escudo y cierra la resolución solo después de elegir usarlo', () => {
+    const r = shield(); start(); attack(); engine.settleAutomatic(); expect(learner().hp).toBe(14);
+    engine.useReaction(learner().id, r.source); engine.settleAutomatic();
+    expect(engine.state().pending).toBeUndefined(); expect(learner().hp).toBe(14); expect(engine.state().resources[learner().id]['magic']).toBe(2);
+  });
+  it('no ofrece reacciones agotadas ni permite atacar estando incapacitado', () => {
+    shield(); start(); engine.setResource(learner().id, 'magic', 0); attack(); engine.settleAutomatic();
+    expect(engine.state().pending).toBeUndefined(); expect(learner().hp).toBe(7);
+    guard().conditions = ['incapacitated']; expect(engine.canAttack(guard().id)).toBeFalse();
+  });
+
+  it('conserva la resolución manual elegida aunque se use una reacción o se recargue', () => {
+    const r = shield(); start(); attack(); engine.requestManualResolution(true);
+    engine.useReaction(learner().id, r.source); engine.settleAutomatic();
+    expect(engine.state().pending).toBeDefined(); expect(learner().hp).toBe(14);
+    const restored = make(); restored.restore(saved); restored.settleAutomatic();
+    expect(restored.state().pending?.manualRequested).toBeTrue(); expect(learner().hp).toBe(14);
+    restored.finish(true, 0, 'Efecto adicional revisado'); expect(restored.state().pending).toBeUndefined();
+  });
+
+  it('espera a confirmar el contexto de quien responde antes de lanzar dados, también tras recargar', () => {
+    const staff = learner().actions[0]; learner().conditions = ['poisoned'];
+    learner().reactions = [{ source: 'Respuesta', name: 'Respuesta', trigger: 'hit', protectOthers: false, range: 1.5, meleeOnly: true, effect: 'counter', amount: 0, dice: '', duration: 'attack', actionSource: staff.source, resourceConfirmed: true, reviewed: true }];
+    sequence = [9, 5, 18, 2, 4]; start(); attack(); engine.useReaction('apprentice', 'Respuesta'); engine.finish(true);
+    expect(engine.state().pending?.phase).toBe('response'); expect(die.calls.count()).toBe(2);
+    engine.restore(saved); engine.settleAutomatic(); expect(die.calls.count()).toBe(2); expect(engine.state().pending?.phase).toBe('response');
+    const info = attackSituation(learner(), guard(), staff, actors, { ...normalAttackFacts(), reviewed: true });
+    expect(info.context.disadvantage).toBeTrue(); engine.resolveResponse(info.context);
+    expect(engine.state().pending?.roll?.dice).toEqual([18, 2]); expect(engine.state().pending?.roll?.total).toBe(3);
+    engine.settleAutomatic(); expect(engine.state().pending).toBeUndefined(); expect(guard().hp).toBe(32);
+  });
+
+  it('aplica la desventaja de DES por restringido también a una salvación de reacción', () => {
+    guard().conditions = ['restrained']; const r = shield(); r.saveAbility = 'dexterity'; r.dc = 12;
+    sequence = [9, 5, 18, 2]; start(); attack(); engine.useReaction(learner().id, r.source);
+    expect(die.calls.count()).toBe(4); expect(engine.state().pending?.reactions.join(' ')).toContain('salvación 2');
+  });
+  it('respeta una resolución explícita de rasgo que elimina una penalización por alcance', () => {
+    Object.assign(sword(), { kind: 'ranged', range: 1.5, longRange: 9 }); learner().x = 102.4; learner().reactions = [];
+    const info = attackSituation(guard(), learner(), sword(), actors, { ...normalAttackFacts(), reviewed: true, finalRoll: 'normal' });
+    sequence = [9, 5]; start(); engine.begin(sword().source, [learner().id], info.context);
+    expect(engine.state().pending?.roll?.dice).toEqual([9]); expect(engine.state().pending?.roll?.disadvantage).toBeFalse();
+  });
+
 });

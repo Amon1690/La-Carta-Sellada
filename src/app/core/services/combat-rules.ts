@@ -24,6 +24,7 @@ export function combatDistance(a: Pick<Combatant, 'x' | 'y' | 'size'>, b: Pick<C
 }
 export function actionProblem(action: CombatAction): string | undefined {
   if (!action || typeof action.source !== 'string' || typeof action.name !== 'string' || !['melee', 'ranged', 'spell'].includes(action.kind) || !['attack', 'save', 'automatic'].includes(action.resolution) || !Array.isArray(action.damage)) return 'Datos de ataque incompletos';
+  if (action.attackType !== undefined && !['melee', 'ranged'].includes(action.attackType)) return 'Confirma el tipo de ataque del conjuro';
   if (!action.reviewed) return 'Revisa los datos y efectos de esta opción';
   if (!Number.isFinite(action.range) || action.range! < 0 || action.range! > 10000) return 'Falta un alcance válido en metros';
   if (action.longRange !== undefined && (!Number.isFinite(action.longRange) || action.longRange < action.range!)) return 'El alcance largo no puede ser inferior al normal';
@@ -72,6 +73,7 @@ export function deriveCombat(stats: GameStatBlock | undefined, rules?: RulesComp
     const melee = /cuerpo a cuerpo/i.test(source), ranged = /distancia/i.test(source), spell = /conjuro/i.test(source);
     const bonus = source.match(/:\s*([+-]\s*\d+)/)?.[1];
     const base: CombatAction = { source, name, kind: spell ? 'spell' : ranged && !melee ? 'ranged' : 'melee', resolution: 'attack',
+      attackType: spell ? melee ? 'melee' : ranged ? 'ranged' : undefined : undefined,
       bonus: bonus ? Number(bonus.replace(/\s/g, '')) : undefined, range: metres(source) ?? (melee && !ranged ? 1.5 : undefined),
       targets: 1, repeatTargets: false, halfOnSave: false, damage: legacyDamage(source),
       resourceConfirmed: !spell, reviewed: false, manualEffects: /salvaci[oó]n|\bsi\b|apresad|derribad|paralizad|incapacitad|cegad|escapar/i.test(source), notes: source };

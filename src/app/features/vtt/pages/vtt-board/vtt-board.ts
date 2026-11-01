@@ -17,10 +17,12 @@ import { CampaignDataService } from '../../../../core/services/campaign-data';
 import { CharacterSheetsService } from '../../../../core/services/character-sheets';
 import { RulesDataService } from '../../../../core/services/rules-data';
 import { RulesCompendium } from '../../../../core/models/rules';
-import { Combatant } from '../../../../core/models/combat';
+import { CombatAction, CombatCondition, CombatSide, Combatant } from '../../../../core/models/combat';
 import { deriveCombat } from '../../../../core/services/combat-rules';
 import { VttCombat } from '../../../../core/services/vtt-combat';
 import { VttCombatPanel } from './combat-panel';
+import { VttAttackPicker } from './attack-picker';
+import { CONDITION_LABELS } from '../../../../core/services/attack-situation';
 import {
   GENERIC_ENCOUNTERS,
   scaledEncounterMonsters,
@@ -63,6 +65,8 @@ interface TokenChoice {
 
 interface BoardToken {
   instanceId: string;
+  conditions?: CombatCondition[];
+  side?: CombatSide;
   actorId: string;
   name: string;
   image: string;
@@ -122,7 +126,7 @@ interface StoredBoardState {
 
 @Component({
   selector: 'app-vtt-board',
-  imports: [AsyncPipe, VttTokenSheet, VttCombatPanel],
+  imports: [AsyncPipe, VttTokenSheet, VttCombatPanel, VttAttackPicker],
   templateUrl: './vtt-board.html',
   styleUrl: './vtt-board.scss',
 })
@@ -153,6 +157,10 @@ export class VttBoard {
   protected readonly diceResult = signal<string>('');
   protected readonly saveStatus = signal('Guardado');
   protected readonly combatMessage = signal('');
+  protected readonly attackingId = signal<string | undefined>(undefined);
+  protected readonly attackTargetId = signal<string | undefined>(undefined);
+  protected readonly conditionLabels = Object.entries(CONDITION_LABELS) as [CombatCondition, string][];
+  protected readonly targeting = computed(() => !!this.attackingId() && this.combat.canAttack(this.attackingId()!));
   private readonly rules = signal<RulesCompendium | undefined>(undefined);
   protected readonly combatants = computed<Combatant[]>(() => {
     this.sheetRevision();
@@ -161,9 +169,9 @@ export class VttBoard {
     return this.tokens().map((token) => {
       const stats = this.resolveTokenSheet(token, campaign).statistics;
       try { return { id: token.instanceId, actorId: token.actorId, name: token.name, x: token.x, y: token.y, size: token.size,
-        hp: token.hp, maxHp: token.maxHp, armorClass: stats?.armorClass, ...deriveCombat(stats, this.rules()) }; }
+        conditions: token.conditions, side: token.side, hp: token.hp, maxHp: token.maxHp, armorClass: stats?.armorClass, ...deriveCombat(stats, this.rules()) }; }
       catch { return { id: token.instanceId, actorId: token.actorId, name: token.name, x: token.x, y: token.y, size: token.size,
-        hp: token.hp, maxHp: token.maxHp, armorClass: undefined, ...deriveCombat(undefined), notes: ['La preparación de esta ficha no es válida. Revisa los datos antes de combatir.'] }; }
+        conditions: token.conditions, side: token.side, hp: token.hp, maxHp: token.maxHp, armorClass: undefined, ...deriveCombat(undefined), notes: ['La preparación de esta ficha no es válida. Revisa los datos antes de combatir.'] }; }
     });
   });
   protected readonly combat = new VttCombat(() => this.combatants(), () => this.activeTurnId(), (hp) => {
@@ -214,6 +222,7 @@ export class VttBoard {
   private tokenSheetDialog?: VttTokenSheet;
 
   @ViewChild(VttCombatPanel) private combatPanel?: VttCombatPanel;
+  @ViewChild('sideContent') private sideContent?: ElementRef<HTMLElement>;
 
   private readonly campaignData = inject(CampaignDataService);
   private readonly characterSheets = inject(CharacterSheetsService);
@@ -252,6 +261,7 @@ export class VttBoard {
     this.vm$.pipe(takeUntilDestroyed()).subscribe((vm) => {
       this.closeTokenSheet();
       this.combatPanel?.close();
+      this.cancelAttack();
       if (!vm) return;
       this.cancelInteraction();
       this.selectedTokenIds.set([]);
@@ -275,6 +285,7 @@ export class VttBoard {
   protected setMode(mode: ToolMode): void {
     this.cancelInteraction();
     this.lastTokenClickId = this.doubleClickTokenId = undefined;
+    this.cancelAttack();
     this.mode.set(mode);
     this.draftFog.set(undefined);
     this.measureLine.set(undefined);
@@ -305,6 +316,7 @@ export class VttBoard {
       maxHp: choice.maxHp,
       initiative: 0,
       hidden: false,
+      conditions: [],
     };
 
     this.tokens.update((tokens) => [...tokens, token]);
@@ -314,6 +326,12 @@ export class VttBoard {
 
   protected selectToken(instanceId: string, event: MouseEvent): void {
     event.stopPropagation();
+    if (this.targeting()) {
+      if (instanceId === this.attackingId()) { this.combatMessage.set('Elige otra ficha como objetivo'); return; }
+      const target = this.combat.find(instanceId);
+      if (!target || target.armorClass === undefined || target.maxHp <= 0) { this.combatMessage.set('Completa la ficha del objetivo antes de atacar'); return; }
+      this.combatMessage.set(''); this.attackTargetId.set(instanceId); return;
+    }
     // El puntero selecciona antes de arrastrar; los clics con detail 0 vienen del teclado.
     if (this.mode() !== 'select' || event.detail !== 0) return;
     this.chooseToken(instanceId, event.shiftKey || event.ctrlKey || event.metaKey);
@@ -321,6 +339,7 @@ export class VttBoard {
 
   protected openTokenSheet(instanceId: string, event: MouseEvent): void {
     event.stopPropagation();
+    if (this.targeting()) return;
     if ((event.type === 'dblclick' && this.mode() !== 'select') || event.shiftKey || event.ctrlKey || event.metaKey) return;
     if (event.type === 'dblclick' && this.doubleClickTokenId !== instanceId) return;
     const dialog = this.tokenSheetDialog;
@@ -358,6 +377,7 @@ export class VttBoard {
   }
 
   protected tokenPointerDown(token: BoardToken, event: PointerEvent): void {
+    if (this.targeting()) { event.stopPropagation(); return; }
     if (this.combat.busy()) { event.stopPropagation(); return; }
     if (this.mode() !== 'select' || event.button !== 0 || this.interactionPointerId !== undefined) return;
     event.stopPropagation();
@@ -455,6 +475,7 @@ export class VttBoard {
 
   protected advanceTurn(): void {
     if (this.combat.busy()) return;
+    this.cancelAttack();
     const ordered = this.initiativeTokens();
     if (!ordered.length) return;
     const currentIndex = ordered.findIndex(
@@ -467,6 +488,7 @@ export class VttBoard {
 
   protected setActiveTurn(instanceId: string): void {
     if (this.combat.busy()) return;
+    this.cancelAttack();
     this.activeTurnId.set(instanceId);
     this.combat.turn(instanceId);
     this.persist();
@@ -478,11 +500,36 @@ export class VttBoard {
     this.cancelInteraction(); this.activeTurnId.set(id); this.combat.start(id);
   }
 
+  protected beginAttack(id: string): void {
+    if (!this.combat.canAttack(id)) { this.prepareCombat(id); return; }
+    this.cancelInteraction(); this.closeTokenSheet(); this.mode.set('select'); this.sidebarTab.set('turns');
+    this.combatMessage.set(''); this.attackTargetId.set(undefined); this.attackingId.set(id); this.showLatestCombat();
+  }
+  protected cancelAttack(): void { this.attackingId.set(undefined); this.attackTargetId.set(undefined); }
+  protected showLatestCombat(): void { requestAnimationFrame(() => this.sideContent?.nativeElement.scrollTo({ top: 0 })); }
+  protected attackRolled(): void { this.attackTargetId.set(undefined); this.showLatestCombat(); }
+  protected showCombatDecision(): void { this.combatPanel?.resume(true); }
+  protected prepareAttack(event: { owner: Combatant; action: CombatAction }): void { this.combatPanel?.prepareEntry(event.owner, event.action); }
+  protected multipleAttack(event: { owner: Combatant; action: CombatAction }): void {
+    this.combatPanel?.open(event.owner.id); this.combatPanel?.choose(event.action);
+    if (this.combatPanel && this.attackTargetId()) this.combatPanel.targetIds[0] = this.attackTargetId()!;
+  }
+  protected setTokenSide(id: string, side: string): void {
+    if (this.combat.busy() || !['party', 'enemy', 'neutral', ''].includes(side)) return;
+    this.updateToken(id, { side: side ? side as CombatSide : undefined });
+  }
+  protected setTokenCondition(id: string, condition: CombatCondition, enabled: boolean): void {
+    if (this.combat.busy()) return;
+    const token = this.tokens().find((t) => t.instanceId === id); if (!token) return;
+    const conditions = token.conditions ?? [];
+    this.updateToken(id, { conditions: enabled ? [...new Set([...conditions, condition])] : conditions.filter((c) => c !== condition) });
+  }
+  protected clearTokenConditions(id: string): void { if (!this.combat.busy()) this.updateToken(id, { conditions: [] }); }
   protected prepareCombat(id: string): void { this.cancelInteraction(); this.combatPanel?.open(id); }
   protected resumeCombat(): void { this.combatPanel?.resume(); }
   protected endCombat(): void {
     if (this.combat.busy() || !window.confirm('¿Terminar el combate? Los PG y los recursos gastados se conservan.')) return;
-    this.combat.end();
+    this.cancelAttack(); this.combat.end();
   }
 
   protected resetInvalidCombat(): void {
@@ -566,6 +613,7 @@ export class VttBoard {
   }
 
   protected boardPointerDown(event: PointerEvent): void {
+    if (this.targeting()) return;
     if (this.combat.busy()) return;
     if (event.button !== 0 || this.interactionPointerId !== undefined) return;
     if ((event.target as HTMLElement).closest('.vtt-token')) return;
@@ -744,6 +792,10 @@ export class VttBoard {
     if (this.tokenSheetDialog?.isOpen || this.combatPanel?.isOpen || this.combat.busy()) return;
     const target = event.target as HTMLElement;
     if (target.closest('input, textarea, select, [contenteditable="true"]')) return;
+    if (this.targeting()) {
+      if (event.key === 'Escape') { event.preventDefault(); this.cancelAttack(); }
+      return;
+    }
     if (event.key === 'Delete' || event.key === 'Backspace') {
       if (this.selectedTokens().length) {
         event.preventDefault();
@@ -937,6 +989,7 @@ export class VttBoard {
           maxHp: choice.maxHp,
           initiative: 0,
           hidden: false,
+          side: seed.side, conditions: [],
         },
       ];
     });
@@ -1098,10 +1151,12 @@ export class VttBoard {
         this.tokenChoices().map((choice) => [choice.id, choice.image])
       );
       this.tokens.set(
-        (state.tokens ?? []).map((token) => ({
-          ...token,
-          image: choiceImages.get(token.actorId) ?? token.image,
-        }))
+        (state.tokens ?? []).map((token) => {
+          const restored = { ...token, image: choiceImages.get(token.actorId) ?? token.image };
+          if (!Array.isArray(restored.conditions) || !restored.conditions.every((c) => Object.hasOwn(CONDITION_LABELS, c))) delete restored.conditions;
+          if (!['party', 'enemy', 'neutral'].includes(restored.side ?? '')) delete restored.side;
+          return restored;
+        })
       );
       this.fogRects.set(state.fogRects ?? []);
       this.layers.set(

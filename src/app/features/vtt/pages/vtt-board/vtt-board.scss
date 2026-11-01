@@ -874,3 +874,8 @@ button {
     grid-template-columns: minmax(0, 1fr) 286px;
   }
 }
+
+.map-board.targeting, .map-board.targeting .vtt-token { cursor: crosshair; }
+.vtt-token.attack-target { outline: 4px solid #efb857; outline-offset: 4px; }
+.combat-log ol { max-height: 220px; overflow: auto; padding-left: 22px; }
+.combat-log li { margin: 8px 0; }
