@@ -1,8 +1,12 @@
+import { NPC_PORTRAITS } from '../../../../../../shared/assets.mjs';
+import { HttpClient } from '@angular/common/http';
+import { ACCESS_CONTEXT, accessError } from '../../../../core/services/access';
+import { REMOTE_SHEETS, SheetCollection } from '../../../../core/services/remote-sheets';
 import { AsyncPipe } from '@angular/common';
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
-import { combineLatest, map, of } from 'rxjs';
+import { combineLatest, firstValueFrom, map, of } from 'rxjs';
 
 import {
   Campaign,
@@ -134,62 +138,6 @@ interface CompendiumPortrait {
   size: string;
 }
 
-const NPC_PORTRAITS: Record<string, CompendiumPortrait> = {
-  'lord-edric-hawkwinter': atlasPortrait('atlas-01-hawkwinter.png', 'left top'),
-  'hermana-elen': atlasPortrait('atlas-01-hawkwinter.png', 'right top'),
-  'sir-cedric-stone': atlasPortrait('atlas-01-hawkwinter.png', 'left bottom'),
-  'owen-harrow': atlasPortrait('atlas-01-hawkwinter.png', 'right bottom'),
-  'marcus-flint': atlasPortrait('atlas-02-guardia.png', 'left top'),
-  'hugo-tanner': atlasPortrait('atlas-02-guardia.png', 'right top'),
-  'edwin-cole': atlasPortrait('atlas-02-guardia.png', 'left bottom'),
-  'roland-ashford': atlasPortrait('atlas-02-guardia.png', 'right bottom'),
-  'thomas-weaver': atlasPortrait('atlas-03-servicio.png', 'left top'),
-  'madre-marta': atlasPortrait('atlas-03-servicio.png', 'right top'),
-  'peter-mozocuadras': atlasPortrait('atlas-03-servicio.png', 'left bottom'),
-  'agatha-ama-llaves': atlasPortrait('atlas-03-servicio.png', 'right bottom'),
-  'elsie-criada': atlasPortrait('atlas-04-templo.png', 'left top'),
-  'bram-jardinero': atlasPortrait('atlas-04-templo.png', 'right top'),
-  'priora-mara-veldan': atlasPortrait('atlas-04-templo.png', 'left bottom'),
-  'hermano-alaric': atlasPortrait('atlas-04-templo.png', 'right bottom'),
-  'doran-mieloscura': atlasPortrait('atlas-05-posada.png', 'left top'),
-  'rusk-bandido': atlasPortrait('atlas-05-posada.png', 'right top'),
-  'niles-bandido': atlasPortrait('atlas-05-posada.png', 'left bottom'),
-  'bren-bandido': atlasPortrait('atlas-05-posada.png', 'right bottom'),
-  'oren-bandido': atlasPortrait('atlas-06-mano-hierro.png', 'left top'),
-  'garrick-mano-de-hierro': atlasPortrait('atlas-06-mano-hierro.png', 'right top'),
-  'kelm-segundo': atlasPortrait('atlas-06-mano-hierro.png', 'left bottom'),
-  'mira-arquera': atlasPortrait('atlas-06-mano-hierro.png', 'right bottom'),
-  'tob-vigia': atlasPortrait('atlas-07-amenaza.png', 'left top'),
-  'harl-veterano': atlasPortrait('atlas-07-amenaza.png', 'right top'),
-  'hombre-encapuchado': atlasPortrait('atlas-07-amenaza.png', 'left bottom'),
-  'guerrero-extraño': atlasPortrait('atlas-07-amenaza.png', 'right bottom'),
-  'varek-herrero': atlasPortrait('atlas-08-campamento.png', 'left top'),
-  'silas-rastreador': atlasPortrait('atlas-08-campamento.png', 'right top'),
-  'dreg-forzudo': atlasPortrait('atlas-08-campamento.png', 'left bottom'),
-  'finn-tramposo': atlasPortrait('atlas-08-campamento.png', 'right bottom'),
-  'jorek-leñador': atlasPortrait('atlas-09-testigos.png', 'left top'),
-  'lena-exploradora': atlasPortrait('atlas-09-testigos.png', 'right top'),
-  'oswin-reed': atlasPortrait('atlas-09-testigos.png', 'left bottom'),
-  'hermano-tomas': atlasPortrait('atlas-09-testigos.png', 'right bottom'),
-  'sargento-aldren-voss': atlasPortrait('atlas-10-escolta.png', 'left top'),
-  'guarda-eamon': atlasPortrait('atlas-10-escolta.png', 'right top'),
-  'guarda-borik': atlasPortrait('atlas-10-escolta.png', 'left bottom'),
-  'guarda-lyra': atlasPortrait('atlas-10-escolta.png', 'right bottom'),
-  'falso-clerigo': {
-    src: 'assets/npcs/falso-clerigo.png',
-    position: 'center top',
-    size: 'cover',
-  },
-};
-
-function atlasPortrait(file: string, position: string): CompendiumPortrait {
-  return {
-    src: `assets/npcs/${file}`,
-    position,
-    size: '200% 200%',
-  };
-}
-
 interface CompendiumViewModel {
   eyebrow: string;
   title: string;
@@ -211,6 +159,15 @@ export class Compendium {
   protected readonly editor = signal<SheetEditorState | undefined>(undefined);
   protected draft: SheetDraft = this.emptyDraft('player');
 
+  private readonly access = inject(ACCESS_CONTEXT);
+  private readonly remote = inject(REMOTE_SHEETS);
+  private readonly http = inject(HttpClient, { optional: true });
+  protected readonly canManage = !this.access || this.access.user()?.role === 'director';
+  protected readonly players = signal<{ id: string; username: string }[]>([]);
+  protected playerIds: string[] = [];
+  protected readonly saveError = signal('');
+  protected readonly saving = signal(false);
+  protected readonly legacyAvailable = signal(false);
   private readonly campaignData = inject(CampaignDataService);
   private readonly rulesData = inject(RulesDataService);
   private readonly route = inject(ActivatedRoute);
@@ -264,6 +221,26 @@ export class Compendium {
     })
   );
 
+  constructor() {
+    if (this.remote && this.canManage && this.campaignId) {
+      void firstValueFrom(this.http!.get<{ id: string; username: string }[]>('/api/players')).then((players) => this.players.set(players)).catch((error) => this.saveError.set(accessError(error)));
+      try { this.legacyAvailable.set(Boolean(localStorage.getItem('la-carta-sellada:editable:fichas-pjs')) && !localStorage.getItem('la-carta-sellada:legacy-players-campaign')); } catch { /* Se conserva el almacenamiento inaccesible. */ }
+    }
+  }
+  protected async importLegacy(): Promise<void> {
+    if (!this.canManage || this.saving()) return;
+    this.saving.set(true); this.saveError.set('');
+    try {
+      const raw = localStorage.getItem('la-carta-sellada:editable:fichas-pjs');
+      if (!raw) throw new Error('No hay fichas locales para importar.');
+      const collection = JSON.parse(raw) as SheetCollection;
+      const saved = await firstValueFrom(this.http!.post<SheetCollection>(`/api/campaigns/${this.campaignId}/import`, collection));
+      this.remote?.hydrate(this.campaignId, saved);
+      localStorage.setItem('la-carta-sellada:legacy-players-campaign', this.campaignId);
+      window.location.reload();
+    } catch (error) { this.saveError.set(accessError(error)); } finally { this.saving.set(false); }
+  }
+
   protected updateQuery(value: string): void {
     this.query.set(value);
   }
@@ -287,6 +264,8 @@ export class Compendium {
   }
 
   protected startCreate(kind: EditableSheetKind): void {
+    if (!this.canManage || this.saving()) return;
+    this.playerIds = [];
     this.draft = this.emptyDraft(kind);
     this.editor.set({
       kind,
@@ -296,7 +275,8 @@ export class Compendium {
   }
 
   protected startEdit(entry: CompendiumCard): void {
-    if (!entry.editableKind || !entry.editableEntity) return;
+    if (!this.canManage || this.saving() || !entry.editableKind || !entry.editableEntity) return;
+    this.playerIds = [...((entry.editableEntity as EditablePlayerSheet).playerIds ?? [])];
     this.draft = this.draftFromEntity(entry.editableKind, entry.editableEntity);
     this.editor.set({
       kind: entry.editableKind,
@@ -311,15 +291,16 @@ export class Compendium {
     this.editor.set(undefined);
   }
 
-  protected saveDraft(event: Event): void {
+  protected async saveDraft(event: Event): Promise<void> {
     event.preventDefault();
     const editor = this.editor();
-    if (!editor) return;
-
+    if (!editor || !this.canManage || this.saving()) return;
+    this.saving.set(true); this.saveError.set('');
+    try {
     if (editor.kind === 'player') {
-      this.characterSheets.savePlayer(
-        this.playerFromDraft(editor),
-        editor.mode
+      await this.characterSheets.savePlayer(
+        { ...this.playerFromDraft(editor), playerIds: this.playerIds },
+        editor.mode, this.campaignId
       );
     } else if (editor.kind === 'generic-npc') {
       this.characterSheets.saveGenericNpc(
@@ -335,6 +316,7 @@ export class Compendium {
     }
 
     this.cancelEditor();
+    } catch (error) { this.saveError.set(accessError(error)); } finally { this.saving.set(false); }
   }
 
   protected tagOptions(entries: CompendiumCard[]): string[] {
@@ -493,7 +475,7 @@ export class Compendium {
           eyebrow: 'Mesa de personajes',
           title: 'Fichas de PJ',
           description:
-            'Quince personajes de nivel 5 listos para jugar, con gancho directo para entrar en la aventura.',
+            'Personajes vinculados a esta campaña. Cada jugador puede consultar las fichas que tiene asignadas.',
           entries: this.playerSheets(campaign).map((player) =>
             this.playerCard(player, true)
           ),

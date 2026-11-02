@@ -1,3 +1,5 @@
+import { ActivatedRoute, convertToParamMap } from '@angular/router';
+import { ACCESS_CONTEXT } from '../../../../core/services/access';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
@@ -82,5 +84,27 @@ describe('Viajes independientes por grupo', () => {
     legacy(); const original = values.get(KEY); const valid = make();
     (Storage.prototype.setItem as jasmine.Spy).and.throwError('Cuota agotada');
     expect(() => valid.selectGroup('b')).not.toThrow(); expect(values.get(KEY)).toBe(original); expect(valid.status()).toContain('guardar');
+  });
+
+  it('el atlas con acceso guarda cada campaña por separado y usa la campaña de la ruta', () => {
+    let id = 'one';
+    TestBed.overrideProvider(ACCESS_CONTEXT, { useValue: { user: () => ({ role: 'director' }) } });
+    TestBed.configureTestingModule({ providers: [{ provide: ActivatedRoute, useValue: { snapshot: { get paramMap() { return convertToParamMap({ campaignId: id }); } } } }] });
+    TestBed.overrideProvider(CampaignDataService, { useValue: { getCampaignById: (campaignId: string) => of({ id: campaignId, playerCharacters: [], playerOptions: [], npcs: [] }) } });
+    const north = make(); north.planFieldChanged('foodKg', 73); expect(north.campaign().id).toBe('one');
+    id = 'two'; const south = make(); expect(south.plan().foodKg).toBe(20); south.planFieldChanged('foodKg', 11);
+    id = 'one'; expect(make().plan().foodKg).toBe(73); expect(values.has(KEY)).toBeFalse();
+  });
+  it('recupera el viaje global una sola vez sin borrar el original ni sus compañeros genéricos', () => {
+    let id = 'one'; legacy(); const old = JSON.parse(values.get(KEY)!); old.groups[0].memberIds = ['generic-guide']; old.plan.guideId = 'generic-guide'; values.set(KEY, JSON.stringify(old));
+    const original = values.get(KEY);
+    TestBed.overrideProvider(ACCESS_CONTEXT, { useValue: { user: () => ({ role: 'director' }) } });
+    TestBed.configureTestingModule({ providers: [{ provide: ActivatedRoute, useValue: { snapshot: { get paramMap() { return convertToParamMap({ campaignId: id }); } } } }] });
+    TestBed.overrideProvider(CampaignDataService, { useValue: { getCampaignById: (campaignId: string) => of({ id: campaignId, playerCharacters: [], playerOptions: [], npcs: [] }) } });
+    TestBed.overrideProvider(CharacterSheetsService, { useValue: { changes$: of(0), playerSheets: () => [], campaignNpcs: () => [], genericNpcs: () => [{ id: 'guide', name: 'Guía guardado', role: 'Guía', skills: ['Supervivencia +4'], abilities: { wisdom: 12 } }], tokenImage: () => '' } });
+    const view = make(); expect(view.groups()).toEqual([]); expect(view.legacyTravelAvailable()).toBeTrue();
+    view.importLegacyTravel(); expect(values.get(KEY)).toBe(original); expect(view.plan().foodKg).toBe(10); expect(view.plan().guideId).toBe('generic-guide');
+    expect(view.members().some((member: { id: string }) => member.id === 'generic-guide')).toBeTrue();
+    id = 'two'; const other = make(); expect(other.legacyTravelAvailable()).toBeFalse(); expect(other.groups()).toEqual([]);
   });
 });

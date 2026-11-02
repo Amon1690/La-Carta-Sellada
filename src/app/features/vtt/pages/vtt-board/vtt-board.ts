@@ -180,7 +180,7 @@ export class VttBoard {
   }, (id, profile) => {
     const token = this.tokens().find((t) => t.instanceId === id);
     if (!token || !this.currentCampaign) throw new Error('La ficha ya no está disponible');
-    this.characterSheets.saveCombatProfile(this.currentCampaign, token.actorId, profile);
+    return this.characterSheets.saveCombatProfile(this.currentCampaign, token.actorId, profile);
   });
   private readonly openedSheetTokenId = signal<string | undefined>(undefined);
   private readonly sheetRevision = signal(0);

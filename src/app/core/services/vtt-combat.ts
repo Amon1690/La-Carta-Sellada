@@ -10,15 +10,16 @@ export interface AttackContext { advantage: boolean; disadvantage: boolean; armo
 export class VttCombat {
   readonly state = signal<CombatState>(fresh());
   readonly error = signal('');
+  readonly saving = signal(false);
   private invalid?: unknown;
   private context: AttackContext = { advantage: false, disadvantage: false, armorAdjustment: 0, damageFactor: 1, confirmed: false };
   constructor(readonly combatants: () => Combatant[], readonly activeId: () => string | undefined,
     private readonly commit: (hp?: { id: string; hp: number }) => void,
-    private readonly saveProfile: (id: string, profile: CombatProfile) => void,
+    private readonly saveProfile: (id: string, profile: CombatProfile) => void | Promise<void>,
     private readonly die: (sides: number) => number = (sides) => Math.floor(Math.random() * sides) + 1) {}
 
   find(id: string | undefined): Combatant | undefined { return this.combatants().find((a) => a.id === id); }
-  busy(): boolean { return !!this.state().pending || this.invalid !== undefined; }
+  busy(): boolean { return this.saving() || !!this.state().pending || this.invalid !== undefined; }
   serialized(): unknown { return this.invalid !== undefined ? this.invalid : this.state(); }
   setResource(ownerId: string, resourceId: string, amount: number): void {
     const owner = this.find(ownerId), resource = owner?.resources.find((r) => r.id === resourceId);
@@ -75,16 +76,16 @@ export class VttCombat {
     if (!cost) return 'Sin gasto adicional';
     return `${owner.resources.find((r) => r.id === cost.resourceId)?.name ?? 'Recurso sin configurar'}: ${this.available(owner, cost)} disponibles; coste ${cost.amount}`;
   }
-  setAttacksPerTurn(ownerId: string, amount: number): void {
+  setAttacksPerTurn(ownerId: string, amount: number): void | Promise<void> {
     const owner = this.find(ownerId);
     if (!owner || !Number.isInteger(amount) || amount < 1 || amount > 10) throw new Error('Indica entre 1 y 10 ataques de arma por acción según la ficha');
-    this.saveProfile(ownerId, { ...owner.profile, attacksPerTurn: amount }); this.commit();
+    return this.persistProfile(ownerId, { ...owner.profile, attacksPerTurn: amount });
   }
   targets(actor: Combatant, action: CombatAction): Combatant[] {
     const max = action.longRange ?? action.range ?? -1;
     return this.combatants().filter((t) => t.id !== actor.id && t.maxHp > 0 && t.armorClass !== undefined && combatDistance(actor, t) <= max + 0.001);
   }
-  configure(ownerId: string, entry: CombatAction | CombatReaction, resource?: CombatResource, remaining?: number): void {
+  configure(ownerId: string, entry: CombatAction | CombatReaction, resource?: CombatResource, remaining?: number): void | Promise<void> {
     const owner = this.find(ownerId); if (!owner) throw new Error('Ficha no disponible');
     const problem = 'resolution' in entry ? actionProblem(entry) : reactionProblem(entry);
     if (problem) throw new Error(problem);
@@ -96,10 +97,20 @@ export class VttCombat {
     if (pool?.kind === 'slot' && (entry.cost?.amount !== 1 || !Number.isInteger(pool.level) || pool.level! < (entry.spellLevel ?? 1) || ('resolution' in entry && entry.kind === 'spell' && pool.level !== entry.spellLevel) || pool.level! < 1 || pool.level! > 9)) throw new Error('Elige un espacio del nivel del conjuro o superior y coste de un espacio');
     if ('resolution' in entry) profile.actions = [...profile.actions.filter((a) => a.source !== entry.source), entry];
     else profile.reactions = [...profile.reactions.filter((r) => r.source !== entry.source), entry];
-    this.saveProfile(ownerId, profile);
+    return this.persistProfile(ownerId, profile, () => {
     if (resource) this.state.update((s) => ({ ...s, resources: { ...s.resources, [ownerId]: { ...s.resources[ownerId], [resource.id]: remaining! } },
       log: this.log(`${owner.name}: disponibilidad de ${resource.name} establecida en ${remaining}/${resource.maximum}.`, s.log) }));
-    this.commit();
+    });
+  }
+  private persistProfile(ownerId: string, profile: CombatProfile, apply?: () => void): void | Promise<void> {
+    if (this.saving()) throw new Error('Espera a que se guarde la preparación');
+    this.saving.set(true);
+    const finish = () => { apply?.(); this.commit(); };
+    try {
+      const saved = this.saveProfile(ownerId, profile);
+      if (saved) return saved.then(finish).finally(() => this.saving.set(false));
+      finish(); this.saving.set(false);
+    } catch (error) { this.saving.set(false); throw error; }
   }
   begin(source: string, targetIds: string[], context: AttackContext): void {
     const actor = this.find(this.activeId());

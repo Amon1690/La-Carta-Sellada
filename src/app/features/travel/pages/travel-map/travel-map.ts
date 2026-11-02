@@ -1,3 +1,5 @@
+import { ActivatedRoute } from '@angular/router';
+import { ACCESS_CONTEXT } from '../../../../core/services/access';
 import { CommonModule } from '@angular/common';
 import {
   AfterViewInit,
@@ -187,6 +189,11 @@ export class TravelMap implements AfterViewInit {
   @ViewChild('mapViewport') private mapViewport?: ElementRef<HTMLElement>;
   @ViewChild('mapStage') private mapStage?: ElementRef<HTMLElement>;
 
+  private readonly routeInfo = inject(ActivatedRoute, { optional: true });
+  private readonly access = inject(ACCESS_CONTEXT);
+  private readonly campaignId = this.routeInfo?.snapshot.paramMap.get('campaignId') ?? '';
+  private readonly storageKey = this.access ? `${STORAGE_KEY}:campaign:${this.campaignId}` : STORAGE_KEY;
+  protected readonly legacyTravelAvailable = signal(false);
   private readonly campaignData = inject(CampaignDataService);
   private readonly characterSheets = inject(CharacterSheetsService);
   private readonly sheetsVersion = toSignal(this.characterSheets.changes$, { initialValue: 0 });
@@ -306,13 +313,30 @@ export class TravelMap implements AfterViewInit {
 
   constructor() {
     this.restoreState();
-    this.campaignData
-      .getDefaultCampaign()
+    try { this.legacyTravelAvailable.set(Boolean(this.access && localStorage.getItem(STORAGE_KEY) && !localStorage.getItem(this.storageKey) && !localStorage.getItem(`${STORAGE_KEY}:campaign-destination`))); } catch { /* El original se conserva. */ }
+    (this.campaignId ? this.campaignData.getCampaignById(this.campaignId) : this.campaignData.getDefaultCampaign())
       .pipe(takeUntilDestroyed())
       .subscribe((campaign) => {
         this.campaign.set(campaign);
         this.sanitizeRoleAssignments();
       });
+  }
+
+  protected importLegacyTravel(): void {
+    if (!this.legacyTravelAvailable() || localStorage.getItem(this.storageKey)) return;
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    try {
+      localStorage.setItem(this.storageKey, raw);
+      this.restoreState();
+      if (!this.storageReadable) {
+        localStorage.removeItem(this.storageKey); this.storageReadable = true;
+        this.status.set('El viaje anterior no es legible. Se conserva el original sin importarlo.'); return;
+      }
+      localStorage.setItem(`${STORAGE_KEY}:campaign-destination`, this.campaignId);
+      this.legacyTravelAvailable.set(false);
+      this.status.set('Viaje recuperado en esta campaña. El original se conserva.');
+    } catch { this.status.set('No se pudo recuperar el viaje. Se conserva el original.'); }
   }
 
   ngAfterViewInit(): void {
@@ -842,7 +866,8 @@ export class TravelMap implements AfterViewInit {
       ...this.travelSkillStats(npc.skills, npc.abilities.wisdom),
     }));
     const seen = new Set<string>();
-    return [...players, ...npcs, ...generic].filter((member) => {
+    const retained = new Set([...this.groups().flatMap((group) => group.memberIds), this.plan().guideId, ...this.plan().hunterIds, ...this.plan().watcherIds]);
+    return [...players, ...npcs, ...(this.access ? generic.filter((member) => retained.has(member.id)) : generic)].filter((member) => {
       const key = member.id;
       if (seen.has(key)) return false;
       seen.add(key);
@@ -1401,9 +1426,9 @@ export class TravelMap implements AfterViewInit {
       ...this.currentJourney(), selectedGroupId: this.selectedGroupId(), zoom: this.zoom(),
     };
     try {
-      const backupKey = `${STORAGE_KEY}:before-group-journeys`;
+      const backupKey = `${this.storageKey}:before-group-journeys`;
       if (this.legacySource && localStorage.getItem(backupKey) === null) localStorage.setItem(backupKey, this.legacySource);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      localStorage.setItem(this.storageKey, JSON.stringify(state));
       this.legacySource = undefined;
     } catch {
       this.status.set('No se pudo guardar el viaje. Los cambios siguen en esta sesión; libera espacio antes de cerrar.');
@@ -1428,7 +1453,7 @@ export class TravelMap implements AfterViewInit {
 
   private restoreState(): void {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(this.storageKey);
       if (!raw) return;
       const state = JSON.parse(raw) as Partial<StoredTravelState>;
       if (!state || typeof state !== 'object' || Array.isArray(state) || (state.version !== undefined && state.version !== 2)) throw new Error('Formato de viaje desconocido');

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "scripts": {
     "ng": "ng",
-    "start": "ng serve",
+    "start": "npm run build && node server/index.mjs",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
@@ -14,7 +14,8 @@
     "agents:next": "node tools/agents/local.cjs next",
     "agents:pause": "node tools/agents/local.cjs pause",
     "agents:resume": "node tools/agents/local.cjs resume",
-    "validate:data": "node tools/validate-data.mjs"
+    "validate:data": "node tools/validate-data.mjs",
+    "test:server": "node --test server/app.test.mjs"
   },
   "prettier": {
     "overrides": [

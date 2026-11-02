@@ -1,6 +1,7 @@
-<dialog #dialog aria-labelledby="combat-title">
-  <header><h2 id="combat-title">Combate · ronda {{ combat().state().round }}</h2><button type="button" autofocus (click)="close()">Cerrar</button></header>
-  <div class="body">
+<dialog #dialog (cancel)="cancelDialog($event)" aria-labelledby="combat-title">
+  <header><h2 id="combat-title">Combate · ronda {{ combat().state().round }}</h2><button type="button" autofocus [disabled]="saving()" (click)="close()">Cerrar</button></header>
+  @if (saving()) { <p role="status">Guardando la preparación…</p> }
+  <div class="body" [inert]="saving()">
     @if (error() || combat().error()) { <p class="error" role="alert">{{ error() || combat().error() }}</p> }
     @if (actionDraft || reactionDraft) {
       <h3>Preparar {{ editingOwner()?.name }} · {{ (actionDraft || reactionDraft)?.name }}</h3>

@@ -123,15 +123,15 @@ describe('CharacterSheetsService y consumidores', () => {
     return cards;
   }
 
-  it('propaga una ficha editada y otra creada desde el editor a compendio, viajes y VTT', () => {
+  it('propaga una ficha editada y otra creada desde el editor a compendio, viajes y VTT', async () => {
     const editor = TestBed.runInInjectionContext(() => new Compendium()) as unknown as {
-      startCreate(kind: string): void; draft: { name: string; hitPoints: number }; saveDraft(event: Event): void;
+      startCreate(kind: string): void; draft: { name: string; hitPoints: number }; saveDraft(event: Event): Promise<void>;
     };
     const travel = TestBed.runInInjectionContext(() => new TravelMap()) as unknown as { members(): { id: string; name: string; survivalBonus: number }[] };
     const board = TestBed.runInInjectionContext(() => new VttBoard()) as unknown as { tokenChoices(): { id: string; name: string; maxHp: number }[] };
     expect(board.tokenChoices().some((p) => p.name === 'Creada desde el editor')).toBeFalse();
     sheets.savePlayer({ ...player(), name: 'Ficha editada', hitPoints: 64, skills: ['Supervivencia +9'] }, 'edit');
-    editor.startCreate('player'); editor.draft.name = 'Creada desde el editor'; editor.draft.hitPoints = 48; editor.saveDraft(new Event('submit'));
+    editor.startCreate('player'); editor.draft.name = 'Creada desde el editor'; editor.draft.hitPoints = 48; await editor.saveDraft(new Event('submit'));
     expect(compendiumCards().some((p) => p.name === 'Ficha editada' && p.stats?.some((s) => s.label === 'PG' && s.value === '64'))).toBeTrue();
     expect(compendiumCards().some((p) => p.name === 'Creada desde el editor')).toBeTrue();
     expect(travel.members().find((p) => p.id === 'player-option-template-player')?.survivalBonus).toBe(9);
@@ -266,36 +266,36 @@ describe('CharacterSheetsService y consumidores', () => {
     expect(travel.plan().foodKg).toBe(food);
   });
 
-  it('editar identidad no confirma estadísticas ausentes; la confirmación explícita habilita la ficha', () => {
+  it('editar identidad no confirma estadísticas ausentes; la confirmación explícita habilita la ficha', async () => {
     const editor = TestBed.runInInjectionContext(() => new Compendium()) as unknown as {
-      startEdit(entry: unknown): void; draft: { name: string; hitPoints: number; statisticsRecorded: boolean }; saveDraft(event: Event): void;
+      startEdit(entry: unknown): void; draft: { name: string; hitPoints: number; statisticsRecorded: boolean }; saveDraft(event: Event): Promise<void>;
     };
     editor.startEdit(compendiumCards().find((c) => c.key === 'player:named-player'));
     expect(editor.draft.statisticsRecorded).toBeFalse();
-    editor.draft.name = 'Identidad editada'; editor.saveDraft(new Event('submit'));
+    editor.draft.name = 'Identidad editada'; await editor.saveDraft(new Event('submit'));
     expect(sheets.playerSheets(adventure).find((p) => p.id === 'named-player')?.statisticsRecorded).toBeFalse();
     expect(compendiumCards().find((c) => c.key === 'player:named-player')?.stats).toEqual([{ label: 'Estadísticas', value: 'Sin registrar' }]);
     editor.startEdit(compendiumCards().find((c) => c.key === 'player:named-player'));
-    editor.draft.hitPoints = 53; editor.draft.statisticsRecorded = true; editor.saveDraft(new Event('submit'));
+    editor.draft.hitPoints = 53; editor.draft.statisticsRecorded = true; await editor.saveDraft(new Event('submit'));
     expect(sheets.playerSheets(adventure).find((p) => p.id === 'named-player')?.hitPoints).toBe(53);
     expect(sheets.playerSheets(adventure).find((p) => p.id === 'named-player')?.statisticsRecorded).toBeTrue();
   });
 
-  it('conserva preparación y recursos de combate al editar PJ, PNJ y genéricos en el compendio', () => {
+  it('conserva preparación y recursos de combate al editar PJ, PNJ y genéricos en el compendio', async () => {
     const combat = { actions: [], reactions: [], resources: [{ id: 'magic', name: 'Usos confirmados', maximum: 3 }], attacksPerTurn: 2 };
     sheets.saveCombatProfile(adventure, 'player:template-player', combat);
-    const editCard = (card: unknown) => {
-      const editor = TestBed.runInInjectionContext(() => new Compendium()) as unknown as { startEdit(c: unknown): void; draft: { name: string }; saveDraft(e: Event): void };
-      editor.startEdit(card); editor.draft.name = 'Nombre editado'; editor.saveDraft(new Event('submit'));
+    const editCard = async (card: unknown) => {
+      const editor = TestBed.runInInjectionContext(() => new Compendium()) as unknown as { startEdit(c: unknown): void; draft: { name: string }; saveDraft(e: Event): Promise<void> };
+      editor.startEdit(card); editor.draft.name = 'Nombre editado'; await editor.saveDraft(new Event('submit'));
     };
-    section = 'players'; editCard(compendiumCards().find((c) => c.key === 'player:template-player'));
+    section = 'players'; await editCard(compendiumCards().find((c) => c.key === 'player:template-player'));
     expect(sheets.playerSheets(adventure).find((p) => p.id === 'template-player')?.combat).toEqual(combat);
     sheets.saveCombatProfile(adventure, 'npc:guide', combat);
-    section = 'npcs'; editCard(compendiumCards().find((c) => c.key === 'npc:guide'));
+    section = 'npcs'; await editCard(compendiumCards().find((c) => c.key === 'npc:guide'));
     expect(sheets.campaignNpcs(adventure.id, adventure.npcs)[0].statBlock?.combat).toEqual(combat);
     expect(sheets.campaignNpcs('other', adventure.npcs)[0].statBlock?.combat).toBeUndefined();
     sheets.saveGenericNpc({ ...genericNpc(), id: 'custom-combat', combat }, 'create');
-    section = 'generic-npcs'; editCard(compendiumCards().find((c) => c.key === 'generic-npc:custom-combat'));
+    section = 'generic-npcs'; await editCard(compendiumCards().find((c) => c.key === 'generic-npc:custom-combat'));
     expect(sheets.genericNpcs().find((p) => p.id === 'custom-combat')?.combat).toEqual(combat);
   });
 });

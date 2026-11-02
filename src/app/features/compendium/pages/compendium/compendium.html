@@ -6,11 +6,15 @@
         <h1>{{ vm.title }}</h1>
         <span>{{ vm.description }}</span>
       </div>
-      @if (vm.editableKind; as editableKind) {
+      @if (canManage && vm.editableKind; as editableKind) {
         <button type="button" class="primary-action" (click)="startCreate(editableKind)">Nueva ficha</button>
       }
     </header>
 
+    @if (saveError()) { <p role="alert">{{ saveError() }}</p> }
+    @if (canManage && vm.editableKind === 'player' && legacyAvailable()) {
+      <aside><p>Hay fichas del guardado anterior en este navegador. Puedes recuperarlas en esta campaña; el original se conservará.</p><button type="button" class="asset-button" [disabled]="saving()" (click)="importLegacy()">Importar fichas locales en esta campaña</button></aside>
+    }
     @if (editor(); as currentEditor) {
       <section class="sheet-editor" aria-label="Editor de ficha">
         <header>
@@ -32,6 +36,8 @@
           @if (currentEditor.kind === 'player') {
             <fieldset>
               <legend>Personaje jugador</legend>
+              <label>Jugadores vinculados <select name="player-users" multiple [(ngModel)]="playerIds" size="4">@for (player of players(); track player.id) { <option [value]="player.id">{{ player.username }}</option> }</select></label>
+              <small>Los jugadores seleccionados tendrán acceso a esta campaña y a esta ficha.</small>
               <label>Linaje <input name="player-ancestry" [(ngModel)]="draft.ancestry" /></label>
               <label>Clase <input name="player-class" [(ngModel)]="draft.className" /></label>
               <label>Subclase <input name="player-subclass" [(ngModel)]="draft.subclass" /></label>
@@ -111,7 +117,7 @@
           }
 
           <div class="editor-actions">
-            <button type="submit" class="primary-action">Guardar ficha</button>
+            <button type="submit" [disabled]="saving()" class="primary-action">Guardar ficha</button>
             <button type="button" class="ghost-action" (click)="cancelEditor()">Cancelar</button>
           </div>
         </form>
@@ -169,7 +175,7 @@
                 <h2>{{ entry.name }}</h2>
               </div>
               <div class="entry-actions">
-                @if (entry.editableKind) {
+                @if (canManage && entry.editableKind) {
                   <button type="button" class="asset-button" (click)="startEdit(entry)">Editar</button>
                 }
                 @if (entry.tokenUrl; as tokenUrl) {

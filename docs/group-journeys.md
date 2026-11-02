@@ -8,13 +8,13 @@ Cuando hay un encuentro pendiente, su ventana identifica el grupo y permite eleg
 
 ## Compatibilidad del guardado
 
-Se mantiene la clave `la-carta-sellada:travel-map:faerun-atlas-v3`. El formato tiene `version: 2` y un diccionario `journeys` por identificador de grupo. Los campos anteriores de ruta, plan, registro y encuentro siguen reflejando el grupo seleccionado. No se modifican las claves de fichas ni los tableros VTT.
+El acceso con roles usa la clave `la-carta-sellada:travel-map:faerun-atlas-v3:campaign:ID_CAMPAÑA`. La clave global anterior se conserva intacta y puede recuperarse una sola vez en la campaña elegida. El formato tiene `version: 2` y un diccionario `journeys` por identificador de grupo. Los campos anteriores de ruta, plan, registro y encuentro siguen reflejando el grupo seleccionado. No se modifican las claves de fichas ni los tableros VTT.
 
 El formato anterior solo tenía un viaje compartido: no es posible reconstruir viajes diferentes que nunca se guardaron. Ese viaje completo se asigna al grupo que estaba seleccionado; si la selección ya no existe, al primero disponible. Los demás empiezan con un plan inicial independiente. Si el archivo no tenía grupos, se conserva como viaje sin asignar y lo recoge el primer grupo que se cree.
 
 Antes del primer guardado migrado se conserva el texto original en `la-carta-sellada:travel-map:faerun-atlas-v3:before-group-journeys`. Una copia previa no se sobrescribe. Si la copia o el guardado fallan, no se sustituye el estado guardado anterior y se muestra el problema. Un archivo ilegible o de versión desconocida se conserva y no se sobrescribe con valores iniciales.
 
-El atlas continúa siendo la pantalla global de viajes de la campaña predeterminada. Esta mejora separa sus grupos; no incorpora selección de campañas ni cambia las reglas de jornadas.
+El atlas se abre dentro de la campaña seleccionada por un director y utiliza sus personajes. Los viajes quedan separados por campaña y por grupo. Los compañeros genéricos que ya pertenecían a un viaje antiguo se conservan al recuperarlo. Las reglas de jornadas no cambian.
 
 ## Comprobación
 

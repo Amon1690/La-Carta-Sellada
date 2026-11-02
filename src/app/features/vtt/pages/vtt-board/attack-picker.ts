@@ -18,6 +18,7 @@ export class VttAttackPicker implements OnChanges {
   readonly prepare = output<{ owner: Combatant; action: CombatAction }>();
   readonly source = signal('');
   readonly error = signal('');
+  readonly submitting = signal(false);
   readonly customizing = signal(false);
   facts: AttackFacts = normalAttackFacts();
   count = 1;
@@ -51,12 +52,15 @@ export class VttAttackPicker implements OnChanges {
     return JSON.stringify([this.actorId(), this.targetId(), this.selected(), this.combat().combatants().map((a) => [a.id, a.x, a.y, a.size, a.hp > 0, a.hp * 2 <= a.maxHp, a.armorClass, a.side, a.conditions, a.notes, a.actions, a.reactions])]);
   }
   choose(action: CombatAction): void {
+    if (this.submitting()) return;
     this.error.set(''); this.source.set(action.source); this.count = 1; this.customizing.set(false);
     this.facts = { ...((!this.forceReview ? this.remembered.get(this.signature()) : undefined) ?? normalAttackFacts()) };
     if (this.facts.reviewed && action.targets === 1) this.attack();
   }
-  confirm(): void { this.facts.reviewed = true; this.attack(); }
-  attack(): void {
+  confirm(): Promise<void> { this.facts.reviewed = true; return this.attack(); }
+  async attack(): Promise<void> {
+    if (this.submitting()) return;
+    this.submitting.set(true);
     this.error.set('');
     try {
       const actor = this.actor(), target = this.target(), action = this.selected(), situation = this.situation();
@@ -65,7 +69,12 @@ export class VttAttackPicker implements OnChanges {
       if (!this.facts.reviewed || (situation.threatUnknown && this.facts.nearbyThreat === undefined) || situation.spellTypeUnknown) throw new Error('Resuelve las dudas indicadas antes de lanzar');
       if (situation.blocked) throw new Error(situation.blocked);
       if (!Number.isInteger(this.count) || this.count < 1 || this.count > action.targets || (this.count > 1 && !action.repeatTargets)) throw new Error('Este ataque no permite ese número de impactos en el mismo objetivo');
-      if (!actor.actions.find((a) => a.source === action.source)?.reviewed) this.combat().configure(actor.id, action);
+      const world = () => JSON.stringify(this.combat().combatants().map((a) => [a.id, a.x, a.y, a.hp, a.maxHp, a.armorClass, a.conditions, a.side]));
+      const initialWorld = world(), initialFacts = JSON.stringify(this.facts), count = this.count;
+      if (!actor.actions.find((a) => a.source === action.source)?.reviewed) {
+        const saved = this.combat().configure(actor.id, action); if (saved) await saved;
+      }
+      if (this.actorId() !== actor.id || this.targetId() !== target.id || this.source() !== action.source || this.count !== count || world() !== initialWorld || JSON.stringify(this.facts) !== initialFacts) throw new Error('La selección o la situación ha cambiado. Elige el ataque de nuevo.');
       // Configurar puede actualizar las fichas compartidas: recordar la firma definitiva.
       const signature = this.signature();
       this.combat().begin(action.source, Array.from({ length: this.count }, () => target.id), situation.context);
@@ -76,6 +85,6 @@ export class VttAttackPicker implements OnChanges {
       this.combat().settleAutomatic();
       if (this.combat().state().pending) this.decision.emit();
       this.rolled.emit(); this.forceReview = false; this.source.set('');
-    } catch (e) { this.error.set(e instanceof Error ? e.message : 'No se pudo realizar el ataque'); }
+    } catch (e) { this.error.set(e instanceof Error ? e.message : 'No se pudo realizar el ataque'); } finally { this.submitting.set(false); }
   }
 }

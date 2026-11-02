@@ -1,3 +1,4 @@
+import { REMOTE_SHEETS } from './core/services/remote-sheets';
 import { Component, inject } from '@angular/core';
 import { RouterLink, RouterOutlet } from '@angular/router';
 
@@ -10,5 +11,6 @@ import { CampaignNavigationState } from './core/services/campaign-navigation';
   styleUrl: './app.scss'
 })
 export class App {
+  protected readonly remoteSheets = inject(REMOTE_SHEETS);
   protected readonly campaignNavigation = inject(CampaignNavigationState);
 }

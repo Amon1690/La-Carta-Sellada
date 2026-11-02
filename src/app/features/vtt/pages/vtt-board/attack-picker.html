@@ -1,6 +1,7 @@
+@if (submitting()) { <p role="status">Guardando la preparación del ataque…</p> }
 @if (actor(); as attacker) {
-  @if (combat().canAttack(attacker.id)) {
-    <section class="attack-picker" aria-label="Elegir ataque en el mapa">
+  @if (combat().canAttack(attacker.id) || submitting()) {
+    <section class="attack-picker" [inert]="submitting()" aria-label="Elegir ataque en el mapa">
       <header><b>{{ attacker.name }} · Atacar</b><button type="button" (click)="cancel.emit()">Cancelar</button></header>
       @if (error()) { <p role="alert">{{ error() }}</p> }
       @if (target(); as victim) {

@@ -1,3 +1,5 @@
+import { REMOTE_SHEETS } from './remote-sheets';
+import { ACCESS_CONTEXT } from './access';
 import { DestroyRef, Injectable, InjectionToken, inject } from '@angular/core';
 import { BehaviorSubject } from 'rxjs';
 import { GENERIC_NPCS } from '../data/generic-npcs';
@@ -6,6 +8,7 @@ import { RuleGenericNpc } from '../models/rules';
 import { CombatProfile } from '../models/combat';
 
 export interface EditablePlayerSheet extends PlayerOption {
+  playerIds?: string[];
   tokenUrl?: string;
   gridTokenUrl?: string;
   affiliation?: string;
@@ -28,6 +31,8 @@ export const CHARACTER_SHEET_STORAGE = new InjectionToken<Storage | undefined>('
 @Injectable({ providedIn: 'root' })
 export class CharacterSheetsService {
   private readonly storage = inject(CHARACTER_SHEET_STORAGE);
+  private readonly remote = inject(REMOTE_SHEETS);
+  private readonly access = inject(ACCESS_CONTEXT);
   private readonly changes = new BehaviorSubject(0);
   readonly changes$ = this.changes.asObservable();
 
@@ -43,15 +48,16 @@ export class CharacterSheetsService {
     inject(DestroyRef).onDestroy(() => window.removeEventListener('storage', refresh));
   }
 
-  savePlayer(player: EditablePlayerSheet, mode: 'create' | 'edit'): void {
-    this.saveEditableEntity(this.playerSheetsStoreKey(), player, mode);
+  savePlayer(player: EditablePlayerSheet, mode: 'create' | 'edit', campaignId?: string): void | Promise<void> {
+    if (this.remote && (!campaignId || this.access?.user()?.role !== 'director')) throw new Error('Solo el director puede editar fichas de la campaña.');
+    return this.saveEditableEntity(this.playerSheetsStoreKey(campaignId), player, mode);
   }
 
-  saveCombatProfile(campaign: Campaign, actorId: string, combat: CombatProfile): void {
+  saveCombatProfile(campaign: Campaign, actorId: string, combat: CombatProfile): void | Promise<void> {
     if (actorId.startsWith('player:')) {
       const player = this.playerSheets(campaign).find((p) => p.id === actorId.slice(7));
       if (!player || player.statisticsRecorded === false) throw new Error('Completa las estadísticas de la ficha de PJ');
-      this.savePlayer({ ...player, combat }, 'edit');
+      return this.savePlayer({ ...player, combat }, 'edit', campaign.id);
     } else if (actorId.startsWith('npc:')) {
       const npc = this.campaignNpcs(campaign.id, campaign.npcs).find((p) => p.id === actorId.slice(4));
       if (!npc?.statBlock) throw new Error('Completa las estadísticas del PNJ');
@@ -91,13 +97,13 @@ export class CharacterSheetsService {
       .filter((player) => player.showToken !== false)
       .map((player) => this.playerOptionToSheet(player));
 
-    return this.withEditablePlayerSheets([...namedPlayers, ...visibleOptions]);
+    return this.withEditablePlayerSheets([...namedPlayers, ...visibleOptions], campaign.id);
   }
 
   private withEditablePlayerSheets(
-    base: EditablePlayerSheet[]
+    base: EditablePlayerSheet[], campaignId?: string
   ): EditablePlayerSheet[] {
-    return this.applyEditableCollection(base, this.playerSheetsStoreKey());
+    return this.applyEditableCollection(base, this.playerSheetsStoreKey(campaignId));
   }
 
   private playerOptionToSheet(player: PlayerOption): EditablePlayerSheet {
@@ -192,7 +198,7 @@ export class CharacterSheetsService {
     key: string,
     entity: T,
     mode: 'create' | 'edit'
-  ): void {
+  ): void | Promise<void> {
     const collection = this.loadEditableCollection<T>(key);
     const createdIndex = collection.created.findIndex(
       (entry) => entry.id === entity.id
@@ -209,12 +215,13 @@ export class CharacterSheetsService {
       collection.edited[entity.id] = entity;
     }
 
-    this.saveEditableCollection(key, collection);
+    return this.saveEditableCollection(key, collection);
   }
 
   private loadEditableCollection<T extends { id: string }>(
     key: string
   ): EditableCollection<T> {
+    if (this.remote && key.includes(':fichas-pjs:')) return this.remote.read(key.split(':fichas-pjs:')[1]) as EditableCollection<T>;
     if (!this.storage) {
       return { edited: {}, created: [] };
     }
@@ -235,14 +242,15 @@ export class CharacterSheetsService {
   private saveEditableCollection<T extends { id: string }>(
     key: string,
     collection: EditableCollection<T>
-  ): void {
+  ): void | Promise<void> {
+    if (this.remote && key.includes(':fichas-pjs:')) return this.remote.save(key.split(':fichas-pjs:')[1], collection).then(() => this.changes.next(this.changes.value + 1));
     if (!this.storage) return;
     this.storage.setItem(key, JSON.stringify(collection));
     this.changes.next(this.changes.value + 1);
   }
 
-  private playerSheetsStoreKey(): string {
-    return 'la-carta-sellada:editable:fichas-pjs';
+  private playerSheetsStoreKey(campaignId?: string): string {
+    return this.remote ? `la-carta-sellada:editable:fichas-pjs:${campaignId ?? 'sin-campana'}` : 'la-carta-sellada:editable:fichas-pjs';
   }
 
   private genericNpcsStoreKey(): string {
