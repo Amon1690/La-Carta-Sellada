@@ -139,7 +139,17 @@ interface PendingTravelEncounter {
   memberActorIds: string[];
 }
 
+interface GroupJourney {
+  route: MapPoint[];
+  plan: TravelPlan;
+  logs: DayLog[];
+  pendingEncounter?: PendingTravelEncounter;
+}
+
 interface StoredTravelState {
+  version?: 2;
+  journeys?: Record<string, GroupJourney>;
+  unassignedJourney?: GroupJourney;
   groups: TravelGroup[];
   route: MapPoint[];
   plan: TravelPlan;
@@ -182,6 +192,10 @@ export class TravelMap implements AfterViewInit {
   private readonly sheetsVersion = toSignal(this.characterSheets.changes$, { initialValue: 0 });
   private dragState?: DragState;
   private suppressMapClick = false;
+  private journeys: Record<string, GroupJourney> = Object.create(null);
+  private unassignedJourney?: GroupJourney;
+  private legacySource?: string;
+  private storageReadable = true;
 
   protected readonly mapWidth = MAP_WIDTH;
   protected readonly mapHeight = MAP_HEIGHT;
@@ -363,9 +377,13 @@ export class TravelMap implements AfterViewInit {
       x: 44.3 + offset,
       y: 37.5 + offset,
     };
+    this.captureJourney();
+    if (this.groups().length === 0 && this.unassignedJourney) {
+      this.journeys[group.id] = structuredClone(this.unassignedJourney);
+      this.unassignedJourney = undefined;
+    }
     this.groups.update((groups) => [...groups, group]);
-    this.selectedGroupId.set(group.id);
-    this.updatePlan({ guideId: '', hunterIds: [], watcherIds: [] });
+    this.activateJourney(group.id);
     this.groupEditorOpen.set(false);
     this.mode.set('place');
     this.status.set('Grupo creado. Pulsa el mapa para colocarlo');
@@ -374,18 +392,20 @@ export class TravelMap implements AfterViewInit {
 
   protected selectGroup(id: string, event?: Event): void {
     event?.stopPropagation();
-    this.selectedGroupId.set(id);
-    this.sanitizeRoleAssignments();
-    this.status.set(this.groups().find((group) => group.id === id)?.name ?? 'Grupo seleccionado');
+    if (!this.groups().some((group) => group.id === id)) return;
+    this.captureJourney();
+    this.activateJourney(id);
+    this.status.set(this.selectedGroup()?.name ?? 'Grupo seleccionado');
     this.persistState();
   }
 
   protected removeSelectedGroup(): void {
     const id = this.selectedGroupId();
     if (!id) return;
+    this.captureJourney();
     this.groups.update((groups) => groups.filter((group) => group.id !== id));
-    this.selectedGroupId.set(this.groups()[0]?.id);
-    this.sanitizeRoleAssignments();
+    delete this.journeys[id];
+    this.activateJourney(this.groups()[0]?.id);
     this.persistState();
   }
 
@@ -857,6 +877,7 @@ export class TravelMap implements AfterViewInit {
   }
 
   private sanitizeRoleAssignments(): void {
+    if (!this.selectedGroup()) return;
     const available = new Set(this.selectedGroup()?.memberIds ?? []);
     const guideId = available.has(this.plan().guideId) ? this.plan().guideId : '';
     const hunterIds = this.plan().hunterIds.filter(
@@ -1347,17 +1368,62 @@ export class TravelMap implements AfterViewInit {
     return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   }
 
+  private currentJourney(): GroupJourney {
+    return structuredClone({ route: this.route(), plan: this.plan(), logs: this.logs(), pendingEncounter: this.pendingEncounter() });
+  }
+
+  private captureJourney(): void {
+    const id = this.selectedGroupId();
+    if (id && this.groups().some((group) => group.id === id)) this.journeys[id] = this.currentJourney();
+    else this.unassignedJourney = this.currentJourney();
+  }
+
+  private activateJourney(id: string | undefined): void {
+    this.selectedGroupId.set(id);
+    const saved = id && Object.hasOwn(this.journeys, id) ? this.journeys[id] : !id ? this.unassignedJourney : undefined;
+    const journey = saved ? structuredClone(saved) : { route: [], logs: [], plan: this.defaultPlan(), pendingEncounter: undefined };
+    this.route.set(journey.route);
+    this.plan.set(journey.plan);
+    this.logs.set(journey.logs);
+    this.pendingEncounter.set(journey.pendingEncounter);
+    this.sanitizeRoleAssignments();
+  }
+
   private persistState(): void {
+    if (!this.storageReadable) {
+      this.status.set('No se puede guardar: el viaje original no es legible y se conserva para recuperarlo.');
+      return;
+    }
+    this.captureJourney();
     const state: StoredTravelState = {
-      groups: this.groups(),
-      route: this.route(),
-      plan: this.plan(),
-      logs: this.logs(),
-      pendingEncounter: this.pendingEncounter(),
-      selectedGroupId: this.selectedGroupId(),
-      zoom: this.zoom(),
+      version: 2, groups: this.groups(), journeys: this.journeys, unassignedJourney: this.unassignedJourney,
+      // Mantener la instantánea seleccionada permite reconocer el formato anterior.
+      ...this.currentJourney(), selectedGroupId: this.selectedGroupId(), zoom: this.zoom(),
     };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    try {
+      const backupKey = `${STORAGE_KEY}:before-group-journeys`;
+      if (this.legacySource && localStorage.getItem(backupKey) === null) localStorage.setItem(backupKey, this.legacySource);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      this.legacySource = undefined;
+    } catch {
+      this.status.set('No se pudo guardar el viaje. Los cambios siguen en esta sesión; libera espacio antes de cerrar.');
+    }
+  }
+
+  private readJourney(value: Partial<GroupJourney>): GroupJourney {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Viaje ilegible');
+    const route = value.route ?? [], logs = value.logs ?? [];
+    if (!Array.isArray(route) || route.some((point) => !point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) ||
+        !Array.isArray(logs) || logs.some((log) => !log || !Number.isFinite(log.day) || !Number.isFinite(log.distance) || !Number.isFinite(log.totalDistance) || (log.events !== undefined && !Array.isArray(log.events)))) throw new Error('Ruta o registro ilegible');
+    const defaults = this.defaultPlan();
+    if (value.plan !== undefined && (!value.plan || typeof value.plan !== 'object' || Array.isArray(value.plan))) throw new Error('Plan ilegible');
+    const plan = { ...defaults, ...value.plan };
+    if (!Array.isArray(plan.hunterIds) || !Array.isArray(plan.watcherIds)) throw new Error('Roles ilegibles');
+    if (!LOCATIONS.some((location) => location.id === plan.originId)) plan.originId = defaults.originId;
+    if (!LOCATIONS.some((location) => location.id === plan.destinationId)) plan.destinationId = defaults.destinationId;
+    const pending = value.pendingEncounter;
+    if (pending && (!GENERIC_ENCOUNTERS.some((encounter) => encounter.id === pending.encounterId) || !Array.isArray(pending.memberActorIds))) throw new Error('Encuentro ilegible');
+    return structuredClone({ route, logs, plan, pendingEncounter: pending });
   }
 
   private restoreState(): void {
@@ -1365,41 +1431,28 @@ export class TravelMap implements AfterViewInit {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return;
       const state = JSON.parse(raw) as Partial<StoredTravelState>;
-      if (Array.isArray(state.groups)) this.groups.set(state.groups);
-      if (Array.isArray(state.route)) this.route.set(state.route);
-      if (Array.isArray(state.logs)) this.logs.set(state.logs);
-      if (
-        state.pendingEncounter &&
-        GENERIC_ENCOUNTERS.some(
-          (encounter) => encounter.id === state.pendingEncounter?.encounterId
-        )
-      ) {
-        this.pendingEncounter.set(state.pendingEncounter);
+      if (!state || typeof state !== 'object' || Array.isArray(state) || (state.version !== undefined && state.version !== 2)) throw new Error('Formato de viaje desconocido');
+      const groups = state.groups ?? [];
+      if (!Array.isArray(groups) || groups.some((group) => !group || typeof group.id !== 'string' || typeof group.name !== 'string' || !Array.isArray(group.memberIds) || !Number.isFinite(group.x) || !Number.isFinite(group.y)) || new Set(groups.map((group) => group.id)).size !== groups.length) throw new Error('Grupos ilegibles');
+      const selected = groups.find((group) => group.id === state.selectedGroupId)?.id ?? groups[0]?.id;
+      let journeys: Record<string, GroupJourney> = Object.create(null);
+      let unassigned: GroupJourney | undefined;
+      if (state.version === 2) {
+        if (!state.journeys || typeof state.journeys !== 'object' || Array.isArray(state.journeys)) throw new Error('Viajes por grupo ilegibles');
+        journeys = Object.fromEntries(Object.entries(state.journeys).map(([id, journey]) => [id, this.readJourney(journey)]));
+        if (state.unassignedJourney) unassigned = this.readJourney(state.unassignedJourney);
+      } else {
+        const legacy = this.readJourney(state);
+        if (selected) journeys[selected] = legacy;
+        else unassigned = legacy;
+        this.legacySource = raw;
       }
-      if (state.plan) {
-        const defaults = this.defaultPlan();
-        const restoredPlan = { ...defaults, ...state.plan };
-        restoredPlan.hunterIds = Array.isArray(restoredPlan.hunterIds)
-          ? restoredPlan.hunterIds
-          : [];
-        restoredPlan.watcherIds = Array.isArray(restoredPlan.watcherIds)
-          ? restoredPlan.watcherIds
-          : [];
-        if (!LOCATIONS.some((location) => location.id === restoredPlan.originId)) {
-          restoredPlan.originId = defaults.originId;
-        }
-        if (!LOCATIONS.some((location) => location.id === restoredPlan.destinationId)) {
-          restoredPlan.destinationId = defaults.destinationId;
-        }
-        this.plan.set(restoredPlan);
-      }
-      if (typeof state.selectedGroupId === 'string') this.selectedGroupId.set(state.selectedGroupId);
-      if (typeof state.zoom === 'number') {
-        this.zoom.set(this.clamp(state.zoom, MIN_ZOOM, MAX_ZOOM));
-      }
-      this.sanitizeRoleAssignments();
+      this.groups.set(groups); this.journeys = journeys; this.unassignedJourney = unassigned;
+      this.activateJourney(selected);
+      if (typeof state.zoom === 'number' && Number.isFinite(state.zoom)) this.zoom.set(this.clamp(state.zoom, MIN_ZOOM, MAX_ZOOM));
     } catch {
-      localStorage.removeItem(STORAGE_KEY);
+      this.storageReadable = false;
+      this.status.set('No se pudo leer el viaje guardado. El original se conserva; recupéralo antes de guardar cambios.');
     }
   }
 }

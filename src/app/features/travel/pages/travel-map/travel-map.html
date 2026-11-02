@@ -448,7 +448,14 @@
 
         <div class="travel-encounter-content">
           <header>
-            <small>Encuentro durante la jornada {{ pending.day }}</small>
+            <small>{{ selectedGroup()?.name }} · Encuentro durante la jornada {{ pending.day }}</small>
+            @if (groups().length > 1) {
+              <label class="encounter-group-switch">Grupo de viaje
+                <select [ngModel]="selectedGroupId()" (ngModelChange)="selectGroup($event)">
+                  @for (group of groups(); track group.id) { <option [value]="group.id">{{ group.name }}</option> }
+                </select>
+              </label>
+            }
             <h2 id="travel-encounter-title">{{ encounter.name }}</h2>
             <p>{{ encounter.summary }}</p>
           </header>
