@@ -1,3 +1,4 @@
+import { VttCombat } from '../../../../core/services/vtt-combat';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Signal, WritableSignal, provideZonelessChangeDetection } from '@angular/core';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
@@ -6,6 +7,7 @@ import { Campaign, GameStatBlock } from '../../../../core/models/campaign';
 import { CampaignDataService } from '../../../../core/services/campaign-data';
 import { CHARACTER_SHEET_STORAGE, CharacterSheetsService, EditablePlayerSheet } from '../../../../core/services/character-sheets';
 import { VttBoard } from './vtt-board';
+import { RulesDataService } from '../../../../core/services/rules-data';
 
 interface Token {
   instanceId: string; actorId: string; name: string; image: string;
@@ -48,6 +50,7 @@ describe('Multiselección de fichas en VTT', () => {
     routeParams = new BehaviorSubject(params());
     TestBed.configureTestingModule({ providers: [
       provideZonelessChangeDetection(),
+      { provide: RulesDataService, useValue: { getRules: () => of({ spells: [], equipment: [] }) } },
       { provide: CampaignDataService, useValue: { getCampaignById: (id: string) => of(campaign(id)) } },
       { provide: CHARACTER_SHEET_STORAGE, useValue: (() => {
         const values = new Map<string, string>();
@@ -377,4 +380,45 @@ describe('Multiselección de fichas en VTT', () => {
     mode('Seleccionar y mover fichas');
     expect(fixture.nativeElement.querySelector('.measure-layer')).toBeNull();
   });
+
+  it('integra combate con la iniciativa y conserva el bloque inválido completo sin borrar la partida', async () => {
+    const view = fixture.componentInstance as unknown as { combat: VttCombat; rollAllInitiatives(): void; startCombat(): void; setActiveTurn(id: string): void };
+    actorFor('A', 'generic:guardia-veterano'); actorFor('B', 'generic:aprendiz-arcano'); actorFor('C', 'generic:guardia');
+    view.rollAllInitiatives();
+    expect(view.combat.state().started).toBeTrue();
+    expect(view.combat.state().turnId).toBe(board.activeTurnId());
+    const current = JSON.parse(localStorage.getItem(key())!);
+    const corrupt = { version: 1, broken: true };
+    current.combat = corrupt; localStorage.setItem(key(), JSON.stringify(current));
+    routeParams.next(params()); fixture.detectChanges(); await fixture.whenStable();
+    expect(view.combat.error()).toContain('no es válido');
+    expect(board.tokens().length).toBe(3);
+    expect(JSON.parse(localStorage.getItem(key())!).combat).toEqual(corrupt);
+  });
+  it('Atacar selecciona el objetivo por clic sin moverlo y abre solo la reacción', () => {
+    const view = fixture.componentInstance as any;
+    actorFor('A', 'generic:guardia-veterano'); actorFor('B', 'generic:aprendiz-arcano');
+    view.tokens.update((list: Token[]) => list.map((t) => t.instanceId === 'B' ? { ...t, x: GRID * 3, hp: 14, maxHp: 14, conditions: [], side: 'enemy' } : { ...t, conditions: [], side: 'party' }));
+    view.setActiveTurn('A'); view.startCombat(); view.setSidebarTab('turns');
+    const owner = view.combat.find('B'); const shield = owner.reactions.find((r: any) => r.name === 'Escudo');
+    view.combat.configure('B', { ...shield, reviewed: true, resourceConfirmed: true, cost: { resourceId: 'magic', amount: 1 } }, { id: 'magic', name: 'Usos de Escudo', maximum: 3 }, 3);
+    spyOn(Math, 'random').and.returnValue(.4);
+    view.beginAttack('A'); fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('dialog[open]')).toBeNull();
+    const before = board.tokens().map((t) => ({ id: t.instanceId, x: t.x, y: t.y })); clickToken('B');
+    expect(board.tokens().map((t) => ({ id: t.instanceId, x: t.x, y: t.y }))).toEqual(before);
+    const sword = Array.from(fixture.nativeElement.querySelectorAll('app-vtt-attack button') as NodeListOf<HTMLButtonElement>).find((b) => b.textContent?.includes('Espada larga'))!;
+    sword.click(); fixture.detectChanges(); expect(fixture.nativeElement.querySelector('dialog[open]')).toBeNull();
+    const confirm = Array.from(fixture.nativeElement.querySelectorAll('app-vtt-attack button') as NodeListOf<HTMLButtonElement>).find((b) => b.textContent?.includes('Confirmar situación'))!;
+    confirm.click(); fixture.detectChanges();
+    expect(view.combat.state().pending.roll.total).toBe(13); expect(view.combat.find('B').hp).toBe(14);
+    const dialog = fixture.nativeElement.querySelector('app-vtt-combat dialog') as HTMLDialogElement; expect(dialog.open).toBeTrue();
+    const react = Array.from(dialog.querySelectorAll('button')).find((b) => b.textContent?.includes('Usar Escudo'))!; react.click(); fixture.detectChanges();
+    expect(dialog.open).toBeFalse(); expect(view.combat.state().pending).toBeUndefined(); expect(view.combat.find('B').hp).toBe(14);
+    expect(view.combat.state().resources['B']['magic']).toBe(2);
+    clickToken('B'); const nextSword = Array.from(fixture.nativeElement.querySelectorAll('app-vtt-attack button') as NodeListOf<HTMLButtonElement>).find((b) => b.textContent?.includes('Espada larga'))!;
+    nextSword.click(); fixture.detectChanges();
+    expect(view.combat.state().usedAttacks).toBe(2); expect(dialog.open).toBeFalse();
+  });
+
 });

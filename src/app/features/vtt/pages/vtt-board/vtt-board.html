@@ -96,6 +96,7 @@
               tabindex="0"
               role="group"
               aria-label="Mapa de juego. Arrastra para seleccionar fichas."
+              [class.targeting]="targeting()"
               [class.drawing]="mode() === 'fog' || mode() === 'reveal' || mode() === 'measure'"
               [style.width.px]="mapWidth"
               [style.height.px]="mapHeight"
@@ -153,6 +154,7 @@
                   <button
                     type="button"
                     class="vtt-token"
+                    [class.attack-target]="targeting() && attackTargetId() === token.instanceId"
                     [class.selected]="isTokenSelected(token.instanceId)"
                     [class.active-turn]="activeTurnId() === token.instanceId"
                     [class.hidden-token]="token.hidden"
@@ -163,7 +165,7 @@
                     [attr.aria-label]="token.name"
                     [attr.aria-pressed]="isTokenSelected(token.instanceId)"
                     [attr.data-token-instance]="token.instanceId"
-                    title="Doble clic para abrir la ficha"
+                    [title]="targeting() ? 'Atacar a ' + token.name : 'Doble clic para abrir la ficha'"
                     (pointerdown)="tokenPointerDown(token, $event)"
                     (click)="selectToken(token.instanceId, $event)"
                     (dblclick)="openTokenSheet(token.instanceId, $event)"
@@ -195,7 +197,7 @@
             <button type="button" [class.active]="sidebarTab() === 'turns'" (click)="setSidebarTab('turns')">Turnos</button>
           </nav>
 
-          <div class="sidebar-content">
+          <div #sideContent class="sidebar-content">
             @if (sidebarTab() === 'tokens') {
               <section class="selection-tools" aria-label="Selección de fichas">
                 <p>Mayús/Ctrl/⌘ + clic para añadir o quitar. Arrastra sobre el mapa para seleccionar un área.</p>
@@ -223,6 +225,12 @@
                     <div><small>Ficha seleccionada</small><h2>{{ token.name }}</h2></div>
                     <button type="button" class="danger-icon" title="Eliminar ficha" (click)="removeSelectedTokens()">×</button>
                   </header>
+                  <details class="combat-status"><summary>Estado de combate</summary><div class="field-grid">
+                    <label>Bando<select [value]="token.side ?? ''" [disabled]="combat.busy()" (change)="setTokenSide(token.instanceId, $any($event.target).value)"><option value="">Sin definir</option><option value="party">Grupo</option><option value="enemy">Adversarios</option><option value="neutral">Neutral</option></select></label>
+                    <p>{{ token.conditions ? token.conditions.length ? 'Condiciones registradas' : 'Sin condiciones activas' : 'Condiciones sin confirmar' }}</p>
+                    @for (condition of conditionLabels; track condition[0]) { <label class="check-field"><input type="checkbox" [disabled]="combat.busy()" [checked]="token.conditions?.includes(condition[0])" (change)="setTokenCondition(token.instanceId, condition[0], $any($event.target).checked)" /> {{ condition[1] }}</label> }
+                    <button type="button" [disabled]="combat.busy()" (click)="clearTokenConditions(token.instanceId)">Sin condiciones</button>
+                  </div></details>
                   <button type="button" class="open-token-sheet" (click)="openTokenSheet(token.instanceId, $event)">Ver ficha completa</button>
                   @if (token.maxHp <= 0) {
                     <p>PG sin registrar. Introduce los PG máximos para este combate. Completar la ficha del personaje se aplicará a las nuevas fichas que añadas.</p>
@@ -273,21 +281,29 @@
             }
 
             @if (sidebarTab() === 'turns') {
+              <app-vtt-attack [combat]="combat" [actorId]="attackingId()" [targetId]="attackTargetId()" (cancel)="cancelAttack()" (rolled)="attackRolled()" (decision)="showCombatDecision()" (prepare)="prepareAttack($event)" (multiple)="multipleAttack($event)" />
+              @if (combat.state().log.length) { <p class="combat-feedback token-inspector" role="status">{{ combat.state().log.at(-1) }}</p><details class="combat-log"><summary>Última acción y registro</summary><ol>@for (line of combat.state().log.slice().reverse(); track $index) { <li>{{ line }}</li> }</ol></details> }
               <section class="turn-panel">
+                @if (combatMessage() || combat.error()) { <p role="alert">{{ combatMessage() || combat.error() }}</p> }
+                @if (combat.error()) { <button type="button" class="combat-launch" (click)="resetInvalidCombat()">Restablecer solo el combate inválido</button> }
+                @if (combat.state().pending) { <button type="button" class="combat-launch" (click)="resumeCombat()">Continuar ataque pendiente</button> }
                 <header>
                   <div><small>Combate</small><h2>Iniciativa</h2></div>
                   <div class="turn-actions">
-                    <button type="button" [disabled]="!tokens().length" (click)="rollAllInitiatives()">Tirar todos</button>
-                    <button type="button" (click)="advanceTurn()">Siguiente →</button>
+                    <button type="button" [disabled]="!tokens().length || combat.busy() || combat.state().started" (click)="rollAllInitiatives()">Tirar iniciativa</button>
+                    <button type="button" [disabled]="combat.busy()" (click)="advanceTurn()">Siguiente →</button>
                   </div>
                 </header>
+                @if (!combat.state().started) { <button type="button" class="combat-launch" [disabled]="!tokens().length || combat.busy()" (click)="startCombat()">Iniciar con esta iniciativa</button> }
+                @else { <p>Combate iniciado · ronda {{ combat.state().round }}</p><button type="button" class="combat-launch" [disabled]="combat.busy()" (click)="endCombat()">Terminar combate</button> }
                 <ol>
                   @for (token of initiativeTokens(); track token.instanceId; let position = $index) {
                     <li [class.active]="activeTurnId() === token.instanceId">
-                      <button type="button" class="turn-select" title="Marcar turno activo" (click)="setActiveTurn(token.instanceId)">{{ position + 1 }}</button>
+                      <button type="button" class="turn-select" title="Marcar turno activo" [disabled]="combat.busy()" (click)="setActiveTurn(token.instanceId)">{{ position + 1 }}</button>
                       <img [src]="token.image" alt="" />
                       <span><b>{{ token.name }}</b><small>{{ token.maxHp > 0 ? token.hp + '/' + token.maxHp + ' PG' : 'PG sin registrar' }}</small></span>
-                      <input type="number" aria-label="Iniciativa" [value]="token.initiative" (change)="updateInitiative(token.instanceId, $any($event.target).value)" />
+                      <input type="number" aria-label="Iniciativa" [disabled]="combat.busy()" [value]="token.initiative" (change)="updateInitiative(token.instanceId, $any($event.target).value)" />
+                      <button type="button" class="combat-launch" (click)="beginAttack(token.instanceId)">{{ combat.canAttack(token.instanceId) ? 'Atacar' : 'Preparar ficha y recursos' }}</button>@if (combat.canAttack(token.instanceId)) { <button type="button" class="combat-launch" (click)="prepareCombat(token.instanceId)">Preparar ficha</button> }
                     </li>
                   } @empty {
                     <p class="empty-state">Añade fichas para preparar la iniciativa.</p>
@@ -299,6 +315,7 @@
         </aside>
       </div>
       <app-vtt-token-sheet [sheet]="openedTokenSheet()" (closed)="tokenSheetClosed()" />
+      <app-vtt-combat (resolved)="showLatestCombat()" [combat]="combat" />
     </main>
   } @else {
     <main class="vtt-missing"><h1>Mapa no encontrado</h1><p>Este tablero no está disponible en la campaña.</p></main>

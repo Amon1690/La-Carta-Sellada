@@ -810,6 +810,9 @@ button {
   cursor: pointer;
 }
 
+.combat-launch { grid-column: 1 / -1; padding: 7px; margin: 5px 0; border: 1px solid #9d814a; border-radius: 4px; color: #f8e5b8; background: #403627; cursor: pointer; font-size: .73rem; }
+.combat-launch:disabled { opacity: .45; cursor: default; }
+
 .turn-panel li.active .turn-select {
   border-color: #65bb91;
   background: #315642;
@@ -871,3 +874,8 @@ button {
     grid-template-columns: minmax(0, 1fr) 286px;
   }
 }
+
+.map-board.targeting, .map-board.targeting .vtt-token { cursor: crosshair; }
+.vtt-token.attack-target { outline: 4px solid #efb857; outline-offset: 4px; }
+.combat-log ol { max-height: 220px; overflow: auto; padding-left: 22px; }
+.combat-log li { margin: 8px 0; }

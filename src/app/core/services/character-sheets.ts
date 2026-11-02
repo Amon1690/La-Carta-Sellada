@@ -3,6 +3,7 @@ import { BehaviorSubject } from 'rxjs';
 import { GENERIC_NPCS } from '../data/generic-npcs';
 import { Campaign, CampaignNpc, CampaignPlayerCharacter, PlayerOption } from '../models/campaign';
 import { RuleGenericNpc } from '../models/rules';
+import { CombatProfile } from '../models/combat';
 
 export interface EditablePlayerSheet extends PlayerOption {
   tokenUrl?: string;
@@ -44,6 +45,22 @@ export class CharacterSheetsService {
 
   savePlayer(player: EditablePlayerSheet, mode: 'create' | 'edit'): void {
     this.saveEditableEntity(this.playerSheetsStoreKey(), player, mode);
+  }
+
+  saveCombatProfile(campaign: Campaign, actorId: string, combat: CombatProfile): void {
+    if (actorId.startsWith('player:')) {
+      const player = this.playerSheets(campaign).find((p) => p.id === actorId.slice(7));
+      if (!player || player.statisticsRecorded === false) throw new Error('Completa las estadísticas de la ficha de PJ');
+      this.savePlayer({ ...player, combat }, 'edit');
+    } else if (actorId.startsWith('npc:')) {
+      const npc = this.campaignNpcs(campaign.id, campaign.npcs).find((p) => p.id === actorId.slice(4));
+      if (!npc?.statBlock) throw new Error('Completa las estadísticas del PNJ');
+      this.saveCampaignNpc(campaign.id, { ...npc, statBlock: { ...npc.statBlock, combat } }, 'edit');
+    } else if (actorId.startsWith('generic:')) {
+      const npc = this.genericNpcs().find((p) => p.id === actorId.slice(8));
+      if (!npc) throw new Error('No se encuentra la ficha genérica');
+      this.saveGenericNpc({ ...npc, combat }, 'edit');
+    } else throw new Error('No se encuentra la ficha de origen');
   }
 
   saveGenericNpc(npc: RuleGenericNpc, mode: 'create' | 'edit'): void {

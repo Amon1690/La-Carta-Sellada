@@ -280,4 +280,22 @@ describe('CharacterSheetsService y consumidores', () => {
     expect(sheets.playerSheets(adventure).find((p) => p.id === 'named-player')?.hitPoints).toBe(53);
     expect(sheets.playerSheets(adventure).find((p) => p.id === 'named-player')?.statisticsRecorded).toBeTrue();
   });
+
+  it('conserva preparación y recursos de combate al editar PJ, PNJ y genéricos en el compendio', () => {
+    const combat = { actions: [], reactions: [], resources: [{ id: 'magic', name: 'Usos confirmados', maximum: 3 }], attacksPerTurn: 2 };
+    sheets.saveCombatProfile(adventure, 'player:template-player', combat);
+    const editCard = (card: unknown) => {
+      const editor = TestBed.runInInjectionContext(() => new Compendium()) as unknown as { startEdit(c: unknown): void; draft: { name: string }; saveDraft(e: Event): void };
+      editor.startEdit(card); editor.draft.name = 'Nombre editado'; editor.saveDraft(new Event('submit'));
+    };
+    section = 'players'; editCard(compendiumCards().find((c) => c.key === 'player:template-player'));
+    expect(sheets.playerSheets(adventure).find((p) => p.id === 'template-player')?.combat).toEqual(combat);
+    sheets.saveCombatProfile(adventure, 'npc:guide', combat);
+    section = 'npcs'; editCard(compendiumCards().find((c) => c.key === 'npc:guide'));
+    expect(sheets.campaignNpcs(adventure.id, adventure.npcs)[0].statBlock?.combat).toEqual(combat);
+    expect(sheets.campaignNpcs('other', adventure.npcs)[0].statBlock?.combat).toBeUndefined();
+    sheets.saveGenericNpc({ ...genericNpc(), id: 'custom-combat', combat }, 'create');
+    section = 'generic-npcs'; editCard(compendiumCards().find((c) => c.key === 'generic-npc:custom-combat'));
+    expect(sheets.genericNpcs().find((p) => p.id === 'custom-combat')?.combat).toEqual(combat);
+  });
 });
