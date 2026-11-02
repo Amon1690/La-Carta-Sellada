@@ -11,7 +11,7 @@ Para arrancar la aplicacion:
 npm start
 ```
 
-Despues abre `http://localhost:4200/`.
+Después abre `http://localhost:4200/`. El arranque incluye el servidor de acceso por roles. Consulta las [cuentas iniciales, permisos y recuperación de guardados](docs/access-roles.md).
 
 ## Validación y agentes
 

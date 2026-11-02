@@ -1,12 +1,15 @@
+import { accessGuard } from './core/services/access';
 import { Routes } from '@angular/router';
 import { campaignAvailable } from './core/services/campaign-navigation';
 import { CampaignError } from './features/dashboard/pages/campaign-error/campaign-error';
 
 export const routes: Routes = [
-  { path: 'error-campana', component: CampaignError },
+  { path: 'login', loadComponent: () => import('./features/access/login').then((m) => m.Login) },
+  { path: 'usuarios', canActivate: [accessGuard], loadComponent: () => import('./features/access/users').then((m) => m.Users) },
+  { path: 'error-campana', canActivate: [accessGuard], component: CampaignError },
   {
     path: 'vtt/:campaignId/:kind/:entryId',
-    canActivate: [campaignAvailable],
+    canActivate: [accessGuard, campaignAvailable],
     loadComponent: () =>
       import('./features/vtt/pages/vtt-board/vtt-board').then(
         (m) => m.VttBoard
@@ -14,6 +17,7 @@ export const routes: Routes = [
   },
   {
     path: '',
+    canActivate: [accessGuard], canActivateChild: [accessGuard],
     loadComponent: () =>
       import('./layout/shell/shell').then((m) => m.ShellComponent),
     children: [
@@ -79,7 +83,12 @@ export const routes: Routes = [
       },
       {
         path: 'fichas-pjs',
-        data: { section: 'rule-players' },
+        redirectTo: ''
+      },
+      {
+        path: 'campanas/:campaignId/fichas-pjs',
+        canActivate: [campaignAvailable],
+        data: { section: 'players' },
         loadComponent: () =>
           import('./features/compendium/pages/compendium/compendium').then(
             (m) => m.Compendium
@@ -101,7 +110,11 @@ export const routes: Routes = [
           ).then((m) => m.GenericEncounterList),
       },
       {
-        path: 'viajes',
+        path: 'viajes', redirectTo: ''
+      },
+      {
+        path: 'campanas/:campaignId/viajes',
+        canActivate: [campaignAvailable],
         loadComponent: () =>
           import('./features/travel/pages/travel-map/travel-map').then(
             (m) => m.TravelMap
@@ -109,7 +122,7 @@ export const routes: Routes = [
       },
       {
         path: 'campanas/:campaignId/introduccion',
-        canActivate: [campaignAvailable],
+        canActivate: [accessGuard, campaignAvailable],
         loadComponent: () =>
           import('./features/dashboard/pages/dashboard/dashboard').then(
             (m) => m.Dashboard
@@ -121,7 +134,7 @@ export const routes: Routes = [
       },
       {
         path: 'campanas/:campaignId/buscar',
-        canActivate: [campaignAvailable],
+        canActivate: [accessGuard, campaignAvailable],
         data: { section: 'search' },
         loadComponent: () =>
           import('./features/compendium/pages/compendium/compendium').then(
@@ -130,7 +143,7 @@ export const routes: Routes = [
       },
       {
         path: 'campanas/:campaignId/actos/:id',
-        canActivate: [campaignAvailable],
+        canActivate: [accessGuard, campaignAvailable],
         loadComponent: () =>
           import('./features/acts/pages/act-detail/act-detail').then(
             (m) => m.ActDetail
@@ -138,7 +151,7 @@ export const routes: Routes = [
       },
       {
         path: 'campanas/:campaignId/actos',
-        canActivate: [campaignAvailable],
+        canActivate: [accessGuard, campaignAvailable],
         loadComponent: () =>
           import('./features/acts/pages/act-list/act-list').then(
             (m) => m.ActList
@@ -146,7 +159,7 @@ export const routes: Routes = [
       },
       {
         path: 'campanas/:campaignId/personajes',
-        canActivate: [campaignAvailable],
+        canActivate: [accessGuard, campaignAvailable],
         data: { section: 'npcs' },
         loadComponent: () =>
           import('./features/compendium/pages/compendium/compendium').then(
@@ -155,7 +168,7 @@ export const routes: Routes = [
       },
       {
         path: 'campanas/:campaignId/tokens',
-        canActivate: [campaignAvailable],
+        canActivate: [accessGuard, campaignAvailable],
         data: { section: 'tokens' },
         loadComponent: () =>
           import('./features/compendium/pages/compendium/compendium').then(
@@ -164,16 +177,11 @@ export const routes: Routes = [
       },
       {
         path: 'campanas/:campaignId/jugadores',
-        canActivate: [campaignAvailable],
-        data: { section: 'players' },
-        loadComponent: () =>
-          import('./features/compendium/pages/compendium/compendium').then(
-            (m) => m.Compendium
-          ),
+        redirectTo: 'campanas/:campaignId/fichas-pjs',
       },
       {
         path: 'campanas/:campaignId/documentos',
-        canActivate: [campaignAvailable],
+        canActivate: [accessGuard, campaignAvailable],
         data: { section: 'items' },
         loadComponent: () =>
           import('./features/compendium/pages/compendium/compendium').then(
@@ -182,7 +190,7 @@ export const routes: Routes = [
       },
       {
         path: 'campanas/:campaignId/hechizos',
-        canActivate: [campaignAvailable],
+        canActivate: [accessGuard, campaignAvailable],
         data: { section: 'spells' },
         loadComponent: () =>
           import('./features/compendium/pages/compendium/compendium').then(
@@ -191,7 +199,7 @@ export const routes: Routes = [
       },
       {
         path: 'campanas/:campaignId/dotes',
-        canActivate: [campaignAvailable],
+        canActivate: [accessGuard, campaignAvailable],
         data: { section: 'feats' },
         loadComponent: () =>
           import('./features/compendium/pages/compendium/compendium').then(
@@ -200,7 +208,7 @@ export const routes: Routes = [
       },
       {
         path: 'campanas/:campaignId/habilidades',
-        canActivate: [campaignAvailable],
+        canActivate: [accessGuard, campaignAvailable],
         data: { section: 'skills' },
         loadComponent: () =>
           import('./features/compendium/pages/compendium/compendium').then(
@@ -209,7 +217,7 @@ export const routes: Routes = [
       },
       {
         path: 'campanas/:campaignId/equipo',
-        canActivate: [campaignAvailable],
+        canActivate: [accessGuard, campaignAvailable],
         data: { section: 'equipment' },
         loadComponent: () =>
           import('./features/compendium/pages/compendium/compendium').then(
@@ -218,7 +226,7 @@ export const routes: Routes = [
       },
       {
         path: 'campanas/:campaignId/lugares',
-        canActivate: [campaignAvailable],
+        canActivate: [accessGuard, campaignAvailable],
         data: { section: 'locations' },
         loadComponent: () =>
           import('./features/compendium/pages/compendium/compendium').then(
@@ -227,7 +235,7 @@ export const routes: Routes = [
       },
       {
         path: 'campanas/:campaignId/escenas',
-        canActivate: [campaignAvailable],
+        canActivate: [accessGuard, campaignAvailable],
         data: { section: 'scenes' },
         loadComponent: () =>
           import('./features/compendium/pages/compendium/compendium').then(
@@ -236,7 +244,7 @@ export const routes: Routes = [
       },
       {
         path: 'campanas/:campaignId/encuentros',
-        canActivate: [campaignAvailable],
+        canActivate: [accessGuard, campaignAvailable],
         data: { section: 'encounters' },
         loadComponent: () =>
           import('./features/compendium/pages/compendium/compendium').then(
@@ -245,7 +253,7 @@ export const routes: Routes = [
       },
       {
         path: 'campanas/:campaignId/timeline',
-        canActivate: [campaignAvailable],
+        canActivate: [accessGuard, campaignAvailable],
         data: { section: 'timeline' },
         loadComponent: () =>
           import('./features/compendium/pages/compendium/compendium').then(
@@ -254,7 +262,7 @@ export const routes: Routes = [
       },
       {
         path: 'campanas/:campaignId/antagonistas',
-        canActivate: [campaignAvailable],
+        canActivate: [accessGuard, campaignAvailable],
         data: { section: 'antagonists' },
         loadComponent: () =>
           import('./features/compendium/pages/compendium/compendium').then(

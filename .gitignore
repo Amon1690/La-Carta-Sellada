@@ -44,3 +44,6 @@ testem.log
 # System files
 .DS_Store
 Thumbs.db
+
+# Usuarios y contraseñas del servidor local
+/.local-server/

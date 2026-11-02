@@ -1,3 +1,6 @@
+import { HttpClient, provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { firstValueFrom } from 'rxjs';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Combatant } from '../../../../core/models/combat';
@@ -18,7 +21,7 @@ function setup() {
   return { engine, actor: () => actors[0], target: () => actors[1] };
 }
 describe('Ventanas de decisión y aclaraciones del VTT', () => {
-  beforeEach(() => TestBed.configureTestingModule({ providers: [provideZonelessChangeDetection()] }));
+  beforeEach(() => TestBed.configureTestingModule({ providers: [provideZonelessChangeDetection(), provideHttpClient(), provideHttpClientTesting()] }));
   it('usar una reacción no aplica PG ni cierra una resolución manual elegida en el formulario', async () => {
     const { engine, actor, target } = setup(); target().resources = [{ id: 'magic', name: 'Magia', maximum: 3 }];
     Object.assign(target().reactions[0], { reviewed: true, resourceConfirmed: true, cost: { resourceId: 'magic', amount: 1 } });
@@ -44,5 +47,46 @@ describe('Ventanas de decisión y aclaraciones del VTT', () => {
     expect(engine.state().usedAttacks).toBe(1);
     picker.choose(actor().actions[0]); expect(picker.facts.reviewed).toBeFalse(); expect(engine.state().usedAttacks).toBe(1);
     fixture.destroy();
+  });
+
+  function remoteSetup() {
+    const original = setup(); const actors = [original.actor(), original.target()];
+    actors[0].actions[0].reviewed = false; actors[1].reactions = [];
+    const http = TestBed.inject(HttpClient);
+    const engine = new VttCombat(() => actors, () => actors[0].id, (hp) => { if (hp) actors.find((a) => a.id === hp.id)!.hp = hp.hp; }, (id, profile) => firstValueFrom(http.put('/api/save-profile', profile)).then(() => {
+      const owner = actors.find((a) => a.id === id)!; owner.profile = profile; owner.resources = profile.resources;
+      owner.actions = owner.actions.map((action) => profile.actions.find((a) => a.source === action.source) ?? action);
+    }), (sides) => sides === 20 ? 9 : 5);
+    engine.start(actors[0].id);
+    return { engine, actors, http: TestBed.inject(HttpTestingController) };
+  }
+  it('el primer ataque de un PJ espera el HTTP de preparación antes de tirar o aplicar daño', async () => {
+    const { engine, actors, http } = remoteSetup();
+    const fixture = TestBed.createComponent(VttAttackPicker); fixture.componentRef.setInput('combat', engine); fixture.componentRef.setInput('actorId', actors[0].id); fixture.componentRef.setInput('targetId', actors[1].id); fixture.detectChanges();
+    const picker = fixture.componentInstance; picker.choose(actors[0].actions[0]); const attack = picker.confirm();
+    const request = http.expectOne('/api/save-profile');
+    expect(engine.saving()).toBeTrue(); expect(actors[1].hp).toBe(14); expect(engine.state().usedAttacks).toBe(0);
+    await picker.attack(); http.expectNone('/api/save-profile');
+    request.flush({}); await attack;
+    expect(engine.saving()).toBeFalse(); expect(picker.error()).toBe(''); expect(engine.state().usedAttacks).toBe(1); expect(actors[1].hp).toBe(7); // 5 en 1d8 + 2 de la espada del Guardia veterano.
+    http.verify(); fixture.destroy();
+  });
+  it('un rechazo HTTP no tira dados ni consume el ataque y conserva la selección del PJ', async () => {
+    const { engine, actors, http } = remoteSetup();
+    const fixture = TestBed.createComponent(VttAttackPicker); fixture.componentRef.setInput('combat', engine); fixture.componentRef.setInput('actorId', actors[0].id); fixture.componentRef.setInput('targetId', actors[1].id); fixture.detectChanges();
+    const picker = fixture.componentInstance; picker.choose(actors[0].actions[0]); const attack = picker.confirm();
+    http.expectOne('/api/save-profile').flush({ message: 'Conflicto' }, { status: 409, statusText: 'Conflict' }); await attack;
+    expect(picker.error()).not.toBe(''); expect(picker.source()).toBe(actors[0].actions[0].source); expect(engine.state().usedAttacks).toBe(0); expect(actors[1].hp).toBe(14); expect(engine.saving()).toBeFalse();
+    http.verify(); fixture.destroy();
+  });
+  it('preparar una ficha mantiene el diálogo y el borrador si falla el guardado remoto', async () => {
+    const { engine, actors, http } = remoteSetup();
+    const fixture = TestBed.createComponent(VttCombatPanel); fixture.componentRef.setInput('combat', engine); fixture.detectChanges(); await fixture.whenStable();
+    const panel = fixture.componentInstance; panel.prepareEntry(actors[0], actors[0].actions[0]); panel.dataConfirmed = true; panel.resourceConfirmed = true;
+    const saved = panel.save(); const request = http.expectOne('/api/save-profile');
+    expect(panel.saving()).toBeTrue(); expect(panel.actionDraft).toBeDefined(); expect(panel.isOpen).toBeTrue();
+    request.flush({}, { status: 503, statusText: 'Service Unavailable' }); await saved;
+    expect(panel.saving()).toBeFalse(); expect(panel.actionDraft).toBeDefined(); expect(panel.isOpen).toBeTrue(); expect(panel.error()).not.toBe('');
+    http.verify(); fixture.destroy();
   });
 });

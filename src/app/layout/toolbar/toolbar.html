@@ -4,6 +4,7 @@
     <span>La Carta Sellada</span>
   </a>
 
+  @if (access.user()?.role === 'director') {
   <form class="search" (submit)="submitSearch($event)">
     <label>
       <span>Buscar</span>
@@ -15,9 +16,8 @@
       />
     </label>
   </form>
+  }
 
-  <div class="actions" aria-label="Acciones principales">
-    <button type="button" title="Nuevo documento" [disabled]="!campaignId()">+</button>
-    <button type="button" title="Ajustes" [disabled]="!campaignId()">...</button>
-  </div>
+  <div class="actions" aria-label="Sesión"><span>{{ access.user()?.username }} · {{ access.user()?.role }}</span><button class="logout" type="button" (click)="logout()">Cerrar sesión</button></div>
 </header>
+@if (error()) { <p role="alert">{{ error() }}</p> }

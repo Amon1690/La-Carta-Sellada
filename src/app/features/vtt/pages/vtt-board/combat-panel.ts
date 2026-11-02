@@ -15,6 +15,7 @@ export class VttCombatPanel implements AfterViewInit {
   private closeAfterSave = false;
   readonly ownerId = signal('');
   readonly error = signal('');
+  readonly saving = signal(false);
   readonly actionSource = signal('');
   readonly editingOwnerId = signal('');
   actionDraft?: CombatAction;
@@ -39,7 +40,8 @@ export class VttCombatPanel implements AfterViewInit {
   resume(quick = false): void { this.quick = quick; this.closeAfterSave = false; this.actionDraft = this.reactionDraft = undefined; this.error.set(''); this.show(); }
   prepareEntry(owner: Combatant, action: CombatAction): void { this.open(owner.id); this.edit(owner, action); this.closeAfterSave = true; }
   private settleQuick(): void { if (this.quick && !this.manualResolution) { this.combat().settleAutomatic(); if (!this.combat().state().pending) { this.close(); this.resolved.emit(); } } }
-  close(): void { this.dialog?.nativeElement.close(); }
+  close(): void { if (!this.saving()) this.dialog?.nativeElement.close(); }
+  cancelDialog(event: Event): void { if (this.saving()) event.preventDefault(); }
   private show(): void { if (!this.isOpen) this.dialog?.nativeElement.showModal(); }
   choose(action: CombatAction): void { this.actionSource.set(action.source); this.targetIds = Array.from({ length: action.targets }, () => ''); this.contextConfirmed = false; }
   edit(owner: Combatant, entry: CombatAction | CombatReaction): void {
@@ -59,9 +61,14 @@ export class VttCombatPanel implements AfterViewInit {
   }
   balance(owner: Combatant, resource: CombatResource): number { return Math.min(resource.maximum, this.combat().state().resources[owner.id]?.[resource.id] ?? resource.maximum); }
   adjustResource(owner: Combatant, id: string, value: string): void { this.attempt(() => this.combat().setResource(owner.id, id, Number(value))); }
-  adjustAttacks(owner: Combatant, value: string): void { this.attempt(() => this.combat().setAttacksPerTurn(owner.id, Number(value))); }
-  save(): void {
-    this.attempt(() => {
+  async adjustAttacks(owner: Combatant, value: string): Promise<void> {
+    if (this.saving()) return; this.saving.set(true); this.error.set('');
+    try { const saved = this.combat().setAttacksPerTurn(owner.id, Number(value)); if (saved) await saved; }
+    catch (error) { this.error.set(error instanceof Error ? error.message : 'No se pudo guardar la preparación'); } finally { this.saving.set(false); }
+  }
+  async save(): Promise<void> {
+    if (this.saving()) return; this.saving.set(true); this.error.set('');
+    try {
       const entry = this.actionDraft ?? this.reactionDraft; if (!entry) return;
       let resource: CombatResource | undefined;
       if (this.resourceId !== 'free') {
@@ -72,10 +79,11 @@ export class VttCombatPanel implements AfterViewInit {
       entry.reviewed = this.dataConfirmed; entry.resourceConfirmed = this.resourceConfirmed;
       if (this.actionDraft?.longRange === null) delete this.actionDraft.longRange;
       if (this.actionDraft) this.actionDraft.damage = this.damageText.split('\n').filter((s) => s.trim()).map((s) => { const [dice, type, critical] = s.split('|'); if (critical && !['si', 'sí', 'no'].includes(critical.trim().toLowerCase())) throw new Error('El tercer campo debe ser sí o no'); return { dice: dice?.trim() ?? '', type: type?.trim() ?? '', critical: critical?.trim().toLowerCase() !== 'no' }; });
-      this.combat().configure(this.editingOwnerId(), entry, resource, this.resourceRemaining);
+      const saved = this.combat().configure(this.editingOwnerId(), entry, resource, this.resourceRemaining);
+      if (saved) await saved;
       this.actionDraft = this.reactionDraft = undefined;
-      if (this.closeAfterSave) { this.closeAfterSave = false; this.close(); }
-    });
+      if (this.closeAfterSave) { this.closeAfterSave = false; this.saving.set(false); this.close(); }
+    } catch (error) { this.error.set(error instanceof Error ? error.message : 'No se pudo guardar la preparación'); } finally { this.saving.set(false); }
   }
   roll(): void { this.attempt(() => {
     this.combat().begin(this.actionSource(), this.targetIds.filter(Boolean), { advantage: this.advantage, disadvantage: this.disadvantage,

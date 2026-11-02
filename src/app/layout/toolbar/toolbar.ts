@@ -1,3 +1,4 @@
+import { AccessService, accessError } from '../../core/services/access';
 import { Component, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink } from '@angular/router';
@@ -11,6 +12,9 @@ import { filter } from 'rxjs';
 })
 export class ToolbarComponent {
   private readonly router = inject(Router);
+  protected readonly access = inject(AccessService);
+  protected readonly error = signal('');
+  protected async logout(): Promise<void> { try { await this.access.logout(); } catch (error) { this.error.set(accessError(error)); } }
 
   protected readonly term = signal('');
   protected readonly campaignId = signal(this.campaignIdFromUrl(this.router.url));

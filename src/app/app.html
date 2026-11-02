@@ -4,3 +4,5 @@
     <h1>Cargando campaña…</h1><p>Estamos leyendo los datos del catálogo.</p><a routerLink="/">Volver al catálogo</a>
   </section>
 }
+
+@if (remoteSheets?.error?.()) { <p class="save-error" role="alert">{{ remoteSheets?.error?.() }}</p> }

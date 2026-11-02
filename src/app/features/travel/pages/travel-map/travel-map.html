@@ -1,7 +1,10 @@
+@if (legacyTravelAvailable()) {
+  <aside class="legacy-travel"><p>Hay un viaje del guardado anterior. Puedes recuperarlo en esta campaña; se conservará la copia original.</p><button type="button" (click)="importLegacyTravel()">Recuperar viaje local en esta campaña</button></aside>
+}
 <section class="travel-page">
   <header class="page-header">
     <div>
-      <p class="eyebrow">Reglas 2024</p>
+      <p class="eyebrow">{{ campaign()?.name ?? 'Campaña' }}</p>
       <h1>Viajes</h1>
       <p>Rutas, grupos y jornadas a través de Faerûn.</p>
     </div>

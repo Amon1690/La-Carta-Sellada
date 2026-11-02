@@ -1,0 +1,21 @@
+<main class="access-page users-page">
+  <header><div><span class="brand">La Carta Sellada · Administración</span><h1>Gestión de usuarios</h1><p>Crea accesos y asigna las campañas que puede abrir cada persona.</p></div><button type="button" class="secondary" (click)="logout()">Cerrar sesión · {{ access.user()?.username }}</button></header>
+  @if (error()) { <p role="alert" class="error">{{ error() }}</p> }
+  <div class="users-layout">
+    <section class="access-card">
+      <h2>{{ editing ? 'Editar usuario' : 'Nuevo usuario' }}</h2>
+      <form (submit)="save($event)">
+        <label>Usuario <input name="username" [(ngModel)]="username" required maxlength="80" autocomplete="off" /></label>
+        <label>Rol <select name="role" [(ngModel)]="role"><option value="administrador">Administrador</option><option value="director">Director</option><option value="jugador">Jugador</option></select></label>
+        @if (role !== 'administrador') { <label>Campañas <select name="campaigns" multiple [(ngModel)]="campaignIds" size="4">@for (campaign of campaigns(); track campaign.id) { <option [value]="campaign.id">{{ campaign.name }}</option> }</select><small>Puedes seleccionar varias campañas.</small></label> }
+        <label>Contraseña <input name="password" type="password" [(ngModel)]="password" [required]="!editing" maxlength="256" autocomplete="new-password" />@if (editing) { <small>Déjala vacía para conservar la contraseña actual.</small> }</label>
+        <div class="buttons"><button type="submit" [disabled]="busy() || !loaded()">{{ busy() ? 'Guardando…' : 'Guardar usuario' }}</button>@if (editing) { <button type="button" class="secondary" (click)="reset()">Cancelar</button> }</div>
+      </form>
+    </section>
+    <section class="access-card user-list"><h2>Usuarios</h2>
+      @if (!loaded()) { <p role="status">Cargando usuarios…</p> }
+      @for (user of users(); track user.id) { <article><div><h3>{{ user.username }}</h3><p>{{ user.role }}</p><small>{{ names(user.campaigns) }}</small></div><div class="buttons"><button type="button" class="secondary" (click)="edit(user)">Editar {{ user.username }}</button><button type="button" class="danger" (click)="deleting = user">Eliminar {{ user.username }}</button></div></article> }
+    </section>
+  </div>
+  @if (deleting; as user) { <div class="confirmation"><section class="access-card" role="alertdialog" aria-labelledby="delete-title"><h2 id="delete-title">Eliminar a {{ user.username }}</h2><p>Se eliminará su acceso y se desvinculará de sus personajes. Las fichas se conservarán.</p><div class="buttons"><button type="button" class="danger" [disabled]="busy()" (click)="remove()">Confirmar eliminación</button><button type="button" class="secondary" (click)="deleting = undefined">Cancelar</button></div></section></div> }
+</main>

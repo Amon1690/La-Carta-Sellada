@@ -1,0 +1,13 @@
+<main class="access-page login-page">
+  <section class="access-card">
+    <span class="brand">LC · La Carta Sellada</span>
+    <h1>Entra en tu aventura</h1>
+    <p>Accede con tu usuario para ver tus campañas y personajes.</p>
+    <form (submit)="submit($event)">
+      <label>Usuario <input name="username" [(ngModel)]="username" autocomplete="username" required maxlength="80" autofocus /></label>
+      <label>Contraseña <input name="password" type="password" [(ngModel)]="password" autocomplete="current-password" required maxlength="256" /></label>
+      @if (error()) { <p role="alert" class="error">{{ error() }}</p> }
+      <button type="submit" [disabled]="busy()">{{ busy() ? 'Entrando…' : 'Entrar' }}</button>
+    </form>
+  </section>
+</main>

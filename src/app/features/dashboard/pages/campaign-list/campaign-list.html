@@ -3,13 +3,13 @@
     <header>
       <p>Biblioteca local</p>
       <h1>Campañas</h1>
-      <span>Selecciona una campaña para abrir su introducción y herramientas de dirección.</span>
+      <span>Selecciona una de tus campañas para entrar.</span>
     </header>
 
     @if (campaigns.length) {
       <div class="campaign-grid">
         @for (campaign of campaigns; track campaign.id) {
-          <a class="campaign-card" [routerLink]="['/campanas', campaign.id, 'introduccion']">
+          <a class="campaign-card" [routerLink]="['/campanas', campaign.id, access.user()?.role === 'jugador' ? 'fichas-pjs' : 'introduccion']">
             <div
               class="campaign-cover"
               role="img"
@@ -53,7 +53,7 @@
     } @else {
       <section class="empty">
         <h2>No hay campañas</h2>
-        <p>Añade una entrada al índice local para comenzar.</p>
+        <p>Tu usuario no tiene campañas asignadas. El administrador o un director puede vincularte.</p>
       </section>
     }
   </section>
