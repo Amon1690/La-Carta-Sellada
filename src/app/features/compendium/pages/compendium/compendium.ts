@@ -1,3 +1,4 @@
+import { PlayerBuilder, PlayerBuilderValue } from '../../components/player-builder/player-builder';
 import { NPC_PORTRAITS } from '../../../../../../shared/assets.mjs';
 import { HttpClient } from '@angular/common/http';
 import { ACCESS_CONTEXT, accessError } from '../../../../core/services/access';
@@ -139,6 +140,7 @@ interface CompendiumPortrait {
 }
 
 interface CompendiumViewModel {
+  rules?: RulesCompendium;
   eyebrow: string;
   title: string;
   description: string;
@@ -148,7 +150,7 @@ interface CompendiumViewModel {
 
 @Component({
   selector: 'app-compendium',
-  imports: [AsyncPipe, FormsModule],
+  imports: [AsyncPipe, FormsModule, PlayerBuilder],
   templateUrl: './compendium.html',
   styleUrl: './compendium.scss',
 })
@@ -157,6 +159,9 @@ export class Compendium {
   protected readonly query = signal('');
   protected readonly activeTags = signal<string[]>([]);
   protected readonly editor = signal<SheetEditorState | undefined>(undefined);
+  protected playerBuilderKey = 0;
+  protected playerBuilderSource?: EditablePlayerSheet;
+  protected playerBuilderValue?: PlayerBuilderValue;
   protected draft: SheetDraft = this.emptyDraft('player');
 
   private readonly access = inject(ACCESS_CONTEXT);
@@ -213,11 +218,7 @@ export class Compendium {
         this.activeTags.set(tags);
       }
 
-      return this.toViewModel(
-        campaign,
-        rules,
-        data['section'] as CompendiumSection
-      );
+      return { ...this.toViewModel(campaign, rules, data['section'] as CompendiumSection), rules };
     })
   );
 
@@ -265,7 +266,9 @@ export class Compendium {
 
   protected startCreate(kind: EditableSheetKind): void {
     if (!this.canManage || this.saving()) return;
+    this.playerBuilderKey++;
     this.playerIds = [];
+    this.playerBuilderSource = undefined; this.playerBuilderValue = undefined;
     this.draft = this.emptyDraft(kind);
     this.editor.set({
       kind,
@@ -284,7 +287,10 @@ export class Compendium {
 
   protected startEdit(entry: CompendiumCard): void {
     if (!this.canEditEntry(entry) || this.saving() || !entry.editableKind || !entry.editableEntity) return;
+    this.playerBuilderKey++;
     this.playerIds = [...((entry.editableEntity as EditablePlayerSheet).playerIds ?? [])];
+    this.playerBuilderSource = entry.editableKind === 'player' ? entry.editableEntity as EditablePlayerSheet : undefined;
+    this.playerBuilderValue = undefined;
     this.draft = this.draftFromEntity(entry.editableKind, entry.editableEntity);
     this.editor.set({
       kind: entry.editableKind,
@@ -303,6 +309,7 @@ export class Compendium {
     event.preventDefault();
     const editor = this.editor();
     if (!editor || this.saving() || !(this.canManage || (editor.kind === 'player' && editor.mode === 'edit' && this.canEditPlayer(editor.original as EditablePlayerSheet | undefined)))) return;
+    if (editor.kind === 'player' && this.playerBuilderValue?.calculation.errors.length) { this.saveError.set(this.playerBuilderValue.calculation.errors.join(' ')); return; }
     this.saving.set(true); this.saveError.set('');
     try {
     if (editor.kind === 'player') {
@@ -998,7 +1005,7 @@ export class Compendium {
         `Componentes: ${spell.components}`,
         `Duración: ${spell.duration}`,
       ],
-      bullets: [`Manual del Jugador, página ${spell.sourcePage}`],
+      bullets: [spell.sourceUrl ? 'Reglas oficiales de D&D 2024 (fuente documentada)' : `Manual del Jugador, página ${spell.sourcePage}`],
     };
   }
 
@@ -1212,6 +1219,8 @@ export class Compendium {
 
   private playerFromDraft(editor: SheetEditorState): EditablePlayerSheet {
     const id = this.draftId(editor);
+    const value = this.playerBuilderValue;
+    const calculated = value ? { ...value.calculation.stats, build: value.build, ancestry: value.calculation.ancestry, className: value.calculation.className, subclass: value.calculation.subclass, background: value.calculation.background, feat: value.calculation.feat, level: value.build.level, statisticsRecorded: true } : {};
     return {
       combat: editor.original && 'className' in editor.original ? editor.original.combat : undefined,
       id,
@@ -1241,6 +1250,7 @@ export class Compendium {
       tokenUrl: this.optionalText(this.draft.tokenUrl),
       gridTokenUrl: this.optionalText(this.draft.gridTokenUrl),
       affiliation: this.optionalText(this.draft.affiliation),
+      ...calculated,
     };
   }
 
@@ -1364,7 +1374,7 @@ export class Compendium {
         ancestry: 'Humano',
         background: 'A elegir',
         feat: 'A elegir',
-        tagsText: 'PJ\nNivel 5',
+        tagsText: 'PJ',
         hitPoints: 38,
         showToken: false,
       };

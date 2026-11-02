@@ -1,3 +1,4 @@
+import type { CharacterBuild } from './character-build';
 import type { CombatProfile } from './combat';
 
 export interface Campaign {
@@ -112,6 +113,7 @@ export interface AbilityCheck {
 }
 
 export interface PlayerOption extends GameStatBlock {
+  build?: CharacterBuild;
   id: string;
   showToken?: boolean;
   name: string;
