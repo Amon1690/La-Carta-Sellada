@@ -12,13 +12,13 @@ En el primer arranque se crean admin/admin (administrador), Director/1234 (direc
 | --- | --- |
 | Administrador | Solo gestión de usuarios: alta, edición, eliminación, rol y campañas. No entra en reglas ni contenido de campañas. |
 | Director | Dashboard con sus campañas, todas las secciones de reglas, y contenido completo de las campañas asignadas. Edita PJs y asigna uno o varios jugadores. |
-| Jugador | Dashboard con sus campañas; hechizos, dotes, habilidades, equipo y rasgos de clase; consulta de sus fichas en cada campaña. No edita fichas ni abre viajes, escenas, encuentros o VTT de dirección. |
+| Jugador | Dashboard con sus campañas; hechizos, dotes, habilidades, equipo y rasgos de clase; consulta y edición de sus fichas en cada campaña, sin cambiar jugadores vinculados ni crear fichas. No abre viajes, escenas, encuentros o VTT de dirección. |
 
 Fichas PJs y Viajes se encuentran dentro de la sección cuyo título es el nombre de la campaña. Al asignar jugadores a una ficha, el servidor les añade esa campaña en la misma operación. Cambiar a un jugador a otro rol o eliminarlo desvincula sus fichas sin borrar personajes. No se puede eliminar ni degradar al último administrador. Los nombres de usuario son únicos también si solo cambian mayúsculas. Al editar, contraseña vacía conserva la actual.
 
 Las credenciales se validan en el servidor. Contraseñas con scrypt y sal aleatoria; cookie de sesión opaca HttpOnly/SameSite=Strict; caducidad por 30 minutos de inactividad y máximo 8 horas; comprobación del origen de escrituras y límite de intentos. Cambiar un usuario revoca sus sesiones. El servidor comprueba permisos y asociaciones en cada petición, incluidas escrituras abiertas antes de una revocación. No devuelve hashes ni contraseñas a la interfaz. Las rutas de Angular son una segunda comprobación de navegación.
 
-Los JSON originales de campañas no se descargan directamente. El jugador recibe solo sus fichas y metadatos mínimos; los secretos y fichas ajenas se omiten. Las imágenes requieren sesión y una relación con las campañas/fichas autorizadas, o ser recursos generales de reglas para el director. La correspondencia de retratos y mapas generales está en `shared/assets.mjs`; conserva allí los recursos compartidos al ampliar los encuentros genéricos.
+Los JSON originales de campañas no se descargan directamente. El jugador recibe solo sus fichas y metadatos mínimos, también en la respuesta al guardado; los secretos y fichas ajenas se omiten. Las imágenes requieren sesión y una relación con las campañas/fichas autorizadas, o ser recursos generales de reglas para el director. La correspondencia de retratos y mapas generales está en `shared/assets.mjs`; conserva allí los recursos compartidos al ampliar los encuentros genéricos.
 
 ## Guardado y compatibilidad
 
@@ -39,3 +39,5 @@ Referencias: [control de permisos OWASP](https://cheatsheetseries.owasp.org/chea
 ## Verificación
 
 `npm run test:server` comprueba autenticación, roles, campañas y fichas filtradas, altas/vinculación, colisiones de nombres, último administrador, caducidad/cierre, origen, intentos, conflictos, importación, fallo de escritura y revocación mientras una petición está abierta. Las pruebas Angular comprueban navegación por rol, separación de fichas, errores de persistencia y descarte de cachés al cambiar permisos. También se ejecutan las comprobaciones de AGENTS.md y una prueba visual con las tres cuentas en un servidor de datos aislados.
+
+La edición del jugador combina sus cambios con el estado del servidor: conserva fichas ajenas y sus vinculaciones, aunque no figuren en su vista. El servidor vuelve a comprobar la asociación dentro de la transacción y rechaza cualquier alta o cambio de jugadores.

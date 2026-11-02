@@ -36,8 +36,10 @@
           @if (currentEditor.kind === 'player') {
             <fieldset>
               <legend>Personaje jugador</legend>
+              @if (canManage) {
               <label>Jugadores vinculados <select name="player-users" multiple [(ngModel)]="playerIds" size="4">@for (player of players(); track player.id) { <option [value]="player.id">{{ player.username }}</option> }</select></label>
               <small>Los jugadores seleccionados tendrán acceso a esta campaña y a esta ficha.</small>
+              }
               <label>Linaje <input name="player-ancestry" [(ngModel)]="draft.ancestry" /></label>
               <label>Clase <input name="player-class" [(ngModel)]="draft.className" /></label>
               <label>Subclase <input name="player-subclass" [(ngModel)]="draft.subclass" /></label>
@@ -175,7 +177,7 @@
                 <h2>{{ entry.name }}</h2>
               </div>
               <div class="entry-actions">
-                @if (canManage && entry.editableKind) {
+                @if (entry.editableKind && canEditEntry(entry)) {
                   <button type="button" class="asset-button" (click)="startEdit(entry)">Editar</button>
                 }
                 @if (entry.tokenUrl; as tokenUrl) {

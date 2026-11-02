@@ -274,8 +274,16 @@ export class Compendium {
     });
   }
 
+  protected canEditEntry(entry: CompendiumCard): boolean {
+    return this.canManage || (entry.editableKind === 'player' && this.canEditPlayer(entry.editableEntity as EditablePlayerSheet | undefined));
+  }
+  private canEditPlayer(player: EditablePlayerSheet | undefined): boolean {
+    const user = this.access?.user();
+    return user?.role === 'jugador' && !!player?.playerIds?.includes(user.id);
+  }
+
   protected startEdit(entry: CompendiumCard): void {
-    if (!this.canManage || this.saving() || !entry.editableKind || !entry.editableEntity) return;
+    if (!this.canEditEntry(entry) || this.saving() || !entry.editableKind || !entry.editableEntity) return;
     this.playerIds = [...((entry.editableEntity as EditablePlayerSheet).playerIds ?? [])];
     this.draft = this.draftFromEntity(entry.editableKind, entry.editableEntity);
     this.editor.set({
@@ -294,12 +302,12 @@ export class Compendium {
   protected async saveDraft(event: Event): Promise<void> {
     event.preventDefault();
     const editor = this.editor();
-    if (!editor || !this.canManage || this.saving()) return;
+    if (!editor || this.saving() || !(this.canManage || (editor.kind === 'player' && editor.mode === 'edit' && this.canEditPlayer(editor.original as EditablePlayerSheet | undefined)))) return;
     this.saving.set(true); this.saveError.set('');
     try {
     if (editor.kind === 'player') {
       await this.characterSheets.savePlayer(
-        { ...this.playerFromDraft(editor), playerIds: this.playerIds },
+        { ...this.playerFromDraft(editor), playerIds: this.canManage ? this.playerIds : (editor.original as EditablePlayerSheet).playerIds },
         editor.mode, this.campaignId
       );
     } else if (editor.kind === 'generic-npc') {

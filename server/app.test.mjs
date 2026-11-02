@@ -92,7 +92,7 @@ test('asignar varios jugadores concede campaña de forma atómica y oculta ficha
     const campaign = (await f.request('/api/campaigns/one', { cookie })).value;
     assert.deepEqual(campaign.playerOptions.map((s) => s.id), ['hero']); assert.deepEqual(campaign.sheetOverrides.created, []);
     assert.deepEqual(campaign.npcs, []); assert.deepEqual(campaign.acts, []); assert.equal(campaign.sealedLetter.message, '');
-    assert.equal((await f.request('/api/campaigns/one/sheets', { cookie, method: 'PUT', data: body })).status, 403);
+    assert.equal((await f.request('/api/campaigns/one/sheets', { cookie, method: 'PUT', data: { ...body, revision: 1 } })).status, 403);
     assert.equal((await f.request('/api/users', { cookie })).status, 403);
     assert.deepEqual((await f.request('/data/rules.json', { cookie })).value.creatures, []);
   }
@@ -190,4 +190,46 @@ test('el director descarga recursos de su campaña pero no mapas privados de otr
   const cookie = await f.login('Director', '1234');
   assert.equal((await f.request('/assets/maps/private-one.png', { cookie })).status, 200);
   assert.equal((await f.request('/assets/maps/private-two.png', { cookie })).status, 403);
+});
+
+test('el jugador edita solo sus fichas, conserva las ajenas y recibe una respuesta filtrada', async (t) => {
+  const f = await fixture(t), admin = await f.login('admin', 'admin'), director = await f.login('Director', '1234');
+  const player = (await f.request('/api/users', { cookie: admin })).value.find((u) => u.role === 'jugador');
+  const own = sheet('hero', [player.id]), hidden = sheet('custom-hidden');
+  await f.request('/api/campaigns/one/sheets', { cookie: director, method: 'PUT', data: { edited: { hero: own }, created: [hidden], revision: 0 } });
+  const cookie = await f.login('Jugador', '1234');
+  const edited = { ...own, name: 'Ficha editada por su jugador', hitPoints: 42 };
+  const response = await f.request('/api/campaigns/one/sheets', { cookie, method: 'PUT', data: { edited: { hero: edited }, created: [], revision: 1 } });
+  assert.equal(response.status, 200); assert.equal(response.value.edited.hero.hitPoints, 42); assert.deepEqual(response.value.created, []);
+  const all = (await f.request('/api/campaigns/one', { cookie: director })).value.sheetOverrides;
+  assert.deepEqual(all.created, [hidden]); assert.deepEqual(all.edited.hero.playerIds, [player.id]); assert.equal(all.edited.hero.name, edited.name);
+  const attempts = [
+    { edited: { hero: { ...edited, playerIds: [] } }, created: [] },
+    { edited: { hero: { ...edited, playerIds: [player.id, player.id] } }, created: [] },
+    { edited: { hero: { ...edited, tokenUrl: 'assets/maps/private-two.png' } }, created: [] },
+    { edited: {}, created: [{ ...hidden, playerIds: [player.id] }] },
+    { edited: {}, created: [sheet('custom-new', [player.id])] },
+  ];
+  for (const attempt of attempts) assert.equal((await f.request('/api/campaigns/one/sheets', { cookie, method: 'PUT', data: { ...attempt, revision: 2 } })).status, 403);
+  assert.equal((await f.request('/assets/maps/private-two.png', { cookie })).status, 403);
+  assert.deepEqual((await f.request('/api/campaigns/one', { cookie: director })).value.sheetOverrides, all);
+  assert.equal((await f.request('/api/campaigns/one/import', { cookie, method: 'POST', data: { edited: {}, created: [] } })).status, 403);
+});
+test('un jugador no modifica fichas de otra campaña y el director conserva el control de las asociaciones', async (t) => {
+  const f = await fixture(t), admin = await f.login('admin', 'admin'), director = await f.login('Director', '1234');
+  const users = (await f.request('/api/users', { cookie: admin })).value, player = users.find((u) => u.role === 'jugador');
+  const other = (await f.request('/api/users', { cookie: admin, method: 'POST', data: { username: 'Segundo', role: 'jugador', campaigns: ['one'], password: '1234' } })).value;
+  await f.request('/api/campaigns/one/sheets', { cookie: director, method: 'PUT', data: { edited: { hero: sheet('hero', [player.id]) }, created: [sheet('custom-shared', [player.id, other.id])], revision: 0 } });
+  const cookie = await f.login('Jugador', '1234');
+  assert.equal((await f.request('/api/campaigns/two/sheets', { cookie, method: 'PUT', data: { edited: { hero: sheet('hero', [player.id]) }, created: [], revision: 0 } })).status, 403);
+  assert.equal((await f.request('/api/campaigns/one/sheets', { cookie, method: 'PUT', data: { edited: { hero: sheet('hero', [player.id, other.id]) }, created: [], revision: 1 } })).status, 403);
+  const shared = { ...sheet('custom-shared'), name: 'Compartida editada' };
+  delete shared.playerIds;
+  const save = await f.request('/api/campaigns/one/sheets', { cookie, method: 'PUT', data: { edited: {}, created: [shared], revision: 1 } });
+  assert.equal(save.status, 200); assert.deepEqual(save.value.created[0].playerIds, [player.id, other.id]);
+  assert.equal((await f.request('/api/campaigns/one/sheets', { cookie, method: 'PUT', data: { edited: {}, created: [shared], revision: 1 } })).status, 409);
+  const snapshot = (await f.request('/api/campaigns/one', { cookie: director })).value.sheetOverrides;
+  snapshot.edited.hero.playerIds = [other.id];
+  assert.equal((await f.request('/api/campaigns/one/sheets', { cookie: director, method: 'PUT', data: snapshot })).status, 200);
+  assert.equal((await f.request('/api/campaigns/one/sheets', { cookie, method: 'PUT', data: { edited: { hero: sheet('hero') }, created: [], revision: 3 } })).status, 403);
 });

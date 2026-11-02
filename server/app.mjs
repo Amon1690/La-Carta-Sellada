@@ -55,6 +55,15 @@ export async function createCartaServer({ root = process.cwd(), stateDir = resol
     queue = result.catch(() => {}); return result;
   };
   const sheetsFor = (id, snapshot = state) => snapshot.sheets[id] ?? { edited: {}, created: [], revision: 0 };
+  const sheetView = (collection, user) => {
+    const result = clone(collection);
+    if (user.role === 'jugador') {
+      const owns = (sheet) => (sheet.playerIds ?? []).includes(user.id);
+      result.edited = Object.fromEntries(Object.entries(result.edited).filter(([, sheet]) => owns(sheet)));
+      result.created = result.created.filter(owns);
+    }
+    return result;
+  };
   const canCampaign = (user, id) => user.role !== 'administrador' && user.campaigns.includes(id) && campaignIds.has(id);
   const director = (user, id) => { if (user.role !== 'director' || !canCampaign(user, id)) fail(403, 'No tienes acceso a esta campaña.'); };
   const validateSheet = (sheet, id, snapshot) => {
@@ -190,23 +199,45 @@ export async function createCartaServer({ root = process.cwd(), stateDir = resol
           }
           return json(res, 200, { ...base, sheetOverrides: saved, legacyImported: Boolean(state.imports.legacyPlayers) });
         }
-        director(user, id);
+        if (!(user.role === 'jugador' && operation === 'sheets' && req.method === 'PUT')) director(user, id);
         if (req.method === 'PUT' && operation === 'sheets' || req.method === 'POST' && operation === 'import') {
           const input = await body(req);
           if (!object(input.edited) || !Array.isArray(input.created)) fail(400, 'Colección de fichas no válida.');
-          await transaction((next) => {
-            director(liveUser(next), id);
+          const saved = await transaction((next) => {
+            const writer = liveUser(next);
+            if (!canCampaign(writer, id) || !['director', 'jugador'].includes(writer.role)) fail(403, 'No tienes permiso para editar esta ficha.');
+            if (operation === 'import') director(writer, id);
             const old = sheetsFor(id, next);
             if (operation === 'import' && (next.imports.legacyPlayers || next.imports[id] || Object.keys(old.edited).length || old.created.length)) fail(409, 'La campaña ya tiene fichas guardadas. Se conservan los datos locales.');
-            if (operation === 'sheets' && input.revision !== old.revision) fail(409, 'Otro director ha cambiado las fichas. Recarga antes de guardar.');
+            if (operation === 'sheets' && input.revision !== old.revision) fail(409, 'Otra persona ha cambiado las fichas. Recarga antes de guardar.');
+            const updated = writer.role === 'jugador' ? clone(old) : { edited: input.edited, created: input.created };
             const ids = new Set();
             for (const [sid, sheet] of [...Object.entries(input.edited), ...input.created.map((s) => [s.id, s])]) {
-              validateSheet(sheet, sid, next); if (ids.has(sid)) fail(400, 'Ficha duplicada.'); ids.add(sid);
-              for (const pid of sheet.playerIds ?? []) { const player = next.users.find((u) => u.id === pid); if (!player.campaigns.includes(id)) player.campaigns.push(id); }
+              if (!object(sheet)) fail(400, 'Ficha no válida.');
+              if (writer.role === 'jugador') {
+                const existing = old.edited[sid] ?? old.created.find((item) => item.id === sid);
+                if (!existing || !(existing.playerIds ?? []).includes(writer.id)) fail(403, 'Solo puedes editar personajes vinculados a tu usuario.');
+                if (sheet.playerIds !== undefined && (!Array.isArray(sheet.playerIds) || JSON.stringify([...sheet.playerIds].sort()) !== JSON.stringify([...(existing.playerIds ?? [])].sort()))) fail(403, 'Solo el director puede cambiar los jugadores vinculados.');
+                const own = [...Object.values(old.edited), ...old.created].filter((item) => (item.playerIds ?? []).includes(writer.id));
+                const images = new Set(own.flatMap((item) => [item.tokenUrl, item.gridTokenUrl, `assets/tokens/players/${item.id}.png`, `assets/tokens-grid/players/${item.id}.png`]).filter(Boolean));
+                for (const field of ['tokenUrl', 'gridTokenUrl']) {
+                  const image = sheet[field];
+                  if (typeof image === 'string' && /^\/?assets\//i.test(image) && !images.has(image)) fail(403, 'Ese recurso no pertenece a tus fichas.');
+                }
+                const value = { ...sheet, playerIds: existing.playerIds };
+                validateSheet(value, sid, next);
+                if (Object.hasOwn(old.edited, sid)) updated.edited[sid] = value;
+                else updated.created[updated.created.findIndex((item) => item.id === sid)] = value;
+              } else {
+                validateSheet(sheet, sid, next);
+                for (const pid of sheet.playerIds ?? []) { const player = next.users.find((u) => u.id === pid); if (!player.campaigns.includes(id)) player.campaigns.push(id); }
+              }
+              if (ids.has(sid)) fail(400, 'Ficha duplicada.'); ids.add(sid);
             }
-            next.sheets[id] = { edited: input.edited, created: input.created, revision: old.revision + 1 };
+            next.sheets[id] = { ...updated, revision: old.revision + 1 };
             if (operation === 'import') { next.imports[id] = { at: new Date(now()).toISOString() }; next.imports.legacyPlayers = id; }
-          }); return json(res, 200, clone(sheetsFor(id)));
+            return sheetView(next.sheets[id], writer);
+          }); return json(res, 200, saved);
         }
         fail(405, 'Operación no admitida.');
       }

@@ -49,7 +49,16 @@ export class CharacterSheetsService {
   }
 
   savePlayer(player: EditablePlayerSheet, mode: 'create' | 'edit', campaignId?: string): void | Promise<void> {
-    if (this.remote && (!campaignId || this.access?.user()?.role !== 'director')) throw new Error('Solo el director puede editar fichas de la campaña.');
+    if (this.remote) {
+      const user = this.access?.user();
+      if (!campaignId || !user || !user.campaigns.includes(campaignId)) throw new Error('No tienes acceso a esta campaña.');
+      if (user.role !== 'director') {
+        const collection = this.remote.read(campaignId);
+        const existing = (collection.edited[player.id] ?? collection.created.find((entry) => entry.id === player.id)) as EditablePlayerSheet | undefined;
+        if (user.role !== 'jugador' || mode !== 'edit' || !existing?.playerIds?.includes(user.id)) throw new Error('Solo puedes editar personajes vinculados a tu usuario.');
+        if (player.playerIds !== undefined && JSON.stringify([...player.playerIds].sort()) !== JSON.stringify([...existing.playerIds].sort())) throw new Error('Solo el director puede cambiar los jugadores vinculados.');
+      }
+    }
     return this.saveEditableEntity(this.playerSheetsStoreKey(campaignId), player, mode);
   }
 

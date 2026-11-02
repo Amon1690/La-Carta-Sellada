@@ -62,4 +62,16 @@ describe('Fichas y cachés con acceso por campaña', () => {
     const request = http.expectOne('/api/campaigns/one/sheets'); request.flush({ ...request.request.body, revision: 1 }); await pending;
     expect(sheets.playerSheets(campaign('one'))[0].combat?.attacksPerTurn).toBe(2);
   });
+
+  it('permite editar un PJ vinculado como jugador conservando asociaciones', async () => {
+    user.set({ id: 'player', username: 'Jugador', role: 'jugador', campaigns: ['one'] });
+    remote.hydrate('one', { edited: {}, created: [player('Original')], revision: 1 });
+    const pending = sheets.savePlayer({ ...player('Editada'), hitPoints: 42 }, 'edit', 'one');
+    const request = http.expectOne('/api/campaigns/one/sheets');
+    expect(request.request.body.created[0].playerIds).toEqual(['player']);
+    request.flush({ ...request.request.body, revision: 2 }); await pending;
+    expect(sheets.playerSheets(campaign('one'))[0].hitPoints).toBe(42);
+    expect(() => sheets.savePlayer({ ...player('Intento'), playerIds: [] }, 'edit', 'one')).toThrow();
+    expect(() => sheets.savePlayer({ ...player('Ajena'), id: 'other' }, 'edit', 'one')).toThrow();
+  });
 });
