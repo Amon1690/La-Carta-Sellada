@@ -1,12 +1,14 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
+import { CampaignNavigationState } from './core/services/campaign-navigation';
 import { App } from './app';
 
 describe('App', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [App],
-      providers: [provideZonelessChangeDetection()],
+      providers: [provideZonelessChangeDetection(), provideRouter([])],
     }).compileComponents();
   });
 
@@ -22,4 +24,11 @@ describe('App', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('router-outlet')).not.toBeNull();
   });
+  it('distingue visualmente la lectura pendiente y retira el indicador al terminar', () => {
+    const fixture = TestBed.createComponent(App); const state = TestBed.inject(CampaignNavigationState);
+    state.begin(); fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[role="status"]')?.textContent).toContain('Cargando campaña');
+    state.end(); fixture.detectChanges(); expect(fixture.nativeElement.querySelector('[role="status"]')).toBeNull();
+  });
+
 });

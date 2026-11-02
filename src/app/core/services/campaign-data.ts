@@ -8,9 +8,16 @@ import {
   shareReplay,
   startWith,
   switchMap,
+  throwError,
+  of,
+  tap,
 } from 'rxjs';
 
 import { Campaign, CampaignIndexEntry } from '../models/campaign';
+
+export class CampaignNotFoundError extends Error {
+  constructor(readonly campaignId: string) { super('La campaña no existe en el catálogo'); this.name = 'CampaignNotFoundError'; }
+}
 
 @Injectable({
   providedIn: 'root',
@@ -18,6 +25,7 @@ import { Campaign, CampaignIndexEntry } from '../models/campaign';
 export class CampaignDataService {
   private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
+  private readonly loadedCampaigns = new Map<string, Campaign>();
 
   private readonly campaigns$ = this.http
     .get<CampaignIndexEntry[]>('data/campaigns.json')
@@ -52,10 +60,13 @@ export class CampaignDataService {
   }
 
   getCampaignById(id: string): Observable<Campaign> {
+    const loaded = this.loadedCampaigns.get(id);
+    if (loaded) return of(loaded);
     return this.campaigns$.pipe(
-      map((campaigns) => campaigns.find((campaign) => campaign.id === id)),
-      filter((campaign): campaign is CampaignIndexEntry => Boolean(campaign)),
-      switchMap((campaign) => this.http.get<Campaign>(campaign.dataPath)),
+      switchMap((campaigns) => {
+        const campaign = campaigns.find((entry) => entry.id === id);
+        return campaign ? this.http.get<Campaign>(campaign.dataPath).pipe(tap((loaded) => this.loadedCampaigns.set(id, loaded))) : throwError(() => new CampaignNotFoundError(id));
+      }),
       shareReplay({ bufferSize: 1, refCount: true })
     );
   }

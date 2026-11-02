@@ -1,0 +1,6 @@
+.campaign-loading {
+  position: fixed; inset: 0; z-index: 1000; display: grid; place-content: center; gap: 12px;
+  padding: 24px; color: #f1eee7; background: #171a1f; text-align: center;
+  h1, p { margin: 0; }
+  a { color: #e1b969; }
+}
