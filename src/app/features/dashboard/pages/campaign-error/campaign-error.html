@@ -1,0 +1,14 @@
+<section class="campaign-error" aria-labelledby="campaign-error-title">
+  <p class="eyebrow">Campañas</p>
+  <h1 id="campaign-error-title">{{ missing() ? 'No encontramos esa campaña' : 'No se pudo leer la campaña' }}</h1>
+  @if (missing()) {
+    <p>La campaña{{ campaignId() ? ' «' + campaignId() + '»' : '' }} no aparece en el catálogo. Comprueba el enlace o elige otra campaña.</p>
+  } @else {
+    <p>Ha fallado la lectura de los datos. Esto no significa que la campaña no exista. Puedes intentarlo de nuevo o volver al catálogo.</p>
+  }
+  <nav aria-label="Recuperar navegación">
+    <a routerLink="/">Volver al catálogo</a>
+    @if (retryUrl(); as url) { <a class="secondary" [routerLink]="url">Reintentar enlace</a> }
+  </nav>
+  <p class="note">Las partidas y fichas guardadas se conservan.</p>
+</section>

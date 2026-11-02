@@ -1,0 +1,8 @@
+.campaign-error { max-width: 760px; margin: 48px auto; padding: 30px; color: var(--text-strong, #eee); background: #23262b; border: 1px solid #695b43; border-radius: 8px; }
+h1 { font-size: clamp(24px, 4vw, 34px); margin: 8px 0 18px; }
+p { line-height: 1.65; }
+.eyebrow { text-transform: uppercase; letter-spacing: .1em; color: #d3ae66; font-size: 12px; }
+nav { display: flex; flex-wrap: wrap; gap: 12px; margin: 24px 0; }
+a { display: inline-block; color: #f7e8ca; background: #73582b; padding: 11px 16px; border: 1px solid #a8884e; border-radius: 4px; text-decoration: none; }
+a.secondary { background: transparent; }
+.note { color: #c3beb4; font-size: 13px; }

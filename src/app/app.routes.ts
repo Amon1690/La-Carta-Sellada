@@ -1,8 +1,12 @@
 import { Routes } from '@angular/router';
+import { campaignAvailable } from './core/services/campaign-navigation';
+import { CampaignError } from './features/dashboard/pages/campaign-error/campaign-error';
 
 export const routes: Routes = [
+  { path: 'error-campana', component: CampaignError },
   {
     path: 'vtt/:campaignId/:kind/:entryId',
+    canActivate: [campaignAvailable],
     loadComponent: () =>
       import('./features/vtt/pages/vtt-board/vtt-board').then(
         (m) => m.VttBoard
@@ -105,6 +109,7 @@ export const routes: Routes = [
       },
       {
         path: 'campanas/:campaignId/introduccion',
+        canActivate: [campaignAvailable],
         loadComponent: () =>
           import('./features/dashboard/pages/dashboard/dashboard').then(
             (m) => m.Dashboard
@@ -116,6 +121,7 @@ export const routes: Routes = [
       },
       {
         path: 'campanas/:campaignId/buscar',
+        canActivate: [campaignAvailable],
         data: { section: 'search' },
         loadComponent: () =>
           import('./features/compendium/pages/compendium/compendium').then(
@@ -124,6 +130,7 @@ export const routes: Routes = [
       },
       {
         path: 'campanas/:campaignId/actos/:id',
+        canActivate: [campaignAvailable],
         loadComponent: () =>
           import('./features/acts/pages/act-detail/act-detail').then(
             (m) => m.ActDetail
@@ -131,6 +138,7 @@ export const routes: Routes = [
       },
       {
         path: 'campanas/:campaignId/actos',
+        canActivate: [campaignAvailable],
         loadComponent: () =>
           import('./features/acts/pages/act-list/act-list').then(
             (m) => m.ActList
@@ -138,6 +146,7 @@ export const routes: Routes = [
       },
       {
         path: 'campanas/:campaignId/personajes',
+        canActivate: [campaignAvailable],
         data: { section: 'npcs' },
         loadComponent: () =>
           import('./features/compendium/pages/compendium/compendium').then(
@@ -146,6 +155,7 @@ export const routes: Routes = [
       },
       {
         path: 'campanas/:campaignId/tokens',
+        canActivate: [campaignAvailable],
         data: { section: 'tokens' },
         loadComponent: () =>
           import('./features/compendium/pages/compendium/compendium').then(
@@ -154,6 +164,7 @@ export const routes: Routes = [
       },
       {
         path: 'campanas/:campaignId/jugadores',
+        canActivate: [campaignAvailable],
         data: { section: 'players' },
         loadComponent: () =>
           import('./features/compendium/pages/compendium/compendium').then(
@@ -162,6 +173,7 @@ export const routes: Routes = [
       },
       {
         path: 'campanas/:campaignId/documentos',
+        canActivate: [campaignAvailable],
         data: { section: 'items' },
         loadComponent: () =>
           import('./features/compendium/pages/compendium/compendium').then(
@@ -170,6 +182,7 @@ export const routes: Routes = [
       },
       {
         path: 'campanas/:campaignId/hechizos',
+        canActivate: [campaignAvailable],
         data: { section: 'spells' },
         loadComponent: () =>
           import('./features/compendium/pages/compendium/compendium').then(
@@ -178,6 +191,7 @@ export const routes: Routes = [
       },
       {
         path: 'campanas/:campaignId/dotes',
+        canActivate: [campaignAvailable],
         data: { section: 'feats' },
         loadComponent: () =>
           import('./features/compendium/pages/compendium/compendium').then(
@@ -186,6 +200,7 @@ export const routes: Routes = [
       },
       {
         path: 'campanas/:campaignId/habilidades',
+        canActivate: [campaignAvailable],
         data: { section: 'skills' },
         loadComponent: () =>
           import('./features/compendium/pages/compendium/compendium').then(
@@ -194,6 +209,7 @@ export const routes: Routes = [
       },
       {
         path: 'campanas/:campaignId/equipo',
+        canActivate: [campaignAvailable],
         data: { section: 'equipment' },
         loadComponent: () =>
           import('./features/compendium/pages/compendium/compendium').then(
@@ -202,6 +218,7 @@ export const routes: Routes = [
       },
       {
         path: 'campanas/:campaignId/lugares',
+        canActivate: [campaignAvailable],
         data: { section: 'locations' },
         loadComponent: () =>
           import('./features/compendium/pages/compendium/compendium').then(
@@ -210,6 +227,7 @@ export const routes: Routes = [
       },
       {
         path: 'campanas/:campaignId/escenas',
+        canActivate: [campaignAvailable],
         data: { section: 'scenes' },
         loadComponent: () =>
           import('./features/compendium/pages/compendium/compendium').then(
@@ -218,6 +236,7 @@ export const routes: Routes = [
       },
       {
         path: 'campanas/:campaignId/encuentros',
+        canActivate: [campaignAvailable],
         data: { section: 'encounters' },
         loadComponent: () =>
           import('./features/compendium/pages/compendium/compendium').then(
@@ -226,6 +245,7 @@ export const routes: Routes = [
       },
       {
         path: 'campanas/:campaignId/timeline',
+        canActivate: [campaignAvailable],
         data: { section: 'timeline' },
         loadComponent: () =>
           import('./features/compendium/pages/compendium/compendium').then(
@@ -234,6 +254,7 @@ export const routes: Routes = [
       },
       {
         path: 'campanas/:campaignId/antagonistas',
+        canActivate: [campaignAvailable],
         data: { section: 'antagonists' },
         loadComponent: () =>
           import('./features/compendium/pages/compendium/compendium').then(
