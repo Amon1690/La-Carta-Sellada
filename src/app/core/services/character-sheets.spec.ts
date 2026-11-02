@@ -1,3 +1,5 @@
+import { calculateCharacter } from './character-builder';
+import { rules as builderRules, warrior } from './character-builder.fixture';
 import { TestBed } from '@angular/core/testing';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { convertToParamMap, ActivatedRoute } from '@angular/router';
@@ -298,4 +300,17 @@ describe('CharacterSheetsService y consumidores', () => {
     section = 'generic-npcs'; await editCard(compendiumCards().find((c) => c.key === 'generic-npc:custom-combat'));
     expect(sheets.genericNpcs().find((p) => p.id === 'custom-combat')?.combat).toEqual(combat);
   });
+  it('conserva las elecciones guiadas y propaga sus estadísticas guardadas a viajes y VTT',()=>{
+    const build=warrior();build.classSkills=['percepcion','supervivencia'];const result=calculateCharacter(build,builderRules);
+    const updated={...player(),...result.stats,id:'template-player',build,statisticsRecorded:true};
+    sheets.savePlayer(updated,'edit');
+    const reloaded=sheets.playerSheets(adventure).find((p)=>p.id==='template-player')!;
+    expect(reloaded.build).toEqual(build);expect(reloaded.armorClass).toBe(18);expect(reloaded.hitPoints).toBe(49);
+    const travel=TestBed.runInInjectionContext(()=>new TravelMap()) as unknown as {members():{id:string;survivalBonus:number;perceptionBonus:number}[]};
+    const board=TestBed.runInInjectionContext(()=>new VttBoard()) as unknown as {tokenChoices():{id:string;maxHp:number}[]};
+    expect(board.tokenChoices().find((p)=>p.id==='player:template-player')?.maxHp).toBe(49);
+    expect(travel.members().find((p)=>p.id==='player-option-template-player')?.survivalBonus).toBe(4);
+    expect(travel.members().find((p)=>p.id==='player-option-template-player')?.perceptionBonus).toBe(4);
+  });
+
 });

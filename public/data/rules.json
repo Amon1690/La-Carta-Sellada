@@ -9687,6 +9687,60 @@
       "components": "V, S",
       "duration": "Instantáneo",
       "description": "Unos orbes de fuego abrasador caen en picado en cuatro puntos del suelo distintos que puedas ver dentro del alcance. Todas las criaturas situadas en una esfera de 12 m de radio centrada en cada uno de esos puntos hacen una tirada de salvación de Destreza. Sufrirán 20d6 de daño de fuego y 20d6 de daño contundente si la fallan o la mitad del daño si la superan. Las criaturas que estén situadas en el área de efecto de más de una de las esferas ardientes solo se verán afectadas por una. Los objetos no mágicos que se encuentren dentro del área del conjuro también recibirán el daño, salvo silos lleva o viste una criatura, y empezarán a arder si son inflamables. CON SU CONJURO, TORMENTA RESPLANDECIENTE DE JALLARZI, LA MAGA JALLARZI HACE QUE UNOS VROCKS SE ARREPIENTAN DE HABER SALIDO DEL ABISMO. Pg"
+    },
+    {
+      "id": "escudo",
+      "name": "Escudo",
+      "summary": "Reacción defensiva que aumenta la CA hasta tu siguiente turno.",
+      "description": "Al recibir un impacto de una tirada de ataque o ser objetivo de proyectil mágico, puedes usar tu reacción. Tu CA aumenta en 5, también contra el ataque desencadenante, hasta el principio de tu siguiente turno. Durante ese tiempo no recibes daño de proyectil mágico.",
+      "tags": [
+        "Hechizo",
+        "Nivel 1",
+        "Abjuración",
+        "Hechicero",
+        "Mago"
+      ],
+      "sourcePage": 0,
+      "sourceUrl": "https://www.dndbeyond.com/sources/dnd/br-2024/spell-descriptions#Shield",
+      "level": 1,
+      "school": "Abjuración",
+      "classes": [
+        "Hechicero",
+        "Mago"
+      ],
+      "castingTime": "Reacción al recibir un impacto o ser objetivo de proyectil mágico",
+      "range": "Personal",
+      "components": "V, S",
+      "duration": "1 asalto"
+    },
+    {
+      "id": "rociada-venenosa",
+      "name": "Rociada venenosa",
+      "summary": "Truco de ataque a distancia que inflige daño de veneno.",
+      "description": "Realiza un ataque de conjuro a distancia contra una criatura a 9 m o menos. Un impacto causa 1d12 de daño de veneno. El daño aumenta a 2d12 a nivel 5, 3d12 a nivel 11 y 4d12 a nivel 17.",
+      "tags": [
+        "Hechizo",
+        "Truco",
+        "Nigromancia",
+        "Druida",
+        "Hechicero",
+        "Brujo",
+        "Mago"
+      ],
+      "sourcePage": 0,
+      "sourceUrl": "https://www.dndbeyond.com/sources/dnd/br-2024/spell-descriptions#PoisonSpray",
+      "level": 0,
+      "school": "Nigromancia",
+      "classes": [
+        "Druida",
+        "Hechicero",
+        "Brujo",
+        "Mago"
+      ],
+      "castingTime": "Acción",
+      "range": "9 m",
+      "components": "V, S",
+      "duration": "Instantáneo"
     }
   ],
   "feats": [

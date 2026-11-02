@@ -6,6 +6,8 @@ export const normalizeCombat = (s: string): string => s.normalize('NFD').replace
 export const SAVE_LABELS: Record<SaveAbility, string> = { strength: 'FUE', dexterity: 'DES', constitution: 'CON', intelligence: 'INT', wisdom: 'SAB', charisma: 'CAR' };
 export const emptyCombatProfile = (): CombatProfile => ({ actions: [], reactions: [], resources: [] });
 export function diceParts(text: string): { count: number; sides: number; bonus: number } | undefined {
+  const compact = text.replace(/\s/g, '');
+  if (/^[+-]?\d{1,4}$/.test(compact) && Math.abs(Number(compact)) <= 1000) return { count: 0, sides: 2, bonus: Number(compact) };
   const match = /^(\d{1,2})d(\d{1,3})([+-]\d{1,4})?$/i.exec(text.replace(/\s/g, ''));
   if (!match) return undefined;
   const count = +match[1], sides = +match[2], bonus = Number(match[3] ?? 0);
@@ -65,6 +67,13 @@ export function deriveCombat(stats: GameStatBlock | undefined, rules?: RulesComp
     const explicit = stats?.saves.find((s) => normalizeCombat(s).startsWith(normalizeCombat(label)))?.match(/[+-]\s*\d+/);
     return [ability, explicit ? Number(explicit[0].replace(/\s/g, '')) : Math.floor(((stats?.abilities[ability as SaveAbility] ?? 10) - 10) / 2)];
   })) as Combatant['saves'];
+  // Guided sheets already supply distinct casting modes (slots / origin uses).
+  // Their stable sources also keep an edited weapon from reusing an old bonus.
+  if (stats && 'build' in stats && (stats.build as { version?: number } | undefined)?.version === 1) {
+    return { actions: profile.actions, reactions: profile.reactions, resources: profile.resources,
+      notes: [...stats.features, ...stats.equipment.map((s) => `Equipo: ${s}`)],
+      attacksPerTurn: profile.attacksPerTurn ?? 1, saves, profile };
+  }
   const actions: CombatAction[] = [], reactions: CombatReaction[] = [];
   const notes = [...(stats?.features ?? []), ...(stats?.equipment ?? []).map((s) => `Equipo: ${s}`)];
   for (const source of stats?.attacks ?? []) {

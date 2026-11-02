@@ -22,7 +22,7 @@
             <small>{{ currentEditor.mode === 'create' ? 'Creación' : 'Edición' }}</small>
             <h2>{{ currentEditor.title }}</h2>
           </div>
-          <button type="button" class="ghost-action" (click)="cancelEditor()">Cerrar</button>
+          <button type="button" class="ghost-action" [disabled]="saving()" (click)="cancelEditor()">Cerrar</button>
         </header>
 
         <form (submit)="saveDraft($event)">
@@ -33,23 +33,14 @@
             <label>Etiquetas <textarea name="sheet-tags" rows="3" [(ngModel)]="draft.tagsText" placeholder="Una por línea o separadas por comas"></textarea></label>
           </fieldset>
 
-          @if (currentEditor.kind === 'player') {
+          @if (currentEditor.kind === 'player' && canManage) {
             <fieldset>
               <legend>Personaje jugador</legend>
               @if (canManage) {
               <label>Jugadores vinculados <select name="player-users" multiple [(ngModel)]="playerIds" size="4">@for (player of players(); track player.id) { <option [value]="player.id">{{ player.username }}</option> }</select></label>
               <small>Los jugadores seleccionados tendrán acceso a esta campaña y a esta ficha.</small>
               }
-              <label>Linaje <input name="player-ancestry" [(ngModel)]="draft.ancestry" /></label>
-              <label>Clase <input name="player-class" [(ngModel)]="draft.className" /></label>
-              <label>Subclase <input name="player-subclass" [(ngModel)]="draft.subclass" /></label>
-              <label>Trasfondo <input name="player-background" [(ngModel)]="draft.background" /></label>
-              <label>Nivel <input name="player-level" type="number" min="1" [(ngModel)]="draft.level" /></label>
-              <label>Dote <input name="player-feat" [(ngModel)]="draft.feat" /></label>
-              <label class="statistics-confirmation"><input name="player-statistics-recorded" type="checkbox" [(ngModel)]="draft.statisticsRecorded" /> Estadísticas registradas</label>
-              @if (!draft.statisticsRecorded) {
-                <p class="statistics-notice">Este personaje no tiene estadísticas registradas. Completa los valores de su ficha y marca la casilla para usarlos en viajes y combate.</p>
-              }
+
             </fieldset>
           }
 
@@ -74,6 +65,9 @@
             </fieldset>
           }
 
+          @if(currentEditor.kind === 'player'){
+            <app-player-builder [rules]="vm.rules!" [resetKey]="playerBuilderKey" [sheet]="playerBuilderSource" [busy]="saving()" (valueChange)="playerBuilderValue=$event" />
+          } @else {
           <fieldset>
             <legend>Estadísticas</legend>
             <label>CA <input name="stat-ac" type="number" min="0" [(ngModel)]="draft.armorClass" /></label>
@@ -81,9 +75,7 @@
             <label>Velocidad <input name="stat-speed" [(ngModel)]="draft.speed" /></label>
             <label>Iniciativa <input name="stat-initiative" [(ngModel)]="draft.initiative" /></label>
             <label>Competencia <input name="stat-prof" type="number" min="0" [(ngModel)]="draft.proficiencyBonus" /></label>
-            @if (currentEditor.kind !== 'player') {
               <label>VD <input name="stat-challenge" [(ngModel)]="draft.challenge" /></label>
-            }
           </fieldset>
 
           <fieldset class="ability-editor">
@@ -98,9 +90,7 @@
 
           <fieldset class="long-fields">
             <legend>Detalle de ficha</legend>
-            @if (currentEditor.kind !== 'player') {
               <label>Personalidad <textarea name="detail-personality" rows="4" [(ngModel)]="draft.personalityText"></textarea></label>
-            }
             <label>Salvaciones <textarea name="detail-saves" rows="3" [(ngModel)]="draft.savesText"></textarea></label>
             <label>Habilidades <textarea name="detail-skills" rows="3" [(ngModel)]="draft.skillsText"></textarea></label>
             <label>Rasgos <textarea name="detail-traits" rows="4" [(ngModel)]="draft.traitsText"></textarea></label>
@@ -109,6 +99,7 @@
             <label>Equipo <textarea name="detail-equipment" rows="4" [(ngModel)]="draft.equipmentText"></textarea></label>
           </fieldset>
 
+          }
           @if (currentEditor.kind === 'npc') {
             <fieldset class="long-fields">
               <legend>Información de campaña</legend>
@@ -119,8 +110,8 @@
           }
 
           <div class="editor-actions">
-            <button type="submit" [disabled]="saving()" class="primary-action">Guardar ficha</button>
-            <button type="button" class="ghost-action" (click)="cancelEditor()">Cancelar</button>
+            <button type="submit" [disabled]="saving() || (currentEditor.kind === 'player' && !!playerBuilderValue?.calculation?.errors?.length)" class="primary-action">Guardar ficha</button>
+            <button type="button" class="ghost-action" [disabled]="saving()" (click)="cancelEditor()">Cancelar</button>
           </div>
         </form>
       </section>

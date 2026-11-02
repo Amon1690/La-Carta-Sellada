@@ -12,6 +12,7 @@ export interface RulesCompendium {
 }
 
 export interface RuleEntry {
+  sourceUrl?: string;
   id: string;
   name: string;
   summary: string;
