@@ -217,6 +217,12 @@ export class TravelMap implements AfterViewInit {
   protected readonly pendingEncounter = signal<PendingTravelEncounter | undefined>(undefined);
   protected readonly selectedGroupId = signal<string | undefined>(undefined);
   protected readonly selectedLocationId = signal<string | undefined>(undefined);
+  protected readonly hoveredLocationId = signal<string | undefined>(undefined);
+  protected readonly focusedLocationId = signal<string | undefined>(undefined);
+  // Solo se monta el detalle que se está consultando; los marcadores siguen completos.
+  protected readonly tooltipLocationId = computed(() =>
+    this.hoveredLocationId() ?? this.focusedLocationId()
+  );
   protected readonly memberQuery = signal('');
   protected readonly groupEditorOpen = signal(false);
   protected readonly groupName = signal('Compañía aventurera');

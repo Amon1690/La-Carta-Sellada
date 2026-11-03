@@ -83,18 +83,25 @@
               [style.left.%]="location.x"
               [style.top.%]="location.y"
               [attr.aria-label]="location.name + '. ' + location.categoryLabel + '. ' + location.summary"
+              [attr.aria-describedby]="tooltipLocationId() === location.id ? 'location-tooltip-' + location.id : null"
+              (mouseenter)="hoveredLocationId.set(location.id)"
+              (mouseleave)="hoveredLocationId.set(undefined)"
+              (focus)="focusedLocationId.set(location.id)"
+              (blur)="focusedLocationId.set(undefined)"
               (click)="locationClicked(location, $event)"
             >
               <i aria-hidden="true"></i>
-              <span class="location-tooltip" role="tooltip">
-                <b>{{ location.name }}</b>
-                <small>{{ location.categoryLabel }} · {{ location.region }}</small>
-                <p>{{ location.summary }}</p>
-                <em>
-                  {{ location.sourceKind === 'zone' ? 'Centro cartográfico del área' : 'Coordenada del marcador' }}:
-                  {{ location.sourceX | number: '1.0-2' }}, {{ location.sourceY | number: '1.0-2' }} px
-                </em>
-              </span>
+              @if (tooltipLocationId() === location.id) {
+                <span class="location-tooltip" role="tooltip" [id]="'location-tooltip-' + location.id">
+                  <b>{{ location.name }}</b>
+                  <small>{{ location.categoryLabel }} · {{ location.region }}</small>
+                  <p>{{ location.summary }}</p>
+                  <em>
+                    {{ location.sourceKind === 'zone' ? 'Centro cartográfico del área' : 'Coordenada del marcador' }}:
+                    {{ location.sourceX | number: '1.0-2' }}, {{ location.sourceY | number: '1.0-2' }} px
+                  </em>
+                </span>
+              }
             </button>
           }
 
