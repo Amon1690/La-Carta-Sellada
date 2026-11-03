@@ -40,6 +40,23 @@ Para compilar la version de produccion:
 npm run build
 ```
 
+## Viajes y mesa virtual (VTT)
+
+El director abre **Viajes** dentro de una campaña. El atlas conserva 1456
+localizaciones, con selección, colocación de grupos, trazado de rutas,
+desplazamiento y zoom. Cada grupo mantiene su ruta, provisiones, puestos,
+jornadas y encuentro pendiente. Los integrantes utilizan las fichas compartidas
+de la campaña; los viajes y tableros se guardan en este navegador por campaña.
+
+Desde un encuentro se puede abrir el **VTT**: mapa con cuadrícula, fichas,
+selección múltiple, ficha del personaje con doble clic, capas, niebla e
+iniciativa. El participante con turno activo puede atacar eligiendo el objetivo
+en el tablero; se comprueban alcance, tiradas y reacciones disponibles según la
+ficha y sus recursos. Si faltan datos de combate hay que completarlos.
+
+El detalle cartográfico se crea solo al consultar un marcador con ratón o foco
+de teclado. Consulta las [mediciones del mapa y la comprobación visual](docs/travel-map-performance.md).
+
 ## Alcance 1.0
 
 - Layout principal con barra superior, navegacion lateral y barra de estado.

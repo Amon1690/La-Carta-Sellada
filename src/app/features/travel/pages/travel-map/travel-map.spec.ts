@@ -6,6 +6,7 @@ import { of } from 'rxjs';
 import { CampaignDataService } from '../../../../core/services/campaign-data';
 import { CharacterSheetsService } from '../../../../core/services/character-sheets';
 import { TravelMap } from './travel-map';
+import { FAERUN_LOCATIONS } from '../../../../core/data/faerun-locations';
 
 const KEY = 'la-carta-sellada:travel-map:faerun-atlas-v3';
 const groups = () => ['a', 'b'].map((id, i) => ({ id, name: `Grupo ${id}`, color: '#c9964a', memberIds: ['player-option-scout'], x: 44.3 + i, y: 37.5 }));
@@ -107,4 +108,71 @@ describe('Viajes independientes por grupo', () => {
     expect(view.members().some((member: { id: string }) => member.id === 'generic-guide')).toBeTrue();
     id = 'two'; const other = make(); expect(other.legacyTravelAvailable()).toBeFalse(); expect(other.groups()).toEqual([]);
   });
+
+  it('monta los 1456 marcadores con sus coordenadas sin crear detalles ocultos', async () => {
+    const fixture = TestBed.createComponent(TravelMap);
+    await fixture.whenStable();
+    const root: HTMLElement = fixture.nativeElement;
+    const markers = Array.from(root.querySelectorAll<HTMLButtonElement>('.map-location'));
+    expect(markers.length).toBe(1456);
+    expect(root.querySelectorAll('.location-tooltip').length).toBe(0);
+    expect(root.querySelectorAll('.map-location *').length).toBe(1456);
+    markers.forEach((marker, index) => {
+      const location = FAERUN_LOCATIONS[index];
+      expect(marker.style.left).toBe(`${location.x}%`);
+      expect(marker.style.top).toBe(`${location.y}%`);
+      expect(marker.getAttribute('aria-label')).toBe(`${location.name}. ${location.categoryLabel}. ${location.summary}`);
+    });
+  });
+
+  it('muestra un único detalle al pasar el ratón y recupera el foco de teclado al salir', async () => {
+    const fixture = TestBed.createComponent(TravelMap);
+    await fixture.whenStable();
+    // Dejar terminar el ajuste inicial del mapa antes de observar escrituras.
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    await fixture.whenStable();
+    const savedBefore = Array.from(values.entries());
+    const root: HTMLElement = fixture.nativeElement;
+    const markers = root.querySelectorAll<HTMLButtonElement>('.map-location');
+    const focused = markers[0], hovered = markers[1];
+    focused.dispatchEvent(new FocusEvent('focus'));
+    await fixture.whenStable();
+    expect(root.querySelectorAll('[role="tooltip"]').length).toBe(1);
+    expect(focused.querySelector('b')?.textContent).toBe(FAERUN_LOCATIONS[0].name);
+    expect(focused.getAttribute('aria-describedby')).toBe(focused.querySelector('[role="tooltip"]')!.id);
+    hovered.dispatchEvent(new MouseEvent('mouseenter'));
+    await fixture.whenStable();
+    expect(root.querySelectorAll('[role="tooltip"]').length).toBe(1);
+    expect(hovered.querySelector('b')?.textContent).toBe(FAERUN_LOCATIONS[1].name);
+    expect(focused.hasAttribute('aria-describedby')).toBeFalse();
+    hovered.dispatchEvent(new MouseEvent('mouseleave'));
+    await fixture.whenStable();
+    expect(focused.querySelector('[role="tooltip"]')).not.toBeNull();
+    focused.dispatchEvent(new FocusEvent('blur'));
+    await fixture.whenStable();
+    expect(root.querySelector('[role="tooltip"]')).toBeNull();
+    expect(Array.from(values.entries())).toEqual(savedBefore);
+  });
+
+  it('mantiene la selección y el trazado exacto al activar un marcador con teclado o clic', async () => {
+    const fixture = TestBed.createComponent(TravelMap);
+    await fixture.whenStable();
+    const root: HTMLElement = fixture.nativeElement;
+    const view = fixture.componentInstance as any;
+    const markers = root.querySelectorAll<HTMLButtonElement>('.map-location');
+    view.setMode('route');
+    markers[0].dispatchEvent(new FocusEvent('focus'));
+    markers[0].click();
+    await fixture.whenStable();
+    expect(view.selectedLocationId()).toBe(FAERUN_LOCATIONS[0].id);
+    expect(view.route()).toEqual([{ x: FAERUN_LOCATIONS[0].x, y: FAERUN_LOCATIONS[0].y }]);
+    markers[1455].click();
+    await fixture.whenStable();
+    expect(view.route()[1]).toEqual({ x: FAERUN_LOCATIONS[1455].x, y: FAERUN_LOCATIONS[1455].y });
+    expect(view.plan().destinationId).toBe(FAERUN_LOCATIONS[1455].id);
+    const saved = JSON.parse(values.get(KEY)!);
+    expect(saved.route).toEqual(view.route());
+    expect(saved.hoveredLocationId).toBeUndefined();
+  });
+
 });
