@@ -113,6 +113,11 @@ export const routes: Routes = [
         path: 'viajes', redirectTo: ''
       },
       {
+        path: 'campanas/:campaignId/copias',
+        canActivate: [campaignAvailable],
+        loadComponent: () => import('./features/backups/backups').then((m) => m.Backups),
+      },
+      {
         path: 'campanas/:campaignId/viajes',
         canActivate: [campaignAvailable],
         loadComponent: () =>

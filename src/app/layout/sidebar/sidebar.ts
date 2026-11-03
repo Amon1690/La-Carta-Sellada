@@ -28,6 +28,7 @@ export class SidebarComponent {
     { label: 'Introducción', path: 'introduccion' },
     { label: 'Fichas PJs', path: 'fichas-pjs' },
     { label: 'Viajes', path: 'viajes' },
+    { label: 'Copias de seguridad', path: 'copias' },
     { label: 'Actos', path: 'actos' },
     { label: 'Fichas de PNJ', path: 'personajes' },
     { label: 'Tokens', path: 'tokens' },

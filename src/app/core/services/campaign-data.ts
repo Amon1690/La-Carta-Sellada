@@ -78,6 +78,8 @@ export class CampaignDataService {
     );
   }
 
+  invalidate(campaignId: string): void { this.loadedCampaigns.delete(campaignId); }
+
   private checkScope(): void {
     if (!this.access) return;
     const user = this.access.user();
