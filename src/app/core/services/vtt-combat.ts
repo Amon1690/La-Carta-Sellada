@@ -330,7 +330,7 @@ export class VttCombat {
 }
 function signed(value: number): string { return value >= 0 ? ` + ${value}` : ` - ${Math.abs(value)}`; }
 function isMagicMissile(action: CombatAction): boolean { return action.resolution === 'automatic' && ['proyectil magico', 'misil magico'].includes(normalizeCombat(action.name)); }
-function validState(value: unknown): value is CombatState {
+export function validState(value: unknown): value is CombatState {
   if (!value || typeof value !== 'object') return false;
   const s = value as CombatState;
   if (!Array.isArray(s.slotsSpent) || s.slotsSpent.some((id) => typeof id !== 'string') || (s.started && typeof s.turnId !== 'string')) return false;
