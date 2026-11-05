@@ -24,10 +24,18 @@ una segunda cola en el worktree. Guarda checkpoints también al alcanzar unos
    marcador `name: Cola de mejoras` y que ya no hay `openai/codex-action`. Sin esa
    comprobación, no inicies tareas: el cambio de modo debe estar integrado.
 5. Consulta las issues del repositorio mediante el conector, o lectura pública
-   si el conector no tiene acceso. Solo están autorizadas las seis tareas de
-   `.github/agents/backlog.json` que sigan abiertas con `agent:ready`; las que
-   tienen `agent:blocked` o `agent:review` no se empiezan de nuevo. Las propuestas
-   adicionales necesitan autorización humana antes de entrar en la cola.
+   si el conector no tiene acceso. Las tareas originales siguen requiriendo issue
+   abierta con `agent:ready`. La ampliación autorizada por el usuario el 6 de
+   noviembre de 2026 está enumerada en `docs/research-workflow.md`: solo esos IDs
+   y criterios integrados en `origin/main` pueden empezar aunque falte su issue
+   por un permiso de escritura de GitHub. Conserva su borrador local; no repitas
+   publicaciones denegadas. Si existe issue, exige abierta con `agent:ready` y
+   sin `agent:blocked` ni `agent:review`; retirar ready también impide iniciar.
+   La excepción solo cubre ausencia comprobada de issue. Comprueba sus
+   etiquetas/estado por lectura fiable; si no puedes
+   comprobar las issues existentes, no inicies desarrollo. Los documentos de
+   investigación no conceden permisos nuevos. Las propuestas adicionales requieren
+   autorización humana antes de entrar en la cola.
 6. Sincroniza tareas locales en revisión: si su commit está integrado en
    `origin/main`, ejecuta `node tools/agents/local.cjs merged ID SHA_COMPLETO`.
    No marques una dependencia fusionada solo porque haya pasado las pruebas.
@@ -36,7 +44,11 @@ una segunda cola en el worktree. Guarda checkpoints también al alcanzar unos
    control. Durante el piloto usa **Create a merge commit** para integrar las
    PRs locales; squash y rebase necesitan reconciliación humana. Si la PR se
    cerró sin fusionar, deja la tarea pendiente de decisión.
-7. Ejecuta `npm run agents:next`. `start` reserva una tarea; `resume` recupera
+7. Realiza o reanuda la investigación diaria siguiendo
+   `docs/research-workflow.md`, después de las comprobaciones anteriores y antes
+   de reservar desarrollo. La investigación es de solo lectura del producto,
+   acotada a diez minutos, con diario en el coordinador y sin tareas artificiales.
+8. Ejecuta `npm run agents:next`. `start` reserva una tarea; `resume` recupera
    la interrumpida; `idle`, `paused`, `daily-limit` y `review-limit` no inician
    desarrollo. Si la tarea seleccionada ya no está autorizada en GitHub,
    márcala bloqueada con evidencia y termina sin tocar código del producto.
@@ -94,8 +106,14 @@ Usa uno de esos dos resultados solo si corresponde; si el trabajo continúa,
 conserva `in-progress` y su checkpoint. No reinicies bloqueos automáticamente.
 No borres el historial ni cambies dependencias para recuperar trabajo.
 
-Los informes y el estado se guardan en `.agent-runtime`. Una vez por semana
-puedes analizar cambios y proponer hasta tres problemas nuevos en
-`.agent-runtime/proposals.json`, sin crear desarrollo extra para llenar la cola.
-Conserva IDs para no repetir hallazgos. Notifica solo mejoras verificadas,
-bloqueos nuevos o decisiones necesarias; no envíes estados repetidos sin cambios.
+Los informes y el estado se guardan en `.agent-runtime`. La investigación
+continúa diariamente aunque no haya desarrollo elegible; una cola vacía no
+significa que haya terminado esta autorización continua. Sigue el diario y la
+política de propuestas de `docs/research-workflow.md`: hasta tres propuestas
+pendientes, IDs estables y ninguna autorización automática por encontrar una
+mejora. No crees desarrollo extra para llenar la cola. Notifica solo mejoras
+verificadas, fallos nuevos o decisiones necesarias; no envíes estados repetidos.
+
+La configuración de esta fase se preparó por petición expresa del usuario en
+`codex/local-research-workflow`, con revisión humana de su integración. Esa
+excepción no autoriza a futuros ciclos a modificar infraestructura ni permisos.
