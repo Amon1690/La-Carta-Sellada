@@ -69,5 +69,150 @@
       "No borrar ni sustituir imágenes o atribuciones sin decisión humana; proponer esas acciones aparte.",
       "Actualizar README para reflejar viajes y VTT y documentar la comprobación visual."
     ]
+  },
+  {
+    "id": "research-workflow",
+    "title": "Añadir investigación diaria para la visión del VTT y las rutas de viaje",
+    "priority": 7,
+    "dependsOn": [],
+    "acceptance": [
+      "Documentar el estado real del VTT y las rutas con fuentes primarias, datos disponibles, incógnitas y fases verificables.",
+      "Registrar la elección del usuario de seleccionar con qué personajes se comparte visión y conservar las seis tareas completadas.",
+      "Incorporar investigación diaria acotada, diario durable, propuestas sin duplicados y continuidad de la automatización aunque no haya desarrollo elegible.",
+      "Mantener cuota incluida, reservas y checkpoints del coordinador, dos tareas nuevas al día, revisión independiente y decisión humana de integrar.",
+      "Preparar una cola acotada a las mejoras solicitadas sin autorizar automáticamente cambios de permisos ni cartografía sin procedencia."
+    ]
+  },
+  {
+    "id": "vtt-vision-model",
+    "title": "Modelar sentidos, entorno y visión compartida sin perder fichas ni tableros",
+    "priority": 8,
+    "dependsOn": [
+      "research-workflow"
+    ],
+    "acceptance": [
+      "Perfiles de sentidos y procedencia verificables; ausencia de datos como desconocida, sin inventar alcances ni deducir mecánicas solo del nombre.",
+      "Estado versionado de iluminación, hora de juego, clima, efectos y listas explícitas de personajes/tokens que comparten visión; referencias por instancia, nunca por selección o turno.",
+      "Conservar niebla manual, claves por campaña/entrada/runId y fichas antiguas; validar y migrar recarga y copias de seguridad a la vez.",
+      "Probar dos listas de observadores, exclusión y eliminación de un miembro, datos inválidos y aislamiento de campañas/encuentros."
+    ]
+  },
+  {
+    "id": "travel-route-precision",
+    "title": "Mantener distancias y posiciones coherentes en rutas con tramos cortos",
+    "priority": 9,
+    "dependsOn": [
+      "research-workflow"
+    ],
+    "acceptance": [
+      "Reproducir el redondeo por segmento con la ruta (20,20)-(20.01,20)-(20.02,20) y conservar kilómetros sin redondeo en el cálculo interno.",
+      "Redondear solo al mostrar; recorrido total, distancia restante e interpolación deben utilizar las mismas longitudes.",
+      "Conservar rutas/planes/jornadas antiguos y su separación por campaña y grupo, sin recalcular silenciosamente jornadas consumidas.",
+      "Probar muchos segmentos cortos, tramos nulos, llegada exacta y recarga/restauración de dos grupos."
+    ]
+  },
+  {
+    "id": "travel-route-graph",
+    "title": "Preparar una red de caminos y vías acuáticas con procedencia y cobertura",
+    "priority": 10,
+    "dependsOn": [
+      "research-workflow",
+      "travel-route-precision"
+    ],
+    "acceptance": [
+      "Contrato local versionado con nodos/aristas, polilíneas completas, modos, dirección, puentes/vados/embarques, terreno y procedencia.",
+      "Validación de red, cobertura y escala; distinguir datos reales contrastados de fixtures sintéticas y conservar el atlas y sus atribuciones.",
+      "Permitir una red propia del director mediante edición/importación validada; no distribuir geometrías de terceros sin procedencia y uso verificados.",
+      "No unir poblaciones por proximidad ni tratar polígonos de región como caminos; mostrar explícitamente zonas sin cobertura.",
+      "Probar enlaces inexistentes, geometría inválida, pasos acuáticos y compatibilidad de guardado/copias de redes propias."
+    ]
+  },
+  {
+    "id": "vtt-vision-preview",
+    "title": "Separar exploración y visión dinámica con observadores seleccionables",
+    "priority": 11,
+    "dependsOn": [
+      "vtt-vision-model"
+    ],
+    "acceptance": [
+      "Conservar exploración manual y añadir una capa distinta de visión: desconocido opaco, conocido sin visión oscuro, visible iluminado.",
+      "El director puede elegir y guardar qué personajes comparten visión; unión exclusiva de esas instancias y limpieza de referencias eliminadas.",
+      "La previsualización excluye tokens no visibles también de etiquetas, PG, listas, turnos, selección, fichas y objetivos; herramientas de dirección claramente fuera de esa vista.",
+      "No abrir rutas a jugadores ni presentar la previsualización como un servicio de tablero compartido; esa entrega requiere una fase específica de servidor/permisos revisada por humanos.",
+      "Comprobar visualmente ambas capas, cambios de lista, movimiento, recarga y copias sin perder exploración."
+    ]
+  },
+  {
+    "id": "vtt-vision-effects",
+    "title": "Calcular visión con iluminación, obstáculos, sentidos y efectos temporales",
+    "priority": 12,
+    "dependsOn": [
+      "vtt-vision-preview"
+    ],
+    "acceptance": [
+      "Motor puro visible/no visible/desconocido con motivos; distinguir ver, detectar posición y línea de efecto.",
+      "Combinar luz ambiental y fuentes luminosas, cegado, visión en oscuridad y otros sentidos documentados con obstáculos configurados por el director.",
+      "Diferenciar oscuridad mágica, penumbra, niebla/clima y paredes; reglas/alcances solo de fuentes verificadas, con datos pendientes explícitos.",
+      "Hora y clima del mundo de juego, nunca reloj real ni meteorología terrestre; duraciones, concentración y final de efecto explícitos y persistentes.",
+      "Probar luz remota, dos sentidos distintos, pared/puerta, oscuridad mágica, vibraciones sin vista, expiración y aislamiento de encuentros."
+    ]
+  },
+  {
+    "id": "travel-route-planner",
+    "title": "Calcular itinerarios por caminos con opción fuera de camino y medios de viaje",
+    "priority": 13,
+    "dependsOn": [
+      "travel-route-graph"
+    ],
+    "acceptance": [
+      "Seleccionar itinerario por caminos por defecto sobre la red verificada y añadir check Permitir tramos fuera de camino.",
+      "Dijkstra determinista con costes no negativos; separar distancia geométrica y duración/avance, sin multiplicar kilómetros por terreno.",
+      "Modo a pie/barco y transbordos restringen aristas; el check no autoriza atravesar agua, obstáculos ni terreno desconocido sin enlace válido.",
+      "Sin cobertura/conexión/medio disponible, explicar que no hay itinerario verificado y ofrecer ruta manual identificada, sin disfrazar una recta de camino.",
+      "Probar rodeo por camino frente a alternativa válida, puentes/vados, barco/pie, desconexión y preservación de rutas manuales."
+    ]
+  },
+  {
+    "id": "travel-route-progress",
+    "title": "Avanzar jornadas por tramos y conservar el itinerario calculado",
+    "priority": 14,
+    "dependsOn": [
+      "travel-route-planner"
+    ],
+    "acceptance": [
+      "Consumir horas de jornada por tramo según terreno y medio de viaje; mostrar kilómetros físicos y duración por separado.",
+      "Guardar geometría, distancia recorrida, opciones y versión de red por campaña/grupo; cambios de red no alteran un viaje empezado sin decisión explícita.",
+      "Conservar provisiones, puestos, encuentros y jornadas anteriores y ampliar la validación de copias en el mismo cambio.",
+      "Probar viaje mixto pie/barco, llegada exacta, pausa por encuentro, cambio de grupo/campaña, recarga y exportación/importación."
+    ]
+  },
+  {
+    "id": "vtt-vision-combat",
+    "title": "Usar visión personal en combate e invalidar decisiones al cambiar el entorno",
+    "priority": 15,
+    "dependsOn": [
+      "vtt-vision-effects"
+    ],
+    "acceptance": [
+      "Consultar visión atacante a objetivo y objetivo a atacante; la visión compartida de un aliado no concede visión personal al atacante.",
+      "Incorporar revisión de luz, obstáculos, movimiento y efectos a la caché de decisiones; preguntar únicamente ante información desconocida.",
+      "Conservar tiradas, recursos, reacciones y comprobaciones de alcance/línea de efecto, sin inferirlas solo del estado visual.",
+      "Probar cambio de observadores, movimiento, puerta y final de hechizo; no reutilizar ventaja/desventaja anterior tras esos cambios."
+    ]
+  },
+  {
+    "id": "encounter-environment",
+    "title": "Trasladar hora y condiciones del viaje al encuentro del VTT",
+    "priority": 16,
+    "dependsOn": [
+      "travel-route-progress",
+      "vtt-vision-model"
+    ],
+    "acceptance": [
+      "Contexto de mundo de juego estructurado para hora, clima e iluminación, con procedencia y valores desconocidos explícitos.",
+      "Pasar una instantánea por campaña/grupo/runId al abrir un encuentro; no mezclar condiciones de grupos ni modificar encuentros anteriores.",
+      "Conservar textos/eventos guardados y no extraer automáticamente números de descripciones ambiguas; permitir corrección del director.",
+      "Probar dos grupos y encuentros distintos, recarga y copias de seguridad; no consultar hora ni clima reales para decidir visibilidad."
+    ]
   }
 ]

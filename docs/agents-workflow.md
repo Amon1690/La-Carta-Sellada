@@ -13,8 +13,8 @@ se utilizan. No hace falta crear `OPENAI_API_KEY`; si llegaste a crear una clave
 exclusiva para el piloto, puedes revocarla en OpenAI y quitar su secreto en GitHub.
 No se leen ni eliminan claves de otras aplicaciones.
 
-El workflow `Cola de mejoras` solo permite crear manualmente las seis issues
-iniciales sin duplicados. Las issues #2 a #7 ya creadas se conservan. La CI de
+El workflow `Cola de mejoras` solo permite crear manualmente las tareas de la cola
+sin duplicados. Las issues #2 a #7 ya creadas se conservan. La CI de
 compilación, datos y pruebas permanece en GitHub. Este repositorio es público y
 la CI usa runners estándar; no se contratan runners ni servicios adicionales.
 No se promete que futuros cambios de plan o de servicios externos sean gratuitos.
@@ -97,3 +97,24 @@ necesitando comprobación visual antes de preparar una propuesta como aprobada.
 
 Referencias oficiales: [autenticación y sesión](https://learn.chatgpt.com/docs/auth),
 [tareas programadas locales](https://learn.chatgpt.com/docs/automations).
+
+## Investigación diaria de VTT y Viajes
+
+La petición del 6 de noviembre de 2026 amplía el piloto con dos líneas: visión
+con exploración separada y personajes que comparten visión de forma seleccionable;
+y rutas que prefieran caminos y distingan terreno, agua y medios de viaje.
+
+La misma automatización comprueba cada hora para poder reanudar tras una pausa o
+un apagado. En el primer ciclo disponible de cada día Europe/Madrid dedica hasta
+diez minutos a investigar y registrar fuentes, hechos, incógnitas y propuestas.
+Después trabaja en una tarea autorizada, con el límite existente de dos tareas
+nuevas al día y checkpoints a unos 25 minutos. Si no hay tarea elegible conserva
+la investigación diaria; no termina la automatización solo porque la cola esté
+vacía. Las propuestas nuevas esperan autorización humana.
+
+Consulta el [procedimiento y la cola autorizada](research-workflow.md), el
+[estudio de visión](research/vtt-vision.md) y el
+[estudio de rutas](research/travel-routing.md). Este cambio del workflow requiere
+integración humana. Hasta que esté integrado se permite investigación local de
+solo lectura; el desarrollo de las nuevas tareas espera. No se cambia el login ni se abren accesos, se compran servicios o se distribuye
+cartografía nueva.
