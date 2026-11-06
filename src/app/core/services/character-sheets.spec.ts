@@ -1,4 +1,5 @@
 import { calculateCharacter } from './character-builder';
+import { VisionProfile } from '../models/vision';
 import { rules as builderRules, warrior } from './character-builder.fixture';
 import { TestBed } from '@angular/core/testing';
 import { provideZonelessChangeDetection } from '@angular/core';
@@ -311,6 +312,50 @@ describe('CharacterSheetsService y consumidores', () => {
     expect(board.tokenChoices().find((p)=>p.id==='player:template-player')?.maxHp).toBe(49);
     expect(travel.members().find((p)=>p.id==='player-option-template-player')?.survivalBonus).toBe(4);
     expect(travel.members().find((p)=>p.id==='player-option-template-player')?.perceptionBonus).toBe(4);
+  });
+
+  it('comparte visión de PJ/PNJ/genérico y la conserva al guardar sus editores', async () => {
+    const vision: VisionProfile = { version: 1, senses: [{ sense: 'darkvision', rangeFeet: 30, source: { kind: 'director', reference: 'Perfil sintético de prueba' } }] };
+    sheets.saveVisionProfile(adventure, 'player:template-player', vision);
+    sheets.saveVisionProfile(adventure, 'npc:guide', vision);
+    sheets.saveGenericNpc(genericNpc(), 'create'); sheets.saveVisionProfile(adventure, 'generic:test-generic', vision);
+    const editor = TestBed.runInInjectionContext(() => new Compendium()) as any;
+    const entities = [
+      { kind: 'player', value: sheets.playerSheets(adventure).find((p) => p.id === 'template-player')! },
+      { kind: 'campaign-npc', value: sheets.campaignNpcs(adventure.id, adventure.npcs)[0] },
+      { kind: 'generic-npc', value: sheets.genericNpcs().find((p) => p.id === 'test-generic')! },
+    ];
+    for (const entity of entities) {
+      editor.startEdit({ key: entity.value.id, name: entity.value.name, editableKind: entity.kind, editableEntity: entity.value });
+      editor.draft.name = 'Nombre actualizado'; await editor.saveDraft(new Event('submit'));
+    }
+    expect(sheets.playerSheets(adventure).find((p) => p.id === 'template-player')?.vision).toEqual(vision);
+    expect(sheets.campaignNpcs(adventure.id, adventure.npcs)[0].statBlock?.vision).toEqual(vision);
+    expect(sheets.genericNpcs().find((p) => p.id === 'test-generic')?.vision).toEqual(vision);
+    expect(sheets.campaignNpcs('other-campaign', adventure.npcs)[0].statBlock?.vision).toBeUndefined();
+  });
+  it('un recalculo guiado conserva un perfil explícito y no lo deduce del linaje', () => {
+    const vision: VisionProfile = { version: 1, senses: [{ sense: 'normal', rangeFeet: null, source: { kind: 'director', reference: 'Prueba' } }] };
+    const original = { ...player(), vision };
+    const result = calculateCharacter(warrior(), builderRules, original);
+    expect(result.stats.vision).toEqual(vision); expect(result.stats.vision).not.toBe(vision);
+    expect(calculateCharacter(warrior(), builderRules).stats.vision).toBeUndefined();
+    const before = storage.getItem(PLAYER_KEY);
+    expect(() => sheets.saveVisionProfile(adventure, 'player:template-player', { ...vision, version: 2 } as any)).toThrow();
+    expect(storage.getItem(PLAYER_KEY)).toBe(before);
+  });
+
+  it('usa un sentido registrado aunque las estadísticas generales sigan pendientes', () => {
+    const profile: VisionProfile = { version: 1, senses: [{ sense: 'normal', rangeFeet: null, source: { kind: 'director', reference: 'Dato explícito de prueba' } }] };
+    expect(sheets.visionProfile(adventure, 'player:named-player')).toBeUndefined();
+    sheets.saveVisionProfile(adventure, 'player:named-player', profile);
+    expect(sheets.playerSheets(adventure).find((p) => p.id === 'named-player')?.statisticsRecorded).toBeFalse();
+    expect(sheets.visionProfile(adventure, 'player:named-player')).toEqual(profile);
+    const view = TestBed.runInInjectionContext(() => new VttBoard()) as any;
+    view.tokens.set([{ instanceId: 'named-instance', actorId: 'player:named-player' }]);
+    expect(view.tokenVisionProfiles().get('named-instance')).toEqual(profile);
+    const read = sheets.visionProfile(adventure, 'player:named-player')!; read.senses[0].rangeFeet = 5;
+    expect(sheets.visionProfile(adventure, 'player:named-player')).toEqual(profile);
   });
 
 });

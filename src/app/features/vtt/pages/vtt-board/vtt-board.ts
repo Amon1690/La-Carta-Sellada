@@ -13,6 +13,8 @@ import { ActivatedRoute } from '@angular/router';
 import { map, shareReplay, skip, switchMap } from 'rxjs';
 
 import { Campaign } from '../../../../core/models/campaign';
+import { BoardVisionState, VisionProfile } from '../../../../core/models/vision';
+import { assertBoardVision, emptyBoardVision, withoutRemovedObservers } from '../../../../core/services/vision-state';
 import { CampaignDataService } from '../../../../core/services/campaign-data';
 import { CharacterSheetsService } from '../../../../core/services/character-sheets';
 import { RulesDataService } from '../../../../core/services/rules-data';
@@ -116,6 +118,7 @@ interface TokenDrag {
 
 
 interface StoredBoardState {
+  vision?: BoardVisionState;
   combat?: unknown;
   tokens: BoardToken[];
   fogRects: FogRect[];
@@ -140,6 +143,11 @@ export class VttBoard {
   protected readonly zoom = signal(0.65);
   protected readonly tokens = signal<BoardToken[]>([]);
   protected readonly fogRects = signal<FogRect[]>([]);
+  protected readonly vision = signal<BoardVisionState>(emptyBoardVision());
+  protected readonly visionObserverIds = computed(() =>
+    this.vision().groups.find((group) => group.id === this.vision().activeGroupId)?.observerIds ?? []
+  );
+  private visionStorageBlocked = false;
   protected readonly layers = signal<LayerState>({
     grid: false,
     fog: true,
@@ -188,6 +196,16 @@ export class VttBoard {
     this.sheetRevision();
     const token = this.tokens().find((item) => item.instanceId === this.openedSheetTokenId());
     return token && this.currentCampaign ? this.resolveTokenSheet(token, this.currentCampaign) : undefined;
+  });
+
+  protected readonly tokenVisionProfiles = computed(() => {
+    this.sheetRevision();
+    const profiles = new Map<string, VisionProfile | undefined>();
+    for (const token of this.tokens()) {
+      profiles.set(token.instanceId, this.currentCampaign
+        ? this.characterSheets.visionProfile(this.currentCampaign, token.actorId) : undefined);
+    }
+    return profiles;
   });
 
   protected readonly filteredTokenChoices = computed(() => {
@@ -289,6 +307,13 @@ export class VttBoard {
     this.mode.set(mode);
     this.draftFog.set(undefined);
     this.measureLine.set(undefined);
+  }
+
+  protected setBoardVision(value: BoardVisionState): void {
+    if (this.visionStorageBlocked) throw new Error('Conserva el guardado original antes de sustituir datos de visión no admitidos.');
+    assertBoardVision(value, new Set(this.tokens().map((token) => token.instanceId)));
+    this.vision.set(structuredClone(value));
+    this.persist();
   }
 
   protected setSidebarTab(tab: SidebarTab): void {
@@ -439,6 +464,7 @@ export class VttBoard {
     if (ids.has(this.openedSheetTokenId() ?? '')) this.closeTokenSheet();
     this.cancelInteraction();
     this.tokens.update((tokens) => tokens.filter((token) => !ids.has(token.instanceId)));
+    this.vision.update((vision) => withoutRemovedObservers(vision, new Set(this.tokens().map((token) => token.instanceId))));
     if (ids.has(this.activeTurnId() ?? '')) this.activeTurnId.set(undefined);
     this.selectedTokenIds.set([]);
     this.persist();
@@ -776,6 +802,8 @@ export class VttBoard {
   protected resetBoard(): void {
     if (this.combat.busy()) return;
     if (!window.confirm('¿Restablecer tokens, niebla y turnos de este mapa?')) return;
+    this.visionStorageBlocked = false;
+    this.vision.set(emptyBoardVision());
     this.closeTokenSheet();
     this.combat.restore(undefined);
     this.cancelInteraction();
@@ -1137,6 +1165,9 @@ export class VttBoard {
   }
 
   private loadState(): boolean {
+    this.saveStatus.set('Guardado');
+    this.visionStorageBlocked = false;
+    this.vision.set(emptyBoardVision());
     const raw = localStorage.getItem(this.storageKey);
     if (!raw) {
       this.combat.restore(undefined);
@@ -1158,6 +1189,15 @@ export class VttBoard {
           return restored;
         })
       );
+      if (state.vision !== undefined) {
+        try {
+          assertBoardVision(state.vision, new Set(this.tokens().map((token) => token.instanceId)));
+          this.vision.set(structuredClone(state.vision));
+        } catch {
+          this.visionStorageBlocked = true;
+          this.saveStatus.set('Visión no válida o de otra versión. Se conserva el guardado original; los cambios de este tablero no se guardarán.');
+        }
+      }
       this.fogRects.set(state.fogRects ?? []);
       this.layers.set(
         state.layers ?? { grid: false, fog: true, tokens: true, labels: true }
@@ -1175,11 +1215,16 @@ export class VttBoard {
 
   private persist(): void {
     if (!this.storageKey) return;
+    if (this.visionStorageBlocked) {
+      this.saveStatus.set('Visión no válida o de otra versión. Se conserva el guardado original; los cambios de este tablero no se guardarán.');
+      return;
+    }
     this.saveStatus.set('Guardando');
     // Otras acciones pueden guardar durante un gesto: las posiciones provisionales
     // solo se confirman al soltar el puntero, nunca al ocultar o cambiar de turno.
     const origins = new Map(this.tokenDrag?.origins.map((token) => [token.instanceId, token]));
     const state: StoredBoardState = {
+      vision: this.vision(),
       combat: this.combat.serialized(),
       tokens: this.tokens().map((token) => {
         const origin = origins.get(token.instanceId);

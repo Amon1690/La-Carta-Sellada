@@ -1223,6 +1223,7 @@ export class Compendium {
     const calculated = value ? { ...value.calculation.stats, build: value.build, ancestry: value.calculation.ancestry, className: value.calculation.className, subclass: value.calculation.subclass, background: value.calculation.background, feat: value.calculation.feat, level: value.build.level, statisticsRecorded: true } : {};
     return {
       combat: editor.original && 'className' in editor.original ? editor.original.combat : undefined,
+      vision: editor.original && 'className' in editor.original ? editor.original.vision : undefined,
       id,
       showToken: this.draft.showToken,
       statisticsRecorded: this.draft.statisticsRecorded,
@@ -1273,6 +1274,7 @@ export class Compendium {
       secret: this.optionalText(this.draft.secret),
       statBlock: {
         combat: editor.original && 'faction' in editor.original ? editor.original.statBlock?.combat : undefined,
+        vision: editor.original && 'faction' in editor.original ? editor.original.statBlock?.vision : undefined,
         armorClass: this.numberOr(this.draft.armorClass, 10),
         hitPoints: this.numberOr(this.draft.hitPoints, 1),
         speed: this.textOr(this.draft.speed, '9 m'),
@@ -1294,6 +1296,7 @@ export class Compendium {
     const id = this.draftId(editor);
     return {
       combat: editor.original && 'category' in editor.original ? editor.original.combat : undefined,
+      vision: editor.original && 'category' in editor.original ? editor.original.vision : undefined,
       id,
       name: this.textOr(this.draft.name, 'Ficha genérica sin nombre'),
       category: this.textOr(this.draft.category, 'Genérico'),

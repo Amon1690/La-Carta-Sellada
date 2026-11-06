@@ -6,6 +6,8 @@ import { GENERIC_NPCS } from '../data/generic-npcs';
 import { Campaign, CampaignNpc, CampaignPlayerCharacter, PlayerOption } from '../models/campaign';
 import { RuleGenericNpc } from '../models/rules';
 import { CombatProfile } from '../models/combat';
+import { VisionProfile } from '../models/vision';
+import { assertVisionProfile } from './vision-state';
 
 export interface EditablePlayerSheet extends PlayerOption {
   playerIds?: string[];
@@ -49,6 +51,7 @@ export class CharacterSheetsService {
   }
 
   savePlayer(player: EditablePlayerSheet, mode: 'create' | 'edit', campaignId?: string): void | Promise<void> {
+    if (player.vision !== undefined) assertVisionProfile(player.vision);
     if (this.remote) {
       const user = this.access?.user();
       if (!campaignId || !user || !user.campaigns.includes(campaignId)) throw new Error('No tienes acceso a esta campaña.');
@@ -60,6 +63,37 @@ export class CharacterSheetsService {
       }
     }
     return this.saveEditableEntity(this.playerSheetsStoreKey(campaignId), player, mode);
+  }
+
+  visionProfile(campaign: Campaign, actorId: string): VisionProfile | undefined {
+    const value = actorId.startsWith('player:')
+      ? this.playerSheets(campaign).find((p) => p.id === actorId.slice(7))?.vision
+      : actorId.startsWith('npc:')
+        ? this.campaignNpcs(campaign.id, campaign.npcs).find((p) => p.id === actorId.slice(4))?.statBlock?.vision
+        : actorId.startsWith('generic:')
+          ? this.genericNpcs().find((p) => p.id === actorId.slice(8))?.vision : undefined;
+    if (value === undefined) return undefined;
+    try { assertVisionProfile(value); return structuredClone(value); }
+    catch { return undefined; } // El original no se modifica; no se inventa un alcance.
+  }
+
+  saveVisionProfile(campaign: Campaign, actorId: string, vision: VisionProfile): void | Promise<void> {
+    assertVisionProfile(vision);
+    if (actorId.startsWith('player:')) {
+      const sheet = this.playerSheets(campaign).find((p) => p.id === actorId.slice(7));
+      if (!sheet) throw new Error('No se encuentra la ficha de PJ');
+      return this.savePlayer({ ...sheet, vision: structuredClone(vision) }, 'edit', campaign.id);
+    }
+    if (actorId.startsWith('npc:')) {
+      const sheet = this.campaignNpcs(campaign.id, campaign.npcs).find((p) => p.id === actorId.slice(4));
+      if (!sheet?.statBlock) throw new Error('Completa las estadísticas del PNJ');
+      return this.saveCampaignNpc(campaign.id, { ...sheet, statBlock: { ...sheet.statBlock, vision: structuredClone(vision) } }, 'edit');
+    }
+    if (actorId.startsWith('generic:')) {
+      const sheet = this.genericNpcs().find((p) => p.id === actorId.slice(8));
+      if (sheet) return this.saveGenericNpc({ ...sheet, vision: structuredClone(vision) }, 'edit');
+    }
+    throw new Error('No se encuentra la ficha de origen');
   }
 
   saveCombatProfile(campaign: Campaign, actorId: string, combat: CombatProfile): void | Promise<void> {
@@ -79,10 +113,12 @@ export class CharacterSheetsService {
   }
 
   saveGenericNpc(npc: RuleGenericNpc, mode: 'create' | 'edit'): void {
+    if (npc.vision !== undefined) assertVisionProfile(npc.vision);
     this.saveEditableEntity(this.genericNpcsStoreKey(), npc, mode);
   }
 
   saveCampaignNpc(campaignId: string, npc: CampaignNpc, mode: 'create' | 'edit'): void {
+    if (npc.statBlock?.vision !== undefined) assertVisionProfile(npc.statBlock.vision);
     this.saveEditableEntity(this.campaignNpcsStoreKey(campaignId), npc, mode);
   }
 

@@ -1,6 +1,7 @@
 import { GENERIC_ENCOUNTERS } from '../data/generic-encounters';
 import { SheetCollection } from './remote-sheets';
 import { validState } from './vtt-combat';
+import { assertVisionProfile, assertBoardVision } from './vision-state';
 
 export const BACKUP_FORMAT = 'la-carta-sellada:campaign-backup';
 export const BACKUP_VERSION = 1;
@@ -66,6 +67,7 @@ function stats(value:unknown, featureKey='features'):void {
   if(abilities.some((key)=>!integer(scores[key],0,30)))fail('características');
   for(const key of ['saves','skills','attacks',featureKey,'spells','equipment'])if(!strings(data[key]))fail(`lista de ficha ${key}`);
   if(data['combat']!==undefined)combatProfile(data['combat']);
+  if(data['vision']!==undefined)assertVisionProfile(data['vision']);
 }
 function build(value:unknown):void {
   const b=object(value,'configuración guiada');if(b['version']!==1)fail('versión de ficha guiada no admitida');
@@ -136,6 +138,7 @@ export function validateBoard(value:unknown):void {
   if(s['layers']!==undefined){const layers=object(s['layers'],'capas');if(['grid','fog','tokens','labels'].some((k)=>typeof layers[k]!=='boolean'))fail('capas del tablero');}
   if(s['zoom']!==undefined&&!number(s['zoom'],0.2,2))fail('escala del tablero');
   if(s['activeTurnId']!==undefined&&!ids.has(s['activeTurnId']))fail('turno activo');
+  if(s['vision']!==undefined)assertBoardVision(s['vision'],ids);
   if(s['combat']!==undefined){
     if(!validState(s['combat']))fail('estado de combate');
     const combat=s['combat'];

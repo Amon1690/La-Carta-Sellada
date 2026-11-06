@@ -1,0 +1,78 @@
+import { BoardVisionState, VisionProfile } from '../models/vision';
+import { assertBoardVision, assertVisionProfile, emptyBoardVision, withoutRemovedObservers } from './vision-state';
+
+const source = { kind: 'director' as const, reference: 'Datos sintéticos de prueba, no regla inferida' };
+const profile = (): VisionProfile => ({ version: 1, senses: [
+  { sense: 'normal', rangeFeet: null, source }, { sense: 'darkvision', rangeFeet: 0, source },
+] });
+const state = (): BoardVisionState => ({ ...emptyBoardVision(), groups: [
+  { id: 'first', name: 'Primera visión', observerIds: ['a', 'b'] },
+  { id: 'second', name: 'Segunda visión', observerIds: ['c'] },
+], activeGroupId: 'first', effects: [
+  { id: 'dark', name: 'Efecto de prueba', kind: 'magical-darkness', source,
+    scope: { kind: 'circle', x: 10, y: 20, radiusFeet: 15 }, duration: { kind: 'rounds', remaining: 3 }, active: true, concentrationTokenId: 'a' },
+  { id: 'sense', name: 'Sentido de prueba', kind: 'sense', source, scope: { kind: 'tokens', tokenIds: ['a', 'b'] },
+    duration: { kind: 'until-ended' }, active: true, grantedSense: { sense: 'blindsight', rangeFeet: 10, source } },
+] });
+const ids = new Set(['a', 'b', 'c']);
+
+describe('Contrato de visión versionado', () => {
+  it('empieza desactivado y con entorno desconocido, sin usar reloj ni clima reales', () => {
+    const first = emptyBoardVision();
+    expect(first.enabled).toBeFalse();
+    expect(first.environment).toEqual({ illumination: 'unknown', timeOfDay: 'unknown', weather: 'unknown' });
+    first.groups.push({ id: 'x', name: 'x', observerIds: [] });
+    expect(emptyBoardVision().groups).toEqual([]);
+  });
+  it('distingue ausencia de dato de alcance cero explícito y exige su procedencia', () => {
+    const p = profile(); expect(() => assertVisionProfile(p)).not.toThrow();
+    expect(p.senses.find((s) => s.sense === 'darkvision')?.rangeFeet).toBe(0);
+    expect(p.senses.find((s) => s.sense === 'truesight')).toBeUndefined();
+    expect(() => assertVisionProfile({ ...p, senses: [{ sense: 'darkvision', rangeFeet: 60 }] })).toThrow();
+  });
+  it('rechaza versiones, sentidos duplicados, alcances no finitos y campos no admitidos', () => {
+    for (const invalid of [
+      { ...profile(), version: 2 }, { ...profile(), inferred: true },
+      { ...profile(), senses: [profile().senses[0], profile().senses[0]] },
+      ...[-1, NaN, Infinity, null].map((rangeFeet) => ({ version: 1, senses: [{ sense: 'darkvision', rangeFeet, source }] })),
+    ]) expect(() => assertVisionProfile(invalid)).toThrow();
+  });
+  it('conserva dos listas explícitas sin incluir el observador excluido en la primera', () => {
+    const s = state(); expect(() => assertBoardVision(s, ids)).not.toThrow();
+    expect(s.groups[0].observerIds).toEqual(['a', 'b']); expect(s.groups[0].observerIds).not.toContain('c');
+    expect(JSON.parse(JSON.stringify(s))).toEqual(s);
+  });
+  it('elimina referencias y concentración al borrar un token sin mutar el original', () => {
+    const s = state(); const cleaned = withoutRemovedObservers(s, new Set(['b', 'c']));
+    expect(cleaned.groups[0].observerIds).toEqual(['b']); expect(cleaned.groups[1].observerIds).toEqual(['c']);
+    expect(cleaned.effects.map((e) => e.id)).toEqual(['sense']);
+    expect(cleaned.effects[0].scope).toEqual({ kind: 'tokens', tokenIds: ['b'] });
+    expect(s.groups[0].observerIds).toEqual(['a', 'b']); expect(s.effects.length).toBe(2);
+    expect(() => assertBoardVision(cleaned, new Set(['b', 'c']))).not.toThrow();
+  });
+  it('rechaza referencias rotas, grupos duplicados y un grupo activo inexistente', () => {
+    for (const invalid of [
+      { ...state(), groups: [{ id: 'x', name: 'x', observerIds: ['missing'] }] },
+      { ...state(), groups: [state().groups[0], state().groups[0]] },
+      { ...state(), activeGroupId: 'missing' },
+      { ...state(), effects: [{ ...state().effects[0], concentrationTokenId: 'missing' }] },
+    ]) expect(() => assertBoardVision(invalid, ids)).toThrow();
+  });
+  it('valida el reloj de juego y una fuente para cualquier entorno conocido', () => {
+    const s = state();
+    s.environment = { illumination: 'dim', weather: 'fog', timeOfDay: 'night', gameTime: { day: 4, minuteOfDay: 120 }, source };
+    expect(() => assertBoardVision(s, ids)).not.toThrow();
+    expect(() => assertBoardVision({ ...s, environment: { ...s.environment, gameTime: { day: 4, minuteOfDay: 1440 } } }, ids)).toThrow();
+    expect(() => assertBoardVision({ ...s, environment: { ...s.environment, source: undefined } }, ids)).toThrow();
+  });
+  it('rechaza geometría inválida, duraciones imposibles y efectos sin datos mecánicos', () => {
+    const base = state().effects[0];
+    for (const effect of [
+      { ...base, scope: { kind: 'circle', x: 0, y: 0, radiusFeet: -1 } },
+      { ...base, duration: { kind: 'rounds', remaining: 1.5 } },
+      { ...base, scope: { kind: 'tokens', tokenIds: [] } },
+      { ...base, kind: 'light' }, { ...base, kind: 'obscurement' },
+      { ...base, illumination: 'bright' },
+    ]) expect(() => assertBoardVision({ ...state(), effects: [effect] }, ids)).toThrow();
+  });
+});
