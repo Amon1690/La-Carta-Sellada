@@ -7,6 +7,8 @@ import { Campaign, GameStatBlock } from '../../../../core/models/campaign';
 import { CampaignDataService } from '../../../../core/services/campaign-data';
 import { CHARACTER_SHEET_STORAGE, CharacterSheetsService, EditablePlayerSheet } from '../../../../core/services/character-sheets';
 import { VttBoard } from './vtt-board';
+import { emptyBoardVision } from '../../../../core/services/vision-state';
+import { BoardVisionState, VisionProfile } from '../../../../core/models/vision';
 import { RulesDataService } from '../../../../core/services/rules-data';
 
 interface Token {
@@ -419,6 +421,94 @@ describe('Multiselección de fichas en VTT', () => {
     clickToken('B'); const nextSword = Array.from(fixture.nativeElement.querySelectorAll('app-vtt-attack button') as NodeListOf<HTMLButtonElement>).find((b) => b.textContent?.includes('Espada larga'))!;
     nextSword.click(); fixture.detectChanges();
     expect(view.combat.state().usedAttacks).toBe(2); expect(dialog.open).toBeFalse();
+  });
+
+
+  function boardVision(): BoardVisionState {
+    return { ...emptyBoardVision(), enabled: true, groups: [
+      { id: 'one', name: 'Uno', observerIds: ['A', 'B'] },
+      { id: 'two', name: 'Dos', observerIds: ['C'] },
+    ], activeGroupId: 'one' };
+  }
+  it('migra un tablero antiguo sin alterar niebla manual ni escribir al leer', async () => {
+    const view = fixture.componentInstance as any;
+    view.fogRects.set([{ id: 'old-fog', x: 5, y: 6, width: 20, height: 30 }]); view.persist();
+    const old = JSON.parse(localStorage.getItem(key())!); delete old.vision;
+    const raw = JSON.stringify(old); localStorage.setItem(key(), raw);
+    routeParams.next(params()); fixture.detectChanges(); await fixture.whenStable();
+    expect(view.vision()).toEqual(emptyBoardVision()); expect(view.fogRects()).toEqual(old.fogRects);
+    expect(localStorage.getItem(key())).toBe(raw);
+    view.persist(); expect(JSON.parse(localStorage.getItem(key())!).fogRects).toEqual(old.fogRects);
+  });
+  it('persiste listas elegidas, ignora turno/selección y aísla campaña y ejecución de encuentro', async () => {
+    const view = fixture.componentInstance as any;
+    view.setBoardVision(boardVision());
+    board.selectedTokenIds.set(['C']); board.activeTurnId.set('C');
+    expect(view.visionObserverIds()).toEqual(['A', 'B']);
+    view.setBoardVision({ ...view.vision(), activeGroupId: 'two' });
+    expect(view.visionObserverIds()).toEqual(['C']);
+    const saved = localStorage.getItem(key());
+    routeParams.next(params('other-selection-test')); fixture.detectChanges(); await fixture.whenStable();
+    expect(view.vision().groups).toEqual([]);
+    routeParams.next(params()); fixture.detectChanges(); await fixture.whenStable();
+    expect(view.vision()).toEqual({ ...boardVision(), activeGroupId: 'two' });
+    const otherRun = key().replace(':spec', ':other-run'); previous.set(otherRun, localStorage.getItem(otherRun)); localStorage.removeItem(otherRun);
+    (TestBed.inject(ActivatedRoute).snapshot as any).queryParamMap = convertToParamMap({ run: 'other-run' });
+    routeParams.next(params()); fixture.detectChanges(); await fixture.whenStable();
+    expect(view.vision().groups).toEqual([]); expect(localStorage.getItem(key())).toBe(saved);
+  });
+  it('limpia observadores al borrar un token y conserva la otra lista y la niebla', () => {
+    const view = fixture.componentInstance as any;
+    view.setBoardVision(boardVision()); view.fogRects.set([{ id: 'fog', x: 1, y: 1, width: 10, height: 10 }]);
+    board.selectedTokenIds.set(['A']); view.removeSelectedTokens();
+    expect(view.vision().groups[0].observerIds).toEqual(['B']); expect(view.vision().groups[1].observerIds).toEqual(['C']);
+    expect(JSON.parse(localStorage.getItem(key())!).vision.groups[0].observerIds).toEqual(['B']);
+    expect(view.fogRects().length).toBe(1);
+  });
+  it('conserva un estado de visión futuro o inválido y bloquea su sobrescritura', async () => {
+    const view = fixture.componentInstance as any; view.persist();
+    const saved = JSON.parse(localStorage.getItem(key())!); saved.vision = { ...boardVision(), version: 99 };
+    const raw = JSON.stringify(saved); localStorage.setItem(key(), raw);
+    routeParams.next(params()); fixture.detectChanges(); await fixture.whenStable();
+    expect(view.vision().enabled).toBeFalse(); expect(board.tokens().length).toBe(3);
+    view.persist(); expect(localStorage.getItem(key())).toBe(raw); expect(view.saveStatus()).toContain('conserva');
+    expect(() => view.setBoardVision(emptyBoardVision())).toThrow();
+  });
+  it('rechaza una lista ajena antes de guardar y comparte el perfil de la ficha entre instancias', () => {
+    const view = fixture.componentInstance as any;
+    const write = spyOn(localStorage, 'setItem').and.callThrough();
+    expect(() => view.setBoardVision({ ...boardVision(), groups: [{ id: 'bad', name: 'Ajena', observerIds: ['missing'] }] })).toThrow();
+    expect(write).not.toHaveBeenCalled();
+    const generic = sheets.genericNpcs()[0]; actorFor('A', `generic:${generic.id}`); actorFor('B', `generic:${generic.id}`);
+    expect(view.tokenVisionProfiles().get('A')).toBeUndefined();
+    const profile: VisionProfile = { version: 1, senses: [{ sense: 'darkvision', rangeFeet: 30, source: { kind: 'director', reference: 'Perfil sintético de prueba' } }] };
+    sheets.saveVisionProfile(campaign('vtt-selection-test'), `generic:${generic.id}`, profile);
+    expect(view.tokenVisionProfiles().get('A')).toEqual(profile); expect(view.tokenVisionProfiles().get('B')).toEqual(profile);
+  });
+
+  it('no arrastra el aviso de visión inválida a un tablero guardado válido', async () => {
+    const view = fixture.componentInstance as any; view.persist();
+    const base = JSON.parse(localStorage.getItem(key())!);
+    localStorage.setItem(key(), JSON.stringify({ ...base, vision: { version: 99 } }));
+    const original = localStorage.getItem(key());
+    localStorage.setItem(key('other-selection-test'), JSON.stringify({ ...base, vision: emptyBoardVision() }));
+    routeParams.next(params()); fixture.detectChanges(); await fixture.whenStable();
+    expect(view.saveStatus()).toContain('no se guardarán');
+    routeParams.next(params('other-selection-test')); fixture.detectChanges(); await fixture.whenStable();
+    expect(view.saveStatus()).toBe('Guardado'); view.persist();
+    expect(localStorage.getItem(key())).toBe(original);
+    expect(JSON.parse(localStorage.getItem(key('other-selection-test'))!).vision).toEqual(emptyBoardVision());
+  });
+  it('solo descarta un estado de visión incompatible tras confirmar restablecer el tablero', async () => {
+    const view = fixture.componentInstance as any; view.persist();
+    const base = JSON.parse(localStorage.getItem(key())!);
+    const original = JSON.stringify({ ...base, vision: { version: 99 } }); localStorage.setItem(key(), original);
+    routeParams.next(params()); fixture.detectChanges(); await fixture.whenStable();
+    const confirm = spyOn(window, 'confirm').and.returnValue(false); view.resetBoard();
+    expect(localStorage.getItem(key())).toBe(original);
+    confirm.and.returnValue(true); view.resetBoard();
+    const reset = JSON.parse(localStorage.getItem(key())!);
+    expect(reset.vision).toEqual(emptyBoardVision()); expect(reset.tokens).toEqual([]); expect(reset.fogRects).toEqual([]);
   });
 
 });

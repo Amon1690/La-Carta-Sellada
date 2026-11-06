@@ -4,6 +4,7 @@ import { SheetCollection } from './remote-sheets';
 import { AccessUser } from './access';
 import { calculateCharacter } from './character-builder';
 import { rules, warrior } from './character-builder.fixture';
+import { emptyBoardVision } from './vision-state';
 
 class MemoryStorage implements Storage {
   values=new Map<string,string>();writes=0;failAt=new Set<number>();
@@ -46,5 +47,25 @@ describe('Copias de seguridad por campaña',()=>{
 
  it('permite conservar el estado actual tras un conflicto solo después de preservar la copia anterior',async()=>{put.and.callFake(async(_id:string,sheets:SheetCollection,revision:number)=>{current=structuredClone({...sheets,revision:revision+2,baseIds:[],npcIds:[]});current.created[0]={...current.created[0],name:'Cambio de otra persona'} as {id:string};throw new Error('NetworkError');});const preview=await store.preview(file(),campaign);await expectAsync(store.restore(preview)).toBeRejected();await expectAsync(store.reconcile(campaign)).toBeRejected();await expectAsync(store.keepCurrent(campaign,true)).toBeRejected();expect(store.hasRecovery(campaign)).toBeTrue();const original=store.previousCopy(campaign);expect(original.canImport).toBeTrue();const stateBefore=[...storage.values].filter(([key])=>key!==recoveryKey(campaign));await store.keepCurrent(campaign,true);expect(store.hasRecovery(campaign)).toBeFalse();expect([...storage.values]).toEqual(stateBefore);expect((current.created[0] as any).name).toBe('Cambio de otra persona');expect(put).toHaveBeenCalledTimes(1);});
  it('la descarga de una incidencia anterior no confirma la siguiente',async()=>{put.and.rejectWith(new Error('NetworkError'));const first=await store.preview(file(),campaign);await expectAsync(store.restore(first)).toBeRejected();store.previousCopy(campaign);await store.keepCurrent(campaign,true);const second=await store.preview(file(),campaign);await expectAsync(store.restore(second)).toBeRejected();await expectAsync(store.keepCurrent(campaign,true)).toBeRejected();expect(store.hasRecovery(campaign)).toBeTrue();});
+
+ it('restaura y vuelve a exportar visión y sentidos junto a la niebla manual sin cambiar de campaña', async () => {
+   const t = { instanceId: 'observer', actorId: 'player:custom-backup', name: 'Prueba', image: '', x: 1, y: 1, size: 1, hp: 5, maxHp: 5, initiative: 0, hidden: false };
+   const vision = { ...emptyBoardVision(), groups: [{ id: 'group', name: 'Compartida', observerIds: ['observer'] }], activeGroupId: 'group' };
+   const input = JSON.parse(file({ [boardKey]: { ...board(), tokens: [t], vision, fogRects: [{ id: 'fog', x: 1, y: 2, width: 3, height: 4 }] } }));
+   input.sheets.created[0].vision = { version: 1, senses: [{ sense: 'darkvision', rangeFeet: 0, source: { kind: 'director', reference: 'Sin visión nocturna: dato de prueba' } }] };
+   const preview = await store.preview(JSON.stringify(input), campaign); await store.restore(preview);
+   expect(JSON.parse(storage.getItem(boardKey)!).vision).toEqual(vision);
+   const result = parseCampaignBackup(await store.export(campaign), campaign);
+   expect((result.sheets.created[0] as any).vision).toEqual(input.sheets.created[0].vision);
+   expect((result.local[boardKey] as any).fogRects).toEqual(input.local[boardKey].fogRects);
+ });
+ it('rechaza perfiles, versiones y referencias de visión inválidos sin escribir nada', async () => {
+   for (const invalid of [{ ...emptyBoardVision(), version: 2 }, { ...emptyBoardVision(), groups: [{ id: 'x', name: 'x', observerIds: ['missing'] }] }]) {
+     await expectAsync(store.preview(file({ [boardKey]: { ...board(), vision: invalid } }), campaign)).toBeRejected();
+   }
+   const input = JSON.parse(file()); input.sheets.created[0].vision = { version: 1, senses: [{ sense: 'darkvision', rangeFeet: 60 }] };
+   await expectAsync(store.preview(JSON.stringify(input), campaign)).toBeRejected();
+   expect(storage.writes).toBe(0); expect(put).not.toHaveBeenCalled();
+ });
 
 });

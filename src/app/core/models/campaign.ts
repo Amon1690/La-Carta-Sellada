@@ -1,5 +1,6 @@
 import type { CharacterBuild } from './character-build';
 import type { CombatProfile } from './combat';
+import type { VisionProfile } from './vision';
 
 export interface Campaign {
   id: string;
@@ -137,6 +138,7 @@ export interface AbilityScores {
 }
 
 export interface GameStatBlock {
+  vision?: VisionProfile;
   combat?: CombatProfile;
   armorClass: number;
   hitPoints: number;

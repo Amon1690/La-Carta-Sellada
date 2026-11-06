@@ -411,6 +411,7 @@ export function calculateCharacter(build: CharacterBuild, rules: RulesCompendium
     }
     const equipment = items.filter((x) => x.item).map(({ item, assigned }) => `${item!.name}${assigned.quantity > 1 ? ` ×${assigned.quantity}` : ''}${assigned.equipped ? '' : ' (guardado)'}`);
     const stats: GameStatBlock = { armorClass: ac, hitPoints: hp, speed: `${speed.toLocaleString('es-ES')} m`, initiative: signed(initiative), proficiencyBonus: proficiency, abilities, saves, skills, attacks, features, spells, equipment };
+    if (original?.vision) stats.vision = structuredClone(original.vision);
     const derived = deriveCombat({ ...stats, combat: original?.combat }, rules);
     const changedMagic = !!original && (original.level !== level || JSON.stringify(original.abilities) !== JSON.stringify(abilities));
     const casts = spellIds.flatMap((id) => {

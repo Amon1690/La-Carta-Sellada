@@ -1,3 +1,4 @@
+import type { VisionProfile } from './vision';
 import type { CombatProfile } from './combat';
 
 export interface RulesCompendium {
@@ -96,6 +97,7 @@ export interface RuleCreatureAbility {
 }
 
 export interface RuleGenericNpc {
+  vision?: VisionProfile;
   combat?: CombatProfile;
   id: string;
   name: string;
