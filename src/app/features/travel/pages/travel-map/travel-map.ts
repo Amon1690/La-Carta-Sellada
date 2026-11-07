@@ -178,6 +178,7 @@ const STORAGE_KEY = 'la-carta-sellada:travel-map:faerun-atlas-v3';
 const KM_PER_X_PERCENT = 61.1;
 const KM_PER_Y_PERCENT = 43.1;
 const LOCATIONS = FAERUN_LOCATIONS;
+const DISTANCE_FORMAT = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 3 });
 
 @Component({
   selector: 'app-travel-map',
@@ -250,15 +251,17 @@ export class TravelMap implements AfterViewInit {
   protected readonly travelledDistance = computed(() =>
     this.logs().reduce((total, log) => total + log.distance, 0)
   );
-  protected readonly remainingDistance = computed(() =>
-    Math.max(0, this.routeDistance() - this.travelledDistance())
-  );
+  protected readonly remainingDistance = computed(() => {
+    const total = this.routeDistance(), travelled = this.travelledDistance();
+    const remaining = Math.max(0, total - travelled);
+    return remaining <= this.distanceTolerance(total, travelled) ? 0 : remaining;
+  });
   protected readonly dailyDistance = computed(() => {
     const plan = this.plan();
     const speed = this.paceSpeed(plan.pace);
     const base = speed * Math.max(1, plan.hours);
     const mountBonus = speed * Math.max(0, plan.mountBoostHours);
-    return Math.round((base + mountBonus) * (plan.difficultTerrain ? 0.5 : 1));
+    return (base + mountBonus) * (plan.difficultTerrain ? 0.5 : 1);
   });
   protected readonly estimatedDays = computed(() => {
     const daily = this.dailyDistance();
@@ -467,7 +470,7 @@ export class TravelMap implements AfterViewInit {
         }
         return [...route, point];
       });
-      this.status.set(`Ruta: ${Math.round(this.routeDistance())} km`);
+      this.status.set(`Ruta: ${this.formatDistance(this.routeDistance())} km`);
       this.persistState();
     }
   }
@@ -719,12 +722,12 @@ export class TravelMap implements AfterViewInit {
     const eventEffects = this.aggregateEventEffects(events);
     const adjustedDistance = Math.max(
       0,
-      Math.round(
-        this.dailyDistance() * (1 + eventEffects.distancePercent) + eventEffects.distanceKm
-      )
+      this.dailyDistance() * (1 + eventEffects.distancePercent) + eventEffects.distanceKm
     );
-    const distance = Math.min(adjustedDistance, this.remainingDistance());
-    const totalDistance = this.travelledDistance() + distance;
+    const remaining = this.remainingDistance();
+    const distance = Math.min(adjustedDistance, remaining);
+    const totalDistance = adjustedDistance >= remaining
+      ? this.routeDistance() : this.travelledDistance() + distance;
     const foodUsed = travelers * 0.45;
     const waterUsed = travelers * 3.8;
     const nextFood = Math.max(0, this.plan().foodKg - foodUsed + eventEffects.foodKg);
@@ -760,7 +763,7 @@ export class TravelMap implements AfterViewInit {
     this.status.set(
       pending
         ? `Jornada ${day}: decide si quieres jugar ${encounter?.name ?? 'el encuentro'}`
-        : `Jornada ${day} resuelta · ${distance} km recorridos`
+        : `Jornada ${day} resuelta · ${this.formatDistance(distance)} km recorridos`
     );
     this.sideTab.set('days');
     this.persistState();
@@ -945,7 +948,7 @@ export class TravelMap implements AfterViewInit {
     this.groups.update((groups) =>
       groups.map((group) =>
         group.id === id
-          ? { ...group, x: this.clamp(point.x, 1, 99), y: this.clamp(point.y, 1, 99) }
+          ? { ...group, x: this.clamp(point.x, 0, 100), y: this.clamp(point.y, 0, 100) }
           : group
       )
     );
@@ -975,6 +978,14 @@ export class TravelMap implements AfterViewInit {
     requestAnimationFrame(() => viewport.scrollTo({ left: 0, top: 0, behavior }));
   }
 
+  private distanceTolerance(...values: number[]): number {
+    return Number.EPSILON * 8 * Math.max(1, ...values.map(Math.abs));
+  }
+
+  protected formatDistance(value: number): string {
+    return value > 0 && value < 0.001 ? '< 0,001' : DISTANCE_FORMAT.format(value);
+  }
+
   private calculateRouteDistance(points: MapPoint[]): number {
     let distance = 0;
     for (let index = 1; index < points.length; index += 1) {
@@ -982,7 +993,7 @@ export class TravelMap implements AfterViewInit {
       const dy = (points[index].y - points[index - 1].y) * KM_PER_Y_PERCENT;
       distance += Math.hypot(dx, dy);
     }
-    return Math.round(distance);
+    return distance;
   }
 
   private positionGroupAlongRoute(distance: number): string {
@@ -990,7 +1001,12 @@ export class TravelMap implements AfterViewInit {
     const points = this.route();
     if (!groupId || points.length < 2) return 'Sin posición';
 
-    let remaining = distance;
+    if (distance >= this.routeDistance() - this.distanceTolerance(distance, this.routeDistance())) {
+      const destination = points[points.length - 1];
+      this.updateGroupPosition(groupId, destination);
+      return this.nearestLocation(destination)?.name ?? 'En ruta';
+    }
+    let remaining = Math.max(0, distance);
     for (let index = 1; index < points.length; index += 1) {
       const start = points[index - 1];
       const end = points[index];
