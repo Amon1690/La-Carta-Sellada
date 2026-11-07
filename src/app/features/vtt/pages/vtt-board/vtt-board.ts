@@ -15,6 +15,7 @@ import { map, shareReplay, skip, switchMap } from 'rxjs';
 import { Campaign } from '../../../../core/models/campaign';
 import { BoardVisionState, VisionProfile } from '../../../../core/models/vision';
 import { assertBoardVision, emptyBoardVision, withoutRemovedObservers } from '../../../../core/services/vision-state';
+import { previewSight, previewTokenVisible } from '../../../../core/services/vision-preview';
 import { CampaignDataService } from '../../../../core/services/campaign-data';
 import { CharacterSheetsService } from '../../../../core/services/character-sheets';
 import { RulesDataService } from '../../../../core/services/rules-data';
@@ -34,7 +35,7 @@ import { TokenSheet, VttTokenSheet } from './token-sheet';
 
 type VttEntryKind = 'scene' | 'encounter' | 'location' | 'generic';
 type ToolMode = 'select' | 'pan' | 'fog' | 'reveal' | 'measure';
-type SidebarTab = 'tokens' | 'layers' | 'turns';
+type SidebarTab = 'tokens' | 'layers' | 'turns' | 'vision';
 
 interface VttEntry {
   id: string;
@@ -144,10 +145,13 @@ export class VttBoard {
   protected readonly tokens = signal<BoardToken[]>([]);
   protected readonly fogRects = signal<FogRect[]>([]);
   protected readonly vision = signal<BoardVisionState>(emptyBoardVision());
+  protected readonly visionPreview = signal(false);
+  protected readonly visionMessage = signal('');
+  protected readonly visionMaskId = this.newId('vision-mask');
   protected readonly visionObserverIds = computed(() =>
     this.vision().groups.find((group) => group.id === this.vision().activeGroupId)?.observerIds ?? []
   );
-  private visionStorageBlocked = false;
+  protected visionStorageBlocked = false;
   protected readonly layers = signal<LayerState>({
     grid: false,
     fog: true,
@@ -168,7 +172,7 @@ export class VttBoard {
   protected readonly attackingId = signal<string | undefined>(undefined);
   protected readonly attackTargetId = signal<string | undefined>(undefined);
   protected readonly conditionLabels = Object.entries(CONDITION_LABELS) as [CombatCondition, string][];
-  protected readonly targeting = computed(() => !!this.attackingId() && this.combat.canAttack(this.attackingId()!));
+  protected readonly targeting = computed(() => !this.visionPreview() && !!this.attackingId() && this.combat.canAttack(this.attackingId()!));
   private readonly rules = signal<RulesCompendium | undefined>(undefined);
   protected readonly combatants = computed<Combatant[]>(() => {
     this.sheetRevision();
@@ -195,7 +199,7 @@ export class VttBoard {
   protected readonly openedTokenSheet = computed(() => {
     this.sheetRevision();
     const token = this.tokens().find((item) => item.instanceId === this.openedSheetTokenId());
-    return token && this.currentCampaign ? this.resolveTokenSheet(token, this.currentCampaign) : undefined;
+    return !this.visionPreview() && token && this.currentCampaign ? this.resolveTokenSheet(token, this.currentCampaign) : undefined;
   });
 
   protected readonly tokenVisionProfiles = computed(() => {
@@ -208,6 +212,12 @@ export class VttBoard {
     return profiles;
   });
 
+  protected readonly previewGeometry = computed(() => previewSight(this.vision(), this.tokens(),
+    this.tokenVisionProfiles(), this.gridSize, this.mapWidth, this.mapHeight));
+  protected readonly displayedTokens = computed(() => this.visionPreview()
+    ? this.tokens().filter((token) => previewTokenVisible(token, this.previewGeometry().circles, this.fogRects(), this.gridSize))
+    : this.tokens());
+
   protected readonly filteredTokenChoices = computed(() => {
     const query = this.normalize(this.tokenQuery());
     return this.tokenChoices().filter((choice) =>
@@ -218,14 +228,14 @@ export class VttBoard {
   });
 
   protected readonly selectedTokens = computed(() =>
-    this.tokens().filter((token) => this.selectedTokenIds().includes(token.instanceId))
+    this.visionPreview() ? [] : this.tokens().filter((token) => this.selectedTokenIds().includes(token.instanceId))
   );
   protected readonly selectedToken = computed(() =>
     this.selectedTokens().length === 1 ? this.selectedTokens()[0] : undefined
   );
 
   protected readonly initiativeTokens = computed(() =>
-    this.tokens()
+    this.displayedTokens()
       .slice()
       .sort((a, b) => b.initiative - a.initiative || a.name.localeCompare(b.name))
   );
@@ -280,6 +290,7 @@ export class VttBoard {
       this.closeTokenSheet();
       this.combatPanel?.close();
       this.cancelAttack();
+      this.visionPreview.set(false);
       if (!vm) return;
       this.cancelInteraction();
       this.selectedTokenIds.set([]);
@@ -301,6 +312,7 @@ export class VttBoard {
   }
 
   protected setMode(mode: ToolMode): void {
+    if (this.visionPreview() && mode !== 'pan') return;
     this.cancelInteraction();
     this.lastTokenClickId = this.doubleClickTokenId = undefined;
     this.cancelAttack();
@@ -316,6 +328,51 @@ export class VttBoard {
     this.persist();
   }
 
+  protected toggleVisionPreview(): void {
+    if (this.combat.busy() || (!this.visionPreview() && (!this.vision().enabled || this.visionStorageBlocked))) return;
+    this.closeTokenSheet(); this.combatPanel?.close(); this.cancelAttack(); this.clearSelection();
+    this.diceOpen.set(false); this.diceResult.set(''); this.combatMessage.set('');
+    this.visionPreview.update((value) => !value);
+    this.mode.set(this.visionPreview() ? 'pan' : 'select');
+  }
+
+  protected enableVision(enabled: boolean): void { this.setBoardVision({ ...this.vision(), enabled }); }
+  protected createVisionGroup(name: string): void {
+    const trimmed = name.trim(); if (!trimmed || trimmed.length > 500 || this.vision().groups.length >= 100) return;
+    const id = this.newId('observers');
+    this.setBoardVision({ ...this.vision(), groups: [...this.vision().groups, { id, name: trimmed, observerIds: [] }], activeGroupId: id });
+  }
+  protected chooseVisionGroup(id: string): void { this.setBoardVision({ ...this.vision(), activeGroupId: id || undefined }); }
+  protected toggleVisionObserver(id: string, checked: boolean): void {
+    const value = this.vision();
+    this.setBoardVision({ ...value, groups: value.groups.map((group) => group.id !== value.activeGroupId ? group : {
+      ...group, observerIds: checked ? [...new Set([...group.observerIds, id])] : group.observerIds.filter((item) => item !== id),
+    }) });
+  }
+  protected setPreviewEnvironment(field: 'illumination' | 'weather', value: string): void {
+    const allowed = field === 'illumination' ? ['unknown', 'bright', 'dim', 'darkness'] : ['unknown', 'clear', 'rain', 'snow', 'fog', 'other'];
+    if (!allowed.includes(value)) return;
+    this.setBoardVision({ ...this.vision(), environment: { ...this.vision().environment, [field]: value,
+      source: { kind: 'director', reference: 'Entorno de juego declarado por el director en el VTT' } } });
+  }
+  protected normalVisionRange(id: string): number | null | undefined {
+    return this.tokenVisionProfiles().get(id)?.senses.find((sense) => sense.sense === 'normal')?.rangeFeet;
+  }
+  protected async saveNormalVision(id: string, range: string, unlimited: boolean, reference: string): Promise<void> {
+    if (this.visionPreview() || this.visionStorageBlocked || !this.currentCampaign) return;
+    const token = this.tokens().find((item) => item.instanceId === id); if (!token) return;
+    const amount = unlimited ? null : Number(range);
+    if ((!unlimited && (!range.trim() || !Number.isFinite(amount) || amount! < 0 || amount! > 100000)) || !reference.trim()) {
+      this.visionMessage.set('Indica un alcance válido y su fuente; no se deducen de los nombres.'); return;
+    }
+    const senses = this.tokenVisionProfiles().get(id)?.senses.filter((sense) => sense.sense !== 'normal') ?? [];
+    try {
+      await this.characterSheets.saveVisionProfile(this.currentCampaign, token.actorId, { version: 1, senses: [...senses,
+        { sense: 'normal', rangeFeet: amount, source: { kind: 'director', reference: reference.trim() } }] });
+      this.sheetRevision.update((revision) => revision + 1); this.visionMessage.set('Vista normal guardada en la ficha compartida.');
+    } catch { this.visionMessage.set('No se pudo guardar la visión. Revisa la ficha y su fuente.'); }
+  }
+
   protected setSidebarTab(tab: SidebarTab): void {
     this.sidebarTab.set(tab);
   }
@@ -325,6 +382,7 @@ export class VttBoard {
   }
 
   protected addToken(choice: TokenChoice): void {
+    if (this.visionPreview()) return;
     if (this.combat.busy()) return;
     const existing = this.tokens().length;
     const x = ((existing % 10) + 1) * this.gridSize;
@@ -351,6 +409,7 @@ export class VttBoard {
 
   protected selectToken(instanceId: string, event: MouseEvent): void {
     event.stopPropagation();
+    if (this.visionPreview()) return;
     if (this.targeting()) {
       if (instanceId === this.attackingId()) { this.combatMessage.set('Elige otra ficha como objetivo'); return; }
       const target = this.combat.find(instanceId);
@@ -364,6 +423,7 @@ export class VttBoard {
 
   protected openTokenSheet(instanceId: string, event: MouseEvent): void {
     event.stopPropagation();
+    if (this.visionPreview()) return;
     if (this.targeting()) return;
     if ((event.type === 'dblclick' && this.mode() !== 'select') || event.shiftKey || event.ctrlKey || event.metaKey) return;
     if (event.type === 'dblclick' && this.doubleClickTokenId !== instanceId) return;
@@ -392,6 +452,7 @@ export class VttBoard {
   }
 
   protected selectAllTokens(): void {
+    if (this.visionPreview()) return;
     this.cancelInteraction();
     this.selectedTokenIds.set(this.layers().tokens ? this.tokens().map((token) => token.instanceId) : []);
   }
@@ -402,6 +463,7 @@ export class VttBoard {
   }
 
   protected tokenPointerDown(token: BoardToken, event: PointerEvent): void {
+    if (this.visionPreview()) return;
     if (this.targeting()) { event.stopPropagation(); return; }
     if (this.combat.busy()) { event.stopPropagation(); return; }
     if (this.mode() !== 'select' || event.button !== 0 || this.interactionPointerId !== undefined) return;
@@ -527,6 +589,7 @@ export class VttBoard {
   }
 
   protected beginAttack(id: string): void {
+    if (this.visionPreview()) return;
     if (!this.combat.canAttack(id)) { this.prepareCombat(id); return; }
     this.cancelInteraction(); this.closeTokenSheet(); this.mode.set('select'); this.sidebarTab.set('turns');
     this.combatMessage.set(''); this.attackTargetId.set(undefined); this.attackingId.set(id); this.showLatestCombat();
@@ -551,7 +614,7 @@ export class VttBoard {
     this.updateToken(id, { conditions: enabled ? [...new Set([...conditions, condition])] : conditions.filter((c) => c !== condition) });
   }
   protected clearTokenConditions(id: string): void { if (!this.combat.busy()) this.updateToken(id, { conditions: [] }); }
-  protected prepareCombat(id: string): void { this.cancelInteraction(); this.combatPanel?.open(id); }
+  protected prepareCombat(id: string): void { if (this.visionPreview()) return; this.cancelInteraction(); this.combatPanel?.open(id); }
   protected resumeCombat(): void { this.combatPanel?.resume(); }
   protected endCombat(): void {
     if (this.combat.busy() || !window.confirm('¿Terminar el combate? Los PG y los recursos gastados se conservan.')) return;
@@ -817,6 +880,7 @@ export class VttBoard {
 
   @HostListener('window:keydown', ['$event'])
   protected handleKeyboard(event: KeyboardEvent): void {
+    if (this.visionPreview()) return;
     if (this.tokenSheetDialog?.isOpen || this.combatPanel?.isOpen || this.combat.busy()) return;
     const target = event.target as HTMLElement;
     if (target.closest('input, textarea, select, [contenteditable="true"]')) return;
