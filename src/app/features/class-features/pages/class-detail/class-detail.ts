@@ -33,7 +33,7 @@ export class ClassDetail {
     )
   );
 
-  protected levels(characterClass: RuleClass): ClassLevel[] {
+  protected levels(characterClass: Pick<RuleClass, 'features'>): ClassLevel[] {
     const grouped = new Map<number, RuleClassFeature[]>();
 
     for (const feature of characterClass.features) {

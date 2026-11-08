@@ -84,22 +84,42 @@ export function magicProgression(build: CharacterBuild): {
 }
 export const featLevels = (classId: string): number[] => [4, 8, 12, 16, ...(classId === 'guerrero' ? [6, 14] : classId === 'picaro' ? [10] : []), 19].sort((a, b) => a - b);
 const aliases: Record<string, string> = { humana: 'humano', elfica: 'elfo', elfico: 'elfo', elfa: 'elfo', enana: 'enano', gnoma: 'gnomo', mediana: 'mediano', orca: 'orco', draconida: 'draconido', paladina: 'paladin', barda: 'bardo', guerrera: 'guerrero', maga: 'mago', exploradora: 'explorador', picara: 'picaro', hechicera: 'hechicero', cleriga: 'clerigo', animadora: 'animador', artesana: 'artesano', charlatana: 'charlatan', guardiana: 'guardia', ermitana: 'ermitano', sabio: 'erudito', mercader: 'comerciante' };
-export const canonicalChoice = (text: string): string => aliases[n(text)] ?? n(text);
+export const canonicalChoice = (text: string): string => n(text) === 'erudita' ? 'erudito' : aliases[n(text)] ?? n(text);
+/** Compatibilidad con el identificador que produjo el OCR del catálogo anterior. */
+export const canonicalSpellId = (id: string): string => id === 'escupo' ? 'escudo' : id;
+const DEVOTION_SPELLS: [number, string[]][] = [[3,['escudo-de-fe','proteccion-contra-el-bien-y-el-mal']],[5,['auxilio','zona-de-la-verdad']],[9,['disipar-magia','senal-de-esperanza']],[13,['guardian-de-la-fe','libertad-de-movimiento']],[17,['comunion','golpe-flamigero']]];
+export function alwaysPreparedSpellIds(build: CharacterBuild): string[] {
+    if (build.classId !== 'paladin') return [];
+    return [...(build.level >= 2 ? ['castigo-divino'] : []), ...(build.level >= 5 ? ['hallar-corcel'] : []), ...(n(build.subclass) === 'juramento de entrega' ? DEVOTION_SPELLS.filter(([level]) => build.level >= level).flatMap(([,ids]) => ids) : [])];
+}
+export function normalizeBuildChoices(build: CharacterBuild): CharacterBuild {
+    const result = structuredClone(build);
+    result.cantripIds = result.cantripIds.map(canonicalSpellId);
+    result.preparedIds = result.preparedIds.map(canonicalSpellId).filter((id) => !alwaysPreparedSpellIds(result).includes(id));
+    result.spellbookIds = result.spellbookIds.map(canonicalSpellId);
+    result.originCantripIds = result.originCantripIds.map(canonicalSpellId);
+    if (result.ritualSpellIds) result.ritualSpellIds = result.ritualSpellIds.map(canonicalSpellId);
+    for (const choice of Object.values(result.magicChoices)) {
+        choice.spellId = canonicalSpellId(choice.spellId);
+        choice.cantripIds = choice.cantripIds.map(canonicalSpellId);
+    }
+    return result;
+}
 export function initialBuild(sheet: PlayerOption | undefined, rules: RulesCompendium): CharacterBuild {
     if (sheet?.build?.version === 1)
-        return structuredClone(sheet.build);
+        return normalizeBuildChoices(sheet.build);
     const classId = canonicalChoice(sheet?.className ?? ''), config = CLASS_RULES[classId];
-    const subclass = config?.subclasses.find((s) => n(s).replace(' de la ', ' de ') === n(sheet?.subclass ?? '').replace(' de la ', ' de ').replace('cazadora', 'cazador').replace('evocadora', 'evocador').replace('maestra', 'maestro').replace('guerrera', 'guerrero').replace('embaucadora', 'embaucador')) ?? '';
+    const subclass = config?.subclasses.find((s) => n(s).replace(' de la ', ' de ') === n(sheet?.subclass ?? '').replace(' de la ', ' de ').replace('adivina', 'adivino').replace('abjuradora', 'abjurador').replace('cazadora', 'cazador').replace('evocadora', 'evocador').replace('maestra', 'maestro').replace('guerrera', 'guerrero').replace('embaucadora', 'embaucador')) ?? '';
     return { version: 1, ancestryId: canonicalChoice(sheet?.ancestry ?? ''), variantId: '', backgroundId: canonicalChoice(sheet?.background ?? ''), classId, subclass, level: sheet?.level ?? 1,
         scores: structuredClone(sheet?.abilities ?? { strength: 10, dexterity: 10, constitution: 10, intelligence: 10, wisdom: 10, charisma: 10 }), scoresIncludeBonuses: !!sheet, backgroundBoosts: {}, classSkills: [], extraSkills: [], expertise: [], humanFeatId: '', featIds: [],
         equipment: (sheet?.equipment ?? []).flatMap((text) => { const item = rules.equipment.find((e) => n(e.name) === n(text)); return item ? [{ id: item.id, quantity: 1, equipped: true, twoHanded: false }] : []; }),
         cantripIds: [], preparedIds: [], spellbookIds: [], originCantripIds: [], magicAbility: 'intelligence', magicChoices: {}, hpMethod: 'fixed', hpRolls: [], resilientAbility: 'constitution', fightingStyle: '', divineOrder: 'protector', primalOrder: 'warden' };
 }
 export function availableSpells(build: CharacterBuild, rules: RulesCompendium, cantrip: boolean, fromBook = true): RuleSpell[] {
-    const magic = magicProgression(build), ids = build.spellbookIds;
+    const magic = magicProgression(build), ids = build.spellbookIds.map(canonicalSpellId);
     const className = rules.classes.find((c) => c.id === magic.classId)?.name;
     const lists = build.classId === 'bardo' && build.level >= 10 && !cantrip ? ['bardo', 'clerigo', 'druida', 'mago'] : [canonicalChoice(className ?? '')];
-    return rules.spells.filter((s) => s.classes.some((c) => lists.includes(canonicalChoice(c))) && (cantrip ? s.level === 0 : s.level > 0 && s.level <= magic.maximum) && (cantrip || !fromBook || build.classId !== 'mago' || ids.includes(s.id)));
+    return rules.spells.filter((s) => s.classes.some((c) => lists.includes(canonicalChoice(c))) && (cantrip ? s.level === 0 : s.level > 0 && s.level <= magic.maximum) && (cantrip || !fromBook || !alwaysPreparedSpellIds(build).includes(s.id)) && (cantrip || !fromBook || build.classId !== 'mago' || ids.includes(s.id)));
 }
 export function originMagic(build: CharacterBuild): {
     key: string;
@@ -144,6 +164,7 @@ export interface CharacterCalculation {
     };
 }
 export function calculateCharacter(build: CharacterBuild, rules: RulesCompendium, original?: PlayerOption): CharacterCalculation {
+    build = normalizeBuildChoices(build);
     const errors: string[] = [], warnings: string[] = [], formulas: string[] = [];
     const ancestry = CHARACTER_ORIGINS.find((o) => o.id === build.ancestryId), background = CHARACTER_BACKGROUNDS.find((b) => b.id === build.backgroundId), cls = rules.classes.find((c) => c.id === build.classId), config = CLASS_RULES[build.classId];
     const level = build.level;
@@ -196,14 +217,24 @@ export function calculateCharacter(build: CharacterBuild, rules: RulesCompendium
         training.add('media');
         training.add('escudo');
     }
-    if (feats.includes('ligeramente-acorazado')) {
-        training.add('ligera');
-        training.add('escudo');
+    for (const id of [...feats, build.fightingStyle].filter(Boolean)) {
+        const feat = rules.feats.find((entry) => entry.id === id);
+        const required = n(feat?.requirements ?? '');
+        const minimum = Number(required.match(/nivel (\d+)/)?.[1] ?? 0);
+        if (level < minimum) errors.push(`${feat!.name}: requiere nivel ${minimum}.`);
+        for (const match of required.matchAll(/((?:fuerza|destreza|constitucion|inteligencia|sabiduria|carisma)(?:\s*(?:,|o|y)\s*(?:fuerza|destreza|constitucion|inteligencia|sabiduria|carisma))*)\s+(\d+)/g)) {
+            const choices = ABILITIES.filter((a) => match[1].includes(n(a.name)));
+            const meets = choices.map((a) => abilities[a.id] >= Number(match[2]));
+            if (!(match[1].includes(' o ') ? meets.some(Boolean) : meets.every(Boolean))) errors.push(`${feat!.name}: requiere ${match[1]} ${match[2]}.`);
+        }
+        for (const [phrase, armorType] of [['armaduras ligeras','ligera'],['armaduras medias','media'],['armaduras pesadas','pesada'],['escudos','escudo']]) {
+            if (required.includes(`entrenamiento con ${phrase}`) && !training.has(armorType)) errors.push(`${feat!.name}: requiere entrenamiento con ${phrase}.`);
+        }
+        if (required.includes('rasgo lanzamiento de conjuros') && (!magicProgression(build).slots.length || build.classId === 'brujo' && !required.includes('magia del pacto'))) errors.push(`${feat!.name}: requiere Lanzamiento de conjuros${required.includes('magia del pacto') ? ' o Magia del pacto' : ''}.`);
+        if (id === 'ligeramente-acorazado') { training.add('ligera'); training.add('escudo'); }
+        if (id === 'moderadamente-acorazado') training.add('media');
+        if (id === 'muy-acorazado') training.add('pesada');
     }
-    if (feats.includes('moderadamente-acorazado'))
-        training.add('media');
-    if (feats.includes('muy-acorazado'))
-        training.add('pesada');
     const shieldTrained = training.has('escudo');
     const items = build.equipment.map((assigned) => ({ assigned, item: rules.equipment.find((e) => e.id === assigned.id) }));
     if (items.some(({ item, assigned }) => !item || !Number.isInteger(assigned.quantity) || assigned.quantity < 1 || assigned.quantity > 999))
@@ -216,8 +247,11 @@ export function calculateCharacter(build: CharacterBuild, rules: RulesCompendium
     if (armors.length > 1 || shields.length > 1)
         errors.push('Solo puedes equipar una armadura y un escudo.');
     const weapons = equipped.filter(({ item }) => /sencilla|marcial/i.test(item.category));
-    if (shield && weapons.some(({ item, assigned }) => n(item.properties.join(' ')).includes('a dos manos') || assigned.twoHanded))
+    const requiresTwoHands = (item: RuleEquipment): boolean => n(item.properties.join(' ')).includes('a dos manos') && !(item.id === 'lanza-de-caballeria' && build.mounted);
+    if (shield && weapons.some(({ item, assigned }) => requiresTwoHands(item) || assigned.twoHanded))
         errors.push('No puedes usar un arma a dos manos y un escudo a la vez.');
+    if (build.fightingStyle === 'duelo' && weapons.length > 1)
+        warnings.push('Duelo requiere una sola arma empuñada con una mano. Marca como guardadas las otras armas para aplicar su +2 al daño; conservarlas en el inventario no las elimina.');
     if (shield && !shieldTrained)
         errors.push('No tienes entrenamiento con escudos: quítalo o completa la elección que concede ese entrenamiento.');
     const heavy = !!armor && n(armor.category).includes('pesada');
@@ -273,8 +307,9 @@ export function calculateCharacter(build: CharacterBuild, rules: RulesCompendium
         features.push(`Orden divina: ${build.divineOrder === 'protector' ? 'Protector' : 'Taumaturgo'}.`);
     if (build.classId === 'druida')
         features.push(`Orden primigenia: ${build.primalOrder === 'warden' ? 'Guardián' : 'Mago'}.`);
-    if (level >= 3)
-        features.push(`Subclase: ${build.subclass}. Consulta sus rasgos específicos en el manual de 2024.`);
+    const subclass = level >= 3 ? cls?.subclasses?.find((s) => n(s.name) === n(build.subclass)) : undefined;
+    if (subclass) features.push(...subclass.features.filter((f) => f.level <= level).map((f) => `${f.name} (${subclass.name}, nivel ${f.level}). ${f.description}`));
+    else if (level >= 3) features.push(`Subclase: ${build.subclass}. Consulta sus rasgos específicos en el manual de 2024.`);
     const knownSkills = new Set([...(background?.skills ?? []), ...build.classSkills, ...build.extraSkills]);
     if (build.classSkills.length !== (config?.skillCount ?? 0) || new Set(build.classSkills).size !== build.classSkills.length || build.classSkills.some((id) => config?.skills.length && !config.skills.includes(id)))
         errors.push(`Selecciona ${config?.skillCount ?? 0} habilidades de clase distintas.`);
@@ -321,7 +356,7 @@ export function calculateCharacter(build: CharacterBuild, rules: RulesCompendium
             return;
         }
         granted.push(spell.id);
-        grants.push({ id: spell.id, ability, resource: spell.level > 0 ? { id: `builder:${key}:${spell.id}`, name: `${name}: usos de ${key === 'ancestry' ? 'linaje' : key === 'class' ? 'clase' : 'Iniciado en la magia'}`, maximum, kind: 'uses' } : undefined });
+        grants.push({ id: spell.id, ability, resource: spell.level > 0 && maximum > 0 ? { id: `builder:${key}:${spell.id}`, name: `${name}: usos de ${key === 'ancestry' ? 'linaje' : key === 'class' ? 'clase' : 'Iniciado en la magia'}`, maximum, kind: 'uses' } : undefined });
     };
     if (build.ancestryId === 'aasimar')
         grant('Luz', 'charisma');
@@ -369,17 +404,37 @@ export function calculateCharacter(build: CharacterBuild, rules: RulesCompendium
         grant('Marca del cazador', 'wisdom', level >= 17 ? 6 : level >= 13 ? 5 : level >= 9 ? 4 : level >= 5 ? 3 : 2, 'class');
     if (build.classId === 'paladin' && level >= 2)
         grant('Castigo divino', 'charisma', 1, 'class');
+    if (build.classId === 'paladin' && level >= 5)
+        grant('Hallar corcel', 'charisma', 1, 'class');
+    if (build.classId === 'paladin' && n(build.subclass) === 'juramento de entrega') {
+        for (const [required, ids] of DEVOTION_SPELLS) if (level >= required) for (const id of ids) {
+            const spell = rules.spells.find((s) => s.id === id);
+            if (spell) grant(spell.name, 'charisma', 0, 'oath');
+            else errors.push(`El catálogo no contiene el conjuro de juramento «${id}».`);
+        }
+    }
+    if (feats.includes('lanzador-ritual')) {
+        const choices = build.ritualSpellIds ?? [];
+        if (choices.length !== proficiency || new Set(choices).size !== choices.length || choices.some((id) => !rules.spells.some((s) => s.id === id && s.level === 1 && /ritual/i.test(s.castingTime))) || !['intelligence', 'wisdom', 'charisma'].includes(build.ritualAbility ?? ''))
+            errors.push(`Lanzador ritual: elige ${proficiency} rituales distintos de nivel 1 y su característica mágica; no se deducen del libro.`);
+        else for (const id of choices) grant(rules.spells.find((s) => s.id === id)!.name, build.ritualAbility!, 0, 'ritual');
+        const quick: CombatResource = { id: 'builder:feat:ritual-quick', name: 'Ritual rápido', maximum: 1, kind: 'uses' };
+        for (const id of new Set([...classSpells, ...granted])) {
+            const spell = rules.spells.find((s) => s.id === id);
+            if (spell && /ritual/i.test(spell.castingTime)) grants.push({id, ability: choices.includes(id) ? build.ritualAbility ?? magic.ability : magic.ability, resource: quick});
+        }
+    }
     if (build.classId === 'picaro' && n(build.subclass) === 'embaucador arcano' && level >= 3 && !build.cantripIds.includes('mano-de-mago'))
         errors.push('Embaucador arcano debe incluir Mano de mago entre sus trucos.');
     const resources: CombatResource[] = magic.slots.flatMap((count, i) => count ? [{ id: `builder:slot:${i + 1}`, name: `${magic.pact ? 'Magia de pacto' : 'Espacios'} nivel ${i + 1}`, maximum: count, kind: 'slot' as const, level: i + 1 }] : []);
-    resources.push(...grants.flatMap((g) => g.resource ? [g.resource] : []));
+    resources.push(...new Map(grants.flatMap((g) => g.resource ? [[g.resource.id, g.resource] as const] : [])).values());
     const spellIds = [...new Set([...classSpells, ...granted])];
     const spells = spellIds.map((id) => rules.spells.find((s) => s.id === id)?.name ?? id);
     const attacks: string[] = [], actions: CombatAction[] = [];
     for (const { item, assigned } of weapons) {
         const properties = n(item.properties.join(' ')), ranged = n(item.category).includes('distancia'), finesse = properties.includes('sutil'), monk = build.classId === 'monje' && !armor && !shield && (n(item.category).includes('sencilla') && !ranged || ['espada-corta', 'cimitarra'].includes(item.id));
         const ability = ranged && !properties.includes('arrojad') ? dex : finesse || monk ? Math.max(str, dex) : str;
-        const proficient = n(item.category).includes('sencilla') ? !['mago', 'hechicero'].includes(build.classId) || properties.includes('ligera') : !!config?.martial || (build.classId === 'monje' && properties.includes('ligera')) || (build.classId === 'picaro' && (properties.includes('sutil') || properties.includes('ligera'))) || build.classId === 'clerigo' && build.divineOrder === 'protector' || build.classId === 'druida' && build.primalOrder === 'warden';
+        const proficient = n(item.category).includes('sencilla') || !!config?.martial || (build.classId === 'monje' && properties.includes('ligera')) || (build.classId === 'picaro' && (properties.includes('sutil') || properties.includes('ligera'))) || build.classId === 'clerigo' && build.divineOrder === 'protector' || build.classId === 'druida' && build.primalOrder === 'warden';
         const bonus = ability + (proficient ? proficiency : 0) + (ranged && build.fightingStyle === 'tiro-con-arco' ? 2 : 0);
         const damage = item.properties[0]?.match(/(\d+d\d+|1) (.+)/), versatile = assigned.twoHanded ? properties.match(/versatil \((\d+d\d+)\)/)?.[1] : undefined;
         if (!damage) {
@@ -387,7 +442,7 @@ export function calculateCharacter(build: CharacterBuild, rules: RulesCompendium
             continue;
         }
         const mode = (isRanged: boolean, range: number, longRange?: number) => {
-            const damageBonus = ability + (build.fightingStyle === 'duelo' && !isRanged && !assigned.twoHanded && !properties.includes('a dos manos') && weapons.length === 1 ? 2 : 0) + (build.fightingStyle === 'combate-con-armas-arrojadizas' && isRanged && properties.includes('arrojad') ? 2 : 0);
+            const damageBonus = ability + (build.fightingStyle === 'duelo' && !isRanged && !assigned.twoHanded && !requiresTwoHands(item) && weapons.length === 1 ? 2 : 0) + (build.fightingStyle === 'combate-con-armas-arrojadizas' && isRanged && properties.includes('arrojad') ? 2 : 0);
             const weaponDice = versatile ?? damage[1];
             const martialDie = level >= 17 ? 12 : level >= 11 ? 10 : level >= 5 ? 8 : 6;
             const bestDice = monk && Number(weaponDice.match(/^1d(\d+)$/)?.[1] ?? 99) < martialDie ? `1d${martialDie}` : weaponDice;
@@ -426,7 +481,7 @@ export function calculateCharacter(build: CharacterBuild, rules: RulesCompendium
         if (classSpells.includes(id))
             sources.push({ ability: magic.ability, resource: spell.level > 0 ? pool : undefined });
         for (const g of grants.filter((g) => g.id === id)) {
-            sources.push({ ability: g.ability, resource: g.resource });
+            if (g.resource || spell.level === 0) sources.push({ ability: g.ability, resource: g.resource });
             if (spell.level > 0 && pool)
                 sources.push({ ability: g.ability, resource: pool });
         }

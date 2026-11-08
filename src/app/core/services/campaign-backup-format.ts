@@ -81,6 +81,9 @@ function build(value:unknown):void {
   for(const entry of array(b['equipment'],'inventario',1000)){const e=object(entry,'objeto');if(!text(e['id'])||!integer(e['quantity'],1,999)||typeof e['equipped']!=='boolean'||typeof e['twoHanded']!=='boolean')fail('objeto de inventario');}
   for(const choice of Object.values(object(b['magicChoices'],'elecciones mágicas'))){const c=object(choice,'magia de origen');if(!text(c['classId'])||!abilities.includes(c['ability'])||!strings(c['cantripIds'],10)||!text(c['spellId']))fail('magia de origen');}
   if(b['legacy']!==undefined)stats(b['legacy']);
+  if(b['ritualSpellIds']!==undefined&&!array(b['ritualSpellIds'],'rituales elegidos',20).every((v)=>v===null||text(v)))fail('rituales elegidos');
+  if(b['ritualAbility']!==undefined&&b['ritualAbility']!==''&&!['intelligence','wisdom','charisma'].includes(b['ritualAbility']))fail('aptitud de rituales');
+  if(b['mounted']!==undefined&&typeof b['mounted']!=='boolean')fail('estado montado');
 }
 export function validateSheetCollection(value:unknown, kind:'player'|'npc'|'generic'='player', allowAssociations=false):SheetCollection {
   const data=object(value,'colección de fichas');if(data['revision']!==undefined&&!integer(data['revision']))fail('revisión de fichas');const edited=object(data['edited'],'fichas editadas'), created=array(data['created'],'fichas creadas',1000);

@@ -1,9 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { repairSpellPages, cleanRuleDescription, SPELLS_PER_LEVEL, SUBCLASS_HEADINGS, SUBCLASS_END_PAGES } from './rules-source-repairs.mjs';
+import { completeEquipment } from './rules-equipment-supplement.mjs';
 
 const input = process.argv[2] ?? '.tmp/manual-raw.txt';
 const output = process.argv[3] ?? 'public/data/rules.json';
-const pages = fs.readFileSync(input, 'utf8').split('\f');
+const pages = repairSpellPages(fs.readFileSync(input, 'utf8').split('\f'));
+const existing = fs.existsSync(output) ? JSON.parse(fs.readFileSync(output, 'utf8')) : {};
 
 const clean = (value) => value.replace(/\s+/g, ' ').trim();
 const title = (value) => {
@@ -34,10 +37,21 @@ function previousHeading(lines, index) {
 }
 
 function field(lines, start, label) {
-  for (let index = start; index < Math.min(lines.length, start + 14); index += 1) {
+  for (let index = start; index < Math.min(lines.length, start + 28); index += 1) {
     const line = clean(lines[index]);
     if (line.startsWith(label)) {
-      return clean(line.slice(label.length));
+      let value = clean(line.slice(label.length));
+      if (label !== 'Duración:') {
+        for (let next = index + 1; next < Math.min(lines.length, index + 12); next++) {
+          const continuation = clean(lines[next]);
+          if (/^(?:Tiempo de lanzamiento|Alcance|Componentes|Duración):/.test(continuation)) break;
+          if (/^CAPÍTULO\b/.test(continuation)) break;
+          value = clean(`${value} ${continuation}`);
+        }
+      } else if (!value || /(?:hasta|,)$/i.test(value)) {
+        value = clean(`${value} ${lines[index + 1] ?? ''}`);
+      }
+      return value || '—';
     }
   }
   return '—';
@@ -70,7 +84,7 @@ function extractDescriptions(startPage, endPage, metadata, maxJoin, marker) {
 
     starts.push({
       id: slug(name),
-      headingIndex: Math.max(0, index - 1),
+      headingIndex: clean(lines[index - 2] ?? '') === 'SANCTASANCTÓRUM PRIVADO' ? index - 2 : Math.max(0, index - 1),
       metadataIndex: index,
       bodyStart: index + consumed,
     });
@@ -90,7 +104,7 @@ function extractDescriptions(startPage, endPage, metadata, maxJoin, marker) {
         }
       }
 
-      const description = lines
+      const description = cleanRuleDescription(lines
         .slice(bodyStart, end)
         .map(clean)
         .filter(Boolean)
@@ -99,7 +113,7 @@ function extractDescriptions(startPage, endPage, metadata, maxJoin, marker) {
         .filter((line) => !/^\d+$/.test(line))
         .join(' ')
         .replace(/\s+([,.;:])/g, '$1')
-        .trim();
+        .trim());
 
       return [entry.id, description];
     })
@@ -124,11 +138,12 @@ function parseSpells() {
     lines.forEach((rawLine, index) => {
       const line = clean(rawLine);
       const joined = clean(`${rawLine} ${lines[index + 1] ?? ''}`);
+      const joinedThree = clean(`${joined} ${lines[index + 2] ?? ''}`);
       const match =
         line.match(metadata[0]) ??
         line.match(metadata[1]) ??
         joined.match(metadata[0]) ??
-        joined.match(metadata[1]);
+        joined.match(metadata[1]) ?? joinedThree.match(metadata[0]) ?? joinedThree.match(metadata[1]);
       if (!match?.groups) return;
 
       const name = previousHeading(lines, index);
@@ -164,7 +179,7 @@ function parseSpells() {
     241,
     345,
     metadata,
-    2,
+    3,
     'Duración:'
   );
 
@@ -173,8 +188,19 @@ function parseSpells() {
       descriptionOverrides.get(spell.id) ??
       descriptions.get(spell.id) ??
       'Consulta la pagina indicada para la descripcion completa del conjuro.';
+    // El título ocupa dos líneas; conservar el ID ya usado por las fichas.
+    if (spell.id === 'de-mordenkainen') spell.name = 'Sanctasanctórum privado de Mordenkainen';
   }
 
+  // Conservar resúmenes oficiales incorporados y reparaciones no extraíbles del OCR.
+  for (const entry of existing.spells ?? []) {
+    if (!entry.sourceUrl || entry.id === 'escupo') continue;
+    const index = spells.findIndex((spell) => spell.id === entry.id);
+    if (index < 0) spells.push(entry);
+    else spells[index] = { ...spells[index], ...entry, sourcePage: spells[index].sourcePage };
+  }
+  const teleport = spells.find((spell) => spell.id === 'circulo-de-teletransportacion');
+  if (teleport) teleport.castingTime = '1 minuto';
   return spells.sort((a, b) => a.level - b.level || a.name.localeCompare(b.name, 'es'));
 }
 
@@ -487,16 +513,32 @@ function classFeatureHeading(line) {
   };
 }
 
-function shortenDescription(value, maxLength = 1800) {
-  const description = clean(value);
-  if (description.length <= maxLength) return description;
+function featureDescription(value) {
+  return cleanRuleDescription(clean(value).split(/OPCIONES DE (?:INVOCACIÓN|METAMAGIA|MANIOBRAS)/)[0]);
+}
 
-  const sentenceEnd = Math.max(
-    description.lastIndexOf('. ', maxLength),
-    description.lastIndexOf(': ', maxLength)
-  );
-  const end = sentenceEnd > maxLength * 0.65 ? sentenceEnd + 1 : maxLength;
-  return `${description.slice(0, end).trim()}…`;
+function featureOptions(firstPage, lastPage, heading, count, inline = false) {
+  const maneuvers = new Set(['Arremetida', 'Ataque amenazador', 'Ataque de barrido', 'Ataque preciso', 'Ataque provocador', 'Ataque y derribo', 'Ataque y desarme', 'Ataque y distracción', 'Ataque y empujón', 'Ataque y maniobra', 'Cambio de posición ventajoso', 'Contraataque', 'Emboscada', 'Evaluación táctica', 'Finta', 'Juego de pies evasivo', 'Orden de ataque', 'Parada', 'Presencia imponente', 'Reagrupar']);
+  const records = pages.slice(firstPage - 1, lastPage).flatMap((page, offset) =>
+    page.split(/\r?\n/).map((line) => ({line: clean(line), page: firstPage + offset - 2}))
+  ).filter(({line}) => line && !/^CAPÍTULO\b/.test(line) && !/^\d+$/.test(line));
+  const start = records.findIndex(({line}) => line === heading);
+  if (start < 0) throw new Error(`No se encuentra ${heading}.`);
+  const remaining = records.slice(start + 1);
+  const end = remaining.findIndex(({line}) => line.startsWith('LISTA DE CONJUROS DE '));
+  const section = end < 0 ? remaining : remaining.slice(0, end);
+  const markers = section.flatMap((record, index) => {
+    const match = inline ? record.line.match(/^([A-ZÁÉÍÓÚÜÑ][a-záéíóúüñ ]+)\.\s+(.+)$/) : undefined;
+    const upper = record.line.toLocaleUpperCase('es');
+    const isHeading = inline ? !!match && maneuvers.has(match[1]) : (record.line === upper || record.line === 'Hoja DEVORADORA') && /^[A-ZÁÉÍÓÚÜÑ ]+$/.test(upper) && upper !== 'SOBRENATURAL';
+    return isHeading ? [{index, page: record.page, name: title(match ? match[1] : upper), inline: match?.[2] ?? ''}] : [];
+  });
+  const options = markers.map((marker, index) => ({
+    id: slug(marker.name), name: marker.name, sourcePage: marker.page,
+    description: cleanRuleDescription([marker.inline, ...section.slice(marker.index + 1, markers[index + 1]?.index ?? section.length).map(({line}) => line)].filter(Boolean).join(' ')),
+  }));
+  if (options.length !== count || options.some((o) => !o.description)) throw new Error(`Revisar ${heading}: se esperaban ${count} opciones, hay ${options.length}.`);
+  return options;
 }
 
 function parseClasses() {
@@ -549,7 +591,7 @@ function parseClasses() {
           id: `${heading.level}-${slug(heading.name)}`,
           name: heading.name,
           level: heading.level,
-          description: shortenDescription(
+          description: featureDescription(
             [heading.inlineDescription, body].filter(Boolean).join(' ') ||
               `Rasgo de ${definition.name} obtenido a nivel ${heading.level}.`
           ),
@@ -594,6 +636,23 @@ function parseClasses() {
         sourcePage: Math.max(1, records[start].page - 2),
       });
     }
+    if (definition.name === 'Hechicero') {
+      const descriptions = {
+        '1-lanzamiento-de-conjuros': 'Lanzas conjuros de la lista de hechicero y utilizas Carisma como aptitud mágica. Puedes usar un foco arcano como canalizador. Conoces cuatro trucos al nivel 1, con las ampliaciones indicadas por la tabla de la clase; al subir de nivel puedes sustituir uno de tus trucos. Preparas conjuros de nivel 1 y superiores según la tabla de hechicero y únicamente de niveles para los que tengas espacios; al subir un nivel de hechicero puedes sustituir uno de los preparados. Los conjuros que otros rasgos mantienen siempre preparados no cuentan para ese límite. Los espacios gastados se recuperan tras un descanso largo.',
+        '1-hechiceria-innata': 'Como acción adicional, desatas tu magia innata durante 1 minuto: la CD de salvación de tus conjuros de hechicero aumenta en 1 y tienes ventaja en sus tiradas de ataque. Dispones de dos usos y los recuperas tras un descanso largo.',
+        '2-fuente-de-magia': 'Obtienes 2 puntos de hechicería al nivel 2 y más conforme a la tabla de hechicero, sin superar el máximo de tu nivel. Recuperas los puntos gastados tras un descanso largo. Puedes convertir un espacio en tantos puntos como su nivel sin gastar acción. Como acción adicional puedes gastar puntos para crear un espacio de hasta nivel 5, respetando el coste y nivel mínimo de la tabla Crear espacios de conjuro (página 125). Los espacios creados desaparecen tras un descanso largo.',
+      };
+      for (const feature of features) if (descriptions[feature.id]) feature.description = descriptions[feature.id];
+    }
+    const optionsForClass = {
+      Brujo: ['1-invocaciones-sobrenaturales', () => featureOptions(73, 75, 'OPCIONES DE INVOCACIÓN', 28)],
+      Hechicero: ['2-metamagia', () => featureOptions(127, 128, 'OPCIONES DE METAMAGIA', 10)],
+    }[definition.name];
+    if (optionsForClass) {
+      const feature = features.find((f) => f.id === optionsForClass[0]);
+      if (!feature) throw new Error(`No se encuentra el rasgo de opciones de ${definition.name}.`);
+      feature.options = optionsForClass[1]();
+    }
     features.sort(
       (a, b) => a.level - b.level || a.name.localeCompare(b.name, 'es')
     );
@@ -603,7 +662,60 @@ function parseClasses() {
       ...definition,
       sourcePage: Math.max(1, records[start].page - 2),
       features,
+      subclasses: parseSubclasses(slug(definition.name)),
     };
+  });
+}
+
+function parseSubclasses(classId) {
+  const records = pages.flatMap((page, pageIndex) => page.split(/\r?\n/).map((line, index) => ({ line, page: pageIndex + 1, index: index + 1 })));
+  const headings = SUBCLASS_HEADINGS[classId];
+  const startOf = ([, page, line]) => records.findIndex((r) => r.page === page && r.index === line);
+  return headings.map((heading, index) => {
+    const [name, page] = heading;
+    const start = startOf(heading);
+    const end = index + 1 < headings.length ? startOf(headings[index + 1]) : records.findIndex((r) => r.page === SUBCLASS_END_PAGES[classId]);
+    if (start < 0 || end <= start) throw new Error(`No se puede verificar la sección de ${name}.`);
+    const header = normalizedSource(records.slice(start, start + 3).map((r) => r.line).join(' '));
+    if (!header.startsWith(normalizedSource(name))) throw new Error(`La fuente de ${name} ha cambiado; revisar su cabecera antes de generar.`);
+    const section = records.slice(start, end);
+    const referenceSpec = {
+      'hechiceria-de-magia-salvaje': {page: 133, target:'3-sobrecarga-de-magia-salvaje', name:'Tabla de sobrecarga de magia salvaje'},
+      'senor-de-las-bestias': {page:113, target:'3-companero-primigenio', name:'Perfiles de las bestias primigenias'},
+    }[slug(name)];
+    const referenceStart = referenceSpec ? section.findIndex((r) => r.page >= referenceSpec.page) : -1;
+    const markers = [];
+    for (let i = 0; i < section.length; i++) {
+      let line = section[i].line;
+      let continued = 0;
+      while (continued < 2 && section[i + continued + 1] && (/(?:\b(?:DE|DEL|LA|LOS|LAS|EL|CON|EN)|:)\s*$/i.test(line) || /^(?:(?:DE|DEL|A|AL)\s|(?:MEJORADA|DEFINITIVA)$)/.test(clean(section[i + continued + 1].line))) && !/^NIVEL\b/i.test(clean(section[i + continued + 1].line))) {
+        const next = clean(section[i + continued + 1].line);
+        if (!next || next !== next.toLocaleUpperCase('es')) break;
+        line += ` ${next}`;
+        continued++;
+      }
+      const feature = classFeatureHeading(line.replace(/LABRÓN/g, 'LADRÓN'));
+      if (feature) markers.push({ ...feature, start: i, bodyStart: i + continued + 1, page: section[i].page });
+    }
+    const seen = new Set();
+    const features = markers.flatMap((marker, i) => {
+      const id = `${marker.level}-${slug(marker.name)}`;
+      if (seen.has(id)) return [];
+      seen.add(id);
+      const body = section.slice(marker.bodyStart, Math.min(markers[i + 1]?.start ?? section.length, referenceStart < 0 ? section.length : referenceStart)).map((r) => clean(r.line)).filter((line) => line && !/^\d+$/.test(line) && !/^CAPÍTULO\b/.test(line)).join(' ');
+      return [{ id, name: marker.name, level: marker.level, description: featureDescription([marker.inlineDescription, body].filter(Boolean).join(' ')), sourcePage: marker.page - 2 }];
+    });
+    if (!features.length) throw new Error(`No se han recuperado los rasgos de ${name}.`);
+    if (referenceSpec) {
+      const target = features.find((f) => f.id === referenceSpec.target);
+      if (!target || referenceStart < 0) throw new Error(`No se puede situar la referencia de ${name}.`);
+      target.references = [{id:slug(referenceSpec.name),name:referenceSpec.name,sourcePage:referenceSpec.page - 2,requiresSourceCheck:true,
+        description: cleanRuleDescription(section.slice(referenceStart).map((r) => clean(r.line)).filter((line) => line && !/^\d+$/.test(line) && !/^CAPÍTULO\b/.test(line)).join(' '))}];
+    }
+    if (classId === 'guerrero' && slug(name) === 'maestro-del-combate') {
+      features.find((f) => f.id === '3-supremacia-en-combate').options = featureOptions(122, 123, 'OPCIONES DE MANIOBRAS', 20, true);
+    }
+    return { id: slug(name), name, sourcePage: page - 2, features };
   });
 }
 
@@ -613,15 +725,20 @@ const result = {
   spells: parseSpells(),
   feats: parseFeats(),
   skills,
-  equipment,
+  equipment: completeEquipment(equipment),
   classes: parseClasses(),
   creatures: fs.existsSync(output)
     ? JSON.parse(fs.readFileSync(output, 'utf8')).creatures ?? []
     : [],
 };
 
+const counts = SPELLS_PER_LEVEL.map((_, level) => result.spells.filter((spell) => spell.level === level).length);
+if (JSON.stringify(counts) !== JSON.stringify(SPELLS_PER_LEVEL) || result.feats.length !== 75 || result.skills.length !== 18 || result.classes.some((cls) => cls.subclasses.length !== 4)) {
+  throw new Error(`Catálogo incompleto; no se escribe el archivo. Conjuros por nivel: ${JSON.stringify(counts)}.`);
+}
+
 fs.mkdirSync(path.dirname(output), { recursive: true });
 fs.writeFileSync(output, `${JSON.stringify(result, null, 2)}\n`, 'utf8');
 console.log(
-  `Generado ${output}: ${result.spells.length} hechizos, ${result.feats.length} dotes, ${skills.length} habilidades, ${equipment.length} objetos y ${result.classes.length} clases.`
+  `Generado ${output}: ${result.spells.length} hechizos, ${result.feats.length} dotes, ${skills.length} habilidades, ${result.equipment.length} objetos y ${result.classes.length} clases.`
 );

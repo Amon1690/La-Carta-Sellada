@@ -58,12 +58,33 @@ export interface RuleClass {
   hitDie: string;
   sourcePage: number;
   features: RuleClassFeature[];
+  subclasses?: RuleSubclass[];
+}
+
+export interface RuleSubclass {
+  id: string;
+  name: string;
+  sourcePage: number;
+  features: RuleClassFeature[];
 }
 
 export interface RuleClassFeature {
   id: string;
   name: string;
   level: number;
+  description: string;
+  sourcePage: number;
+  options?: RuleFeatureOption[];
+  references?: RuleFeatureReference[];
+}
+
+export interface RuleFeatureReference extends RuleFeatureOption {
+  requiresSourceCheck?: boolean;
+}
+
+export interface RuleFeatureOption {
+  id: string;
+  name: string;
   description: string;
   sourcePage: number;
 }

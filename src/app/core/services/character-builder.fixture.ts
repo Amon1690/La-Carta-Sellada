@@ -480,6 +480,214 @@ export const rules: RulesCompendium = {
       "components": "V, S, M (el ojo petrificado de un tritón)",
       "duration": "Concentración, hasta 1 hora",
       "description": "Impones una maldición a una criatura que puedas ver dentro del alcance. Hasta que el conjuro termine, infliges 1d6 de daño necrótico adicional al objetivo siempre que le aciertes con una tirada de ataque. Además, elige una característica cuando lances el conjuro. El objetivo tendrá desventaja en las pruebas que haga con la característica elegida. Silos puntos de golpe del objetivo se reducen a O antes de que el conjuro termine, puedes usar una acción adicional en un turno posterior para maldecir a una nueva criatura. Con un espacio de conjuro de nivel superior. Tu concen- tración puede durar más si usas un espacio de conjuro de nivel 2 (hasta 4 horas), 3 o 4 (hasta 8 horas) o 5 o más (24 horas)."
+    },
+    {
+      "id": "hallar-corcel",
+      "name": "Hallar corcel",
+      "summary": "Conjuro de conjuración de nivel 2 disponible para Paladín.",
+      "tags": [
+        "Hechizo",
+        "Nivel 2",
+        "Conjuración",
+        "Paladín"
+      ],
+      "sourcePage": 290,
+      "level": 2,
+      "school": "Conjuración",
+      "classes": [
+        "Paladín"
+      ],
+      "castingTime": "Acción",
+      "range": "9 m",
+      "components": "V, S",
+      "duration": "Instantáneo",
+      "description": "Hallar corcel"
+    },
+    {
+      "id": "escudo-de-fe",
+      "name": "Escudo de fe",
+      "summary": "Conjuro de abjuración de nivel 1 disponible para Clérigo, Paladín.",
+      "tags": [
+        "Hechizo",
+        "Nivel 1",
+        "Abjuración",
+        "Clérigo",
+        "Paladín"
+      ],
+      "sourcePage": 278,
+      "level": 1,
+      "school": "Abjuración",
+      "classes": [
+        "Clérigo",
+        "Paladín"
+      ],
+      "castingTime": "Acción adicional",
+      "range": "18 m 3",
+      "components": "V, S, M (un pergamino de plegarias)",
+      "duration": "Concentración, hasta 10 minutos",
+      "description": "Escudo de fe"
+    },
+    {
+      "id": "proteccion-contra-el-bien-y-el-mal",
+      "name": "Protección contra el bien y el mal",
+      "summary": "Conjuro de abjuración de nivel 1 disponible para Brujo, Clérigo, Druida, Mago, Paladín.",
+      "tags": [
+        "Hechizo",
+        "Nivel 1",
+        "Abjuración",
+        "Brujo",
+        "Clérigo",
+        "Druida",
+        "Mago",
+        "Paladín"
+      ],
+      "sourcePage": 322,
+      "level": 1,
+      "school": "Abjuración",
+      "classes": [
+        "Brujo",
+        "Clérigo",
+        "Druida",
+        "Mago",
+        "Paladín"
+      ],
+      "castingTime": "Acción",
+      "range": "Toque",
+      "components": "V, S, M (un frasco de agua bendita que valga al menos 25 po, que se consume como parte del conjuro)",
+      "duration": "Concentración, hasta 10 minutos",
+      "description": "Protección contra el bien y el mal"
+    },
+    {
+      "id": "auxilio",
+      "name": "Auxilio",
+      "summary": "Conjuro de abjuración de nivel 2 disponible para Bardo, Clérigo, Druida, Explorador, Paladín.",
+      "tags": [
+        "Hechizo",
+        "Nivel 2",
+        "Abjuración",
+        "Bardo",
+        "Clérigo",
+        "Druida",
+        "Explorador",
+        "Paladín"
+      ],
+      "sourcePage": 247,
+      "level": 2,
+      "school": "Abjuración",
+      "classes": [
+        "Bardo",
+        "Clérigo",
+        "Druida",
+        "Explorador",
+        "Paladín"
+      ],
+      "castingTime": "Acción",
+      "range": "9 m",
+      "components": "V, S, M (una tira de tela blanca)",
+      "duration": "8 horas",
+      "description": "Auxilio"
+    },
+    {
+      "id": "zona-de-la-verdad",
+      "name": "Zona de la verdad",
+      "summary": "Conjuro de encantamiento de nivel 2 disponible para Bardo, Clérigo, Paladín.",
+      "tags": [
+        "Hechizo",
+        "Nivel 2",
+        "Encantamiento",
+        "Bardo",
+        "Clérigo",
+        "Paladín"
+      ],
+      "sourcePage": 343,
+      "level": 2,
+      "school": "Encantamiento",
+      "classes": [
+        "Bardo",
+        "Clérigo",
+        "Paladín"
+      ],
+      "castingTime": "Acción",
+      "range": "18 m",
+      "components": "V, S",
+      "duration": "10 minutos",
+      "description": "Zona de la verdad"
+    },
+    {
+      "id": "alarma",
+      "name": "Alarma",
+      "summary": "Conjuro de abjuración de nivel 1 disponible para Explorador, Mago.",
+      "tags": [
+        "Hechizo",
+        "Nivel 1",
+        "Abjuración",
+        "Explorador",
+        "Mago"
+      ],
+      "sourcePage": 240,
+      "level": 1,
+      "school": "Abjuración",
+      "classes": [
+        "Explorador",
+        "Mago"
+      ],
+      "castingTime": "1 minuto o un ritual",
+      "range": "9 m",
+      "components": "V, S, M (una campana e hilo de plata)",
+      "duration": "8 horas",
+      "description": "Alarma"
+    },
+    {
+      "id": "entender-idiomas",
+      "name": "Entender idiomas",
+      "summary": "Conjuro de adivinación de nivel 1 disponible para Bardo, Brujo, Hechicero, Mago.",
+      "tags": [
+        "Hechizo",
+        "Nivel 1",
+        "Adivinación",
+        "Bardo",
+        "Brujo",
+        "Hechicero",
+        "Mago"
+      ],
+      "sourcePage": 278,
+      "level": 1,
+      "school": "Adivinación",
+      "classes": [
+        "Bardo",
+        "Brujo",
+        "Hechicero",
+        "Mago"
+      ],
+      "castingTime": "Acción o ritual",
+      "range": "Lanzador",
+      "components": "V, S, M (una pizca de hollín y sal)",
+      "duration": "1 hora",
+      "description": "Entender idiomas"
+    },
+    {
+      "id": "identificar",
+      "name": "Identificar",
+      "summary": "Conjuro de adivinación de nivel 1 disponible para Bardo, Mago.",
+      "tags": [
+        "Hechizo",
+        "Nivel 1",
+        "Adivinación",
+        "Bardo",
+        "Mago"
+      ],
+      "sourcePage": 292,
+      "level": 1,
+      "school": "Adivinación",
+      "classes": [
+        "Bardo",
+        "Mago"
+      ],
+      "castingTime": "1 minuto o un ritual",
+      "range": "Toque",
+      "components": "V, S, M (una perla que valga al menos 100 po)",
+      "duration": "Instantáneo",
+      "description": "Identificar"
     }
   ],
   "feats": [
@@ -612,6 +820,20 @@ export const rules: RulesCompendium = {
       "category": "Dote de origen",
       "repeatable": false,
       "description": "Sanador"
+    },
+    {
+      "id": "maestro-en-armaduras-medias",
+      "name": "Maestro en armaduras medias",
+      "summary": "Dote general para personalizar las capacidades del personaje. Consulta sus beneficios en la pagina indicada.",
+      "tags": [
+        "Dote",
+        "Dote general"
+      ],
+      "sourcePage": 206,
+      "category": "Dote general",
+      "requirements": "nivel 4 o más, entrenamiento con armaduras medias",
+      "repeatable": false,
+      "description": "Obtienes los siguientes beneficios: Mejora de característica. Aumenta tu puntuación de Fuerza o Destreza en 1, hasta un máximo de 20. Portador diestro. Mientras lleves puesta una armadura media, puedes sumar 3 en lugar de 2 atu CA si tu puntuación de Destreza es de 16 o más."
     }
   ],
   "skills": [
@@ -2798,6 +3020,50 @@ export const rules: RulesCompendium = {
           "description": "Memorizar conjuro",
           "sourcePage": 139
         }
+      ],
+      "subclasses": [
+        {
+          "id": "adivino",
+          "name": "Adivino",
+          "sourcePage": 145,
+          "features": [
+            {
+              "id": "3-experto-en-adivinacion",
+              "name": "Experto en adivinación",
+              "level": 3,
+              "description": "Experto en adivinación",
+              "sourcePage": 145
+            },
+            {
+              "id": "3-presagio",
+              "name": "Presagio",
+              "level": 3,
+              "description": "Presagio",
+              "sourcePage": 145
+            },
+            {
+              "id": "6-adivino-avezado",
+              "name": "Adivino avezado",
+              "level": 6,
+              "description": "Adivino avezado",
+              "sourcePage": 145
+            },
+            {
+              "id": "10-el-tercer-ojo",
+              "name": "El tercer ojo",
+              "level": 10,
+              "description": "El tercer ojo",
+              "sourcePage": 145
+            },
+            {
+              "id": "14-presagio-mayor",
+              "name": "Presagio mayor",
+              "level": 14,
+              "description": "Presagio mayor",
+              "sourcePage": 145
+            }
+          ]
+        }
       ]
     },
     {
@@ -2908,6 +3174,50 @@ export const rules: RulesCompendium = {
           "level": 5,
           "description": "Corcel fiel",
           "sourcePage": 159
+        }
+      ],
+      "subclasses": [
+        {
+          "id": "juramento-de-entrega",
+          "name": "Juramento de entrega",
+          "sourcePage": 161,
+          "features": [
+            {
+              "id": "3-arma-sagrada",
+              "name": "Arma sagrada",
+              "level": 3,
+              "description": "Arma sagrada",
+              "sourcePage": 161
+            },
+            {
+              "id": "3-conjuros-del-juramento-de-entrega",
+              "name": "Conjuros del juramento de entrega",
+              "level": 3,
+              "description": "Conjuros del juramento de entrega",
+              "sourcePage": 161
+            },
+            {
+              "id": "7-aura-de-entrega",
+              "name": "Aura de entrega",
+              "level": 7,
+              "description": "Aura de entrega",
+              "sourcePage": 162
+            },
+            {
+              "id": "15-castigo-protector",
+              "name": "Castigo protector",
+              "level": 15,
+              "description": "Castigo protector",
+              "sourcePage": 162
+            },
+            {
+              "id": "20-halo-sagrado",
+              "name": "Halo sagrado",
+              "level": 20,
+              "description": "Halo sagrado",
+              "sourcePage": 162
+            }
+          ]
         }
       ]
     },

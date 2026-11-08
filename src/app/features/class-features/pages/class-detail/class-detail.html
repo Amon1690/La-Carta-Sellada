@@ -36,12 +36,57 @@
                   <span>Pág. {{ feature.sourcePage }}</span>
                 </div>
                 <p>{{ feature.description }}</p>
+                @if (feature.options?.length) {
+                  <details>
+                    <summary>Opciones de {{ feature.name }} ({{ feature.options!.length }})</summary>
+                    <p>Opciones disponibles para elegir según el rasgo y sus requisitos.</p>
+                    @for (option of feature.options; track option.id) {
+                      <section><h3>{{ option.name }} <small>· Pág. {{ option.sourcePage }}</small></h3><p>{{ option.description }}</p></section>
+                    }
+                  </details>
+                }
               </article>
             }
           </div>
         </section>
       }
     </div>
+    @if (characterClass.subclasses?.length) {
+      <section class="level-list" aria-label="Subclases de 2024">
+        <h2>Subclases de {{ characterClass.name }}</h2>
+        @for (subclass of characterClass.subclasses; track subclass.id) {
+          <details class="subclass-details">
+            <summary>{{ subclass.name }} · {{ subclass.features.length }} rasgos</summary>
+            <div class="feature-list">
+              @for (group of levels(subclass); track group.level) {
+                @for (feature of group.features; track feature.id) {
+                  <article>
+                    <div class="feature-heading"><h3>Nivel {{ feature.level }}: {{ feature.name }}</h3><span>Pág. {{ feature.sourcePage }}</span></div>
+                    <p>{{ feature.description }}</p>
+                    @for (reference of feature.references; track reference.id) {
+                      <details>
+                        <summary>{{ reference.name }} · Pág. {{ reference.sourcePage }}</summary>
+                        @if (reference.requiresSourceCheck) {<p>La extracción mezcla columnas de la fuente. Coteja la tabla o los perfiles en el manual antes de aplicar sus valores; esta referencia no activa efectos ni crea criaturas.</p>}
+                        <p>{{ reference.description }}</p>
+                      </details>
+                    }
+                    @if (feature.options?.length) {
+                      <details>
+                        <summary>Opciones de {{ feature.name }} ({{ feature.options!.length }})</summary>
+                        <p>Opciones disponibles para elegir según el rasgo y sus requisitos.</p>
+                        @for (option of feature.options; track option.id) {
+                          <section><h4>{{ option.name }} <small>· Pág. {{ option.sourcePage }}</small></h4><p>{{ option.description }}</p></section>
+                        }
+                      </details>
+                    }
+                  </article>
+                }
+              }
+            </div>
+          </details>
+        }
+      </section>
+    }
   </section>
 } @else {
   <section class="missing">

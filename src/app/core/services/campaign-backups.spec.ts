@@ -31,6 +31,18 @@ describe('Copias de seguridad por campaña',()=>{
  it('los archivos inválidos o de versión no admitida no cambian nada',async()=>{for(const raw of ['{','{}',file().replace('"version":1','"version":7'),file().replace(campaign,'otra')]){const before=[...storage.values];await expectAsync(store.preview(raw,campaign)).toBeRejected();expect([...storage.values]).toEqual(before);}expect(put).not.toHaveBeenCalled();});
  it('rechaza claves ajenas, asociaciones históricas y campos reservados antes de escribir',async()=>{const inputs=[JSON.parse(file({'la-carta-sellada:vtt:otra:scene:x':board()})),JSON.parse(file())];inputs[1].sheets.created[0].playerIds=['antiguo'];for(const value of inputs)await expectAsync(store.preview(JSON.stringify(value),campaign)).toBeRejected();const reserved=file().replace('"local":{','"local":{"__proto__":{},');await expectAsync(store.preview(reserved,campaign)).toBeRejected();expect(storage.writes).toBe(0);expect(put).not.toHaveBeenCalled();});
  it('tolera y conserva huecos de selecciones de conjuros y dotes válidos',()=>{const input=JSON.parse(file());input.sheets.created[0].build.featIds=[null,'duro'];input.sheets.created[0].build.preparedIds=[null,'escudo'];const parsed=parseCampaignBackup(JSON.stringify(input),campaign);expect((parsed.sheets.created[0] as any).build.preparedIds).toEqual([null,'escudo']);});
+ it('conserva los rituales y la montura opcionales y rechaza valores inválidos antes de escribir',async()=>{
+   const input=JSON.parse(file());
+   Object.assign(input.sheets.created[0].build,{ritualSpellIds:['alarma',null,'identificar'],ritualAbility:'intelligence',mounted:true});
+   const parsed=parseCampaignBackup(JSON.stringify(input),campaign);
+   expect((parsed.sheets.created[0] as any).build.ritualSpellIds).toEqual(['alarma',null,'identificar']);
+   expect((parsed.sheets.created[0] as any).build.mounted).toBeTrue();
+   for(const change of [{ritualSpellIds:[4]},{ritualAbility:'strength'},{mounted:'sí'}]){
+     const invalid=structuredClone(input);Object.assign(invalid.sheets.created[0].build,change);
+     await expectAsync(store.preview(JSON.stringify(invalid),campaign)).toBeRejected();
+   }
+   expect(storage.writes).toBe(0);expect(put).not.toHaveBeenCalled();
+ });
  it('si no hay espacio para la copia previa no escribe partidas ni servidor',async()=>{storage.setItem(boardKey,JSON.stringify(board()));const preview=await store.preview(file(),campaign);const before=[...storage.values];storage.failAt.add(storage.writes+1);await expectAsync(store.restore(preview)).toBeRejected();expect([...storage.values]).toEqual(before);expect(put).not.toHaveBeenCalled();});
  it('revierte las escrituras locales si falla una posterior y no envía PUT',async()=>{storage.setItem(boardKey,JSON.stringify({...board(),zoom:1}));storage.setItem(npcKey,JSON.stringify({edited:{},created:[]}));const before=storage.getItem(boardKey);const preview=await store.preview(file({[boardKey]:board(),[npcKey]:{edited:{},created:[]}}),campaign);storage.failAt.add(storage.writes+3);await expectAsync(store.restore(preview)).toBeRejected();expect(storage.getItem(boardKey)).toBe(before);expect(put).not.toHaveBeenCalled();expect(storage.getItem(recoveryKey(campaign))).toBeNull();});
  it('revierte localmente un rechazo de revisión del servidor',async()=>{const before=JSON.stringify({...board(),zoom:1});storage.setItem(boardKey,before);put.and.rejectWith(Object.assign(new Error('Conflict'),{status:409}));const preview=await store.preview(file(),campaign);await expectAsync(store.restore(preview)).toBeRejected();expect(storage.getItem(boardKey)).toBe(before);expect(store.hasRecovery(campaign)).toBeFalse();});
