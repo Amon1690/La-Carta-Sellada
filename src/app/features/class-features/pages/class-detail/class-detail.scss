@@ -125,6 +125,17 @@ header dd {
   gap: var(--space-sm);
 }
 
+.subclass-details > summary {
+  cursor: pointer;
+  color: var(--text-strong);
+  padding: var(--space-md);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.subclass-details > .feature-list {
+  margin-top: var(--space-md);
+}
+
 article {
   display: grid;
   gap: var(--space-sm);

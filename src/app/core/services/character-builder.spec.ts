@@ -8,6 +8,84 @@ import { deriveCombat, rollDice } from './combat-rules';
 import { CHARACTER_BACKGROUNDS } from '../data/character-origins';
 import { rules, warrior } from './character-builder.fixture';
 describe('Ficha de personaje guiada 2024', () => {
+    it('solo permite lanza de caballería y escudo a la vez si va montado, y Duelo no se acumula con otra arma', () => {
+        const catalog = structuredClone(rules);
+        catalog.equipment.find((item) => item.id === 'lanza-de-caballeria')!.properties.push('a dos manos (salvo montado)');
+        const build = warrior(); build.classId = 'paladin'; build.subclass = 'Juramento de entrega'; build.fightingStyle = 'duelo';
+        build.equipment = [{id:'lanza-de-caballeria',quantity:1,equipped:true,twoHanded:false},{id:'escudo',quantity:1,equipped:true,twoHanded:false}];
+        expect(calculateCharacter(build,catalog).errors.join(' ')).toContain('dos manos');
+        build.mounted = true;
+        const mounted = calculateCharacter(build,catalog);
+        expect(mounted.errors.some((e) => e.includes('dos manos'))).toBeFalse();
+        expect(mounted.stats.attacks[0]).toContain('1d10+5');
+        build.equipment.push({id:'espada-larga',quantity:1,equipped:true,twoHanded:false});
+        expect(calculateCharacter(build,catalog).stats.attacks[0]).toContain('1d10+3');
+    });
+    it('conserva las elecciones de Erwan al convertir los nombres femeninos de la ficha anterior', () => {
+        const sheet = { ...calculateCharacter(warrior(), rules).stats, id: 'erwan', name: 'Erwan', ancestry: 'Elfa', className: 'Maga', subclass: 'Adivina', background: 'Erudita', level: 5 } as PlayerOption;
+        const build = initialBuild(sheet, rules);
+        expect(build.classId).toBe('mago');
+        expect(build.backgroundId).toBe('erudito');
+        expect(build.subclass).toBe('Adivino');
+    });
+    it('aplica la competencia 2024 del mago y hechicero a un bastón aunque no sea ligero', () => {
+        for (const classId of ['mago', 'hechicero']) {
+            const build = warrior();
+            build.classId = classId;
+            build.scores.strength = 8;
+            build.equipment = [{ id: 'baston', quantity: 1, equipped: true, twoHanded: false }];
+            const action = calculateCharacter(build, rules).stats.combat!.actions[0];
+            expect(action.bonus).withContext(classId).toBe(2);
+            expect(action.damage[0].dice).withContext(classId).toBe('1d6-1');
+        }
+    });
+    it('resuelve Escupo como Escudo sin cambiar el guardado original de Erwan', () => {
+        const build = warrior(); build.classId = 'mago'; build.subclass = 'Adivino';
+        build.spellbookIds = ['escupo']; build.preparedIds = ['escupo'];
+        const original = { ...calculateCharacter(warrior(), rules).stats, build } as PlayerOption;
+        const converted = initialBuild(original, rules);
+        expect(converted.spellbookIds).toEqual(['escudo']);
+        expect(converted.preparedIds).toEqual(['escudo']);
+        expect(build.preparedIds).toEqual(['escupo']);
+        expect(calculateCharacter(build, rules).stats.spells).toContain('Escudo');
+    });
+    it('incorpora Presagio a Erwan a nivel 5 sin adelantar Adivino avezado', () => {
+        const build = warrior(); build.classId = 'mago'; build.subclass = 'Adivino';
+        const features = calculateCharacter(build, rules).stats.features;
+        expect(features.some((f) => f.startsWith('Presagio (Adivino, nivel 3)'))).toBeTrue();
+        expect(features.some((f) => f.startsWith('Adivino avezado'))).toBeFalse();
+        expect(features.some((f) => f.startsWith('Arma sagrada'))).toBeFalse();
+    });
+    it('exige el entrenamiento previo de una dote de armaduras', () => {
+        const build = warrior(); build.classId = 'mago'; build.subclass = 'Adivino'; build.featIds = ['maestro-en-armaduras-medias'];
+        expect(calculateCharacter(build, rules).errors.join(' ')).toContain('requiere entrenamiento con armaduras medias');
+    });
+    it('concede el juramento y Corcel fiel sin consumir elecciones ni inventar usos gratis del juramento', () => {
+        const build = warrior(); build.classId = 'paladin'; build.subclass = 'Juramento de entrega';
+        build.preparedIds = ['escudo-de-fe', 'auxilio', 'zona-de-la-verdad', 'hallar-corcel'];
+        const original = { ...calculateCharacter(warrior(), rules).stats, build } as PlayerOption;
+        const converted = initialBuild(original, rules);
+        expect(converted.preparedIds).toEqual([]);
+        expect(build.preparedIds.length).toBe(4);
+        const result = calculateCharacter(build, rules);
+        for (const name of ['Castigo divino','Hallar corcel','Escudo de fe','Protección contra el bien y el mal','Auxilio','Zona de la verdad']) expect(result.stats.spells).toContain(name);
+        expect(result.stats.combat!.resources.find((r) => r.id === 'builder:class:hallar-corcel')?.maximum).toBe(1);
+        expect(result.stats.combat!.resources.some((r) => r.id.startsWith('builder:oath:'))).toBeFalse();
+        expect(result.stats.combat!.actions.filter((a) => ['Escudo de fe','Auxilio'].includes(a.name)).every((a) => a.cost?.resourceId.startsWith('builder:slot:'))).toBeTrue();
+    });
+    it('exige las elecciones de Lanzador ritual y mantiene un único uso compartido de Ritual rápido', () => {
+        const build = warrior(); build.classId = 'mago'; build.subclass = 'Adivino'; build.featIds = ['lanzador-ritual'];
+        expect(calculateCharacter(build, rules).errors.join(' ')).toContain('Lanzador ritual: elige 3');
+        build.ritualSpellIds = ['alarma','detectar-magia','identificar']; build.ritualAbility = 'intelligence';
+        const result = calculateCharacter(build, rules);
+        expect(result.errors.some((e) => e.startsWith('Lanzador ritual:'))).toBeFalse();
+        const pools = result.stats.combat!.resources.filter((r) => r.id === 'builder:feat:ritual-quick');
+        expect(pools.length).toBe(1); expect(pools[0].maximum).toBe(1);
+        for (const name of ['Alarma','Detectar magia','Identificar']) expect(result.stats.spells).toContain(name);
+        expect(result.stats.combat!.resources.some((r) => r.id.startsWith('builder:ritual:'))).toBeFalse();
+        build.ritualSpellIds[2] = 'alarma';
+        expect(calculateCharacter(build, rules).errors.join(' ')).toContain('rituales distintos');
+    });
     it('deriva CA, PG, iniciativa, competencia, salvaciones y ataque del equipo y características', () => {
         const result = calculateCharacter(warrior(), rules);
         expect(result.errors).toEqual([]);

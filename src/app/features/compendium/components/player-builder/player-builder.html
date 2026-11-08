@@ -55,7 +55,16 @@
       <label>Característica mágica <select [name]="'build-origin-ability-'+origin.key" [attr.name]="'build-origin-ability-'+origin.key" [(ngModel)]="choice.ability" (ngModelChange)="changed()"><option value="intelligence">Inteligencia</option><option value="wisdom">Sabiduría</option><option value="charisma">Carisma</option></select></label>
     </fieldset>}}
     @if(calculation.errors.length){<aside class="errors" role="status"><h4>Falta completar</h4><ul>@for(error of calculation.errors;track error){<li>{{error}}</li>}</ul></aside>}
-    @if(calculation.warnings.length){<aside class="migration"><h4>Reglas que debes tener en cuenta</h4><ul>@for(warning of calculation.warnings;track warning){<li>{{warning}}</li>}</ul></aside>}
+      @if(automaticSpellNames()){<p>Siempre preparados por clase o juramento: {{automaticSpellNames()}}. No consumen las elecciones de preparados.</p>}
+      @if(hasRitualCaster()){
+        <fieldset [disabled]="busy"><legend>Lanzador ritual</legend>
+          <p class="wide">Elige {{calculation.stats.proficiencyBonus}} rituales de nivel 1. Siempre están preparados y comparten un uso de Ritual rápido por descanso largo.</p>
+          <label>Característica de Lanzador ritual <select name="build-ritual-ability" [(ngModel)]="build.ritualAbility" (ngModelChange)="changed()"><option value="">Selecciona la característica aumentada por la dote</option><option value="intelligence">Inteligencia</option><option value="wisdom">Sabiduría</option><option value="charisma">Carisma</option></select></label>
+          @for(i of rows(calculation.stats.proficiencyBonus);track i){<label>Ritual de nivel 1 {{i+1}} <select [name]="'build-ritual-'+i" [ngModel]="build.ritualSpellIds?.[i] ?? ''" (ngModelChange)="ritualChoice(i,$event)"><option value="">Selecciona un ritual</option>@for(spell of ritualOptions();track spell.id){<option [value]="spell.id">{{spell.name}}</option>}</select></label>}
+        </fieldset>
+      }
+      @if(hasLance()){<label class="check"><input type="checkbox" name="build-mounted" [(ngModel)]="build.mounted" (ngModelChange)="changed()" />Va montado (permite usar la lanza de caballería con una mano)</label>}
+      @if(calculation.warnings.length){<aside class="migration"><h4>Reglas que debes tener en cuenta</h4><ul>@for(warning of calculation.warnings;track warning){<li>{{warning}}</li>}</ul></aside>}
   }
   <fieldset disabled class="calculated"><legend>{{active?'Valores calculados':'Estadísticas conservadas'}}</legend><label>CA <input aria-label="CA calculada" [value]="preview().armorClass" /></label><label>PG máximos <input aria-label="PG calculados" [value]="preview().hitPoints" /></label><label>Velocidad <input [value]="preview().speed" /></label><label>Iniciativa <input [value]="preview().initiative" /></label><label>Competencia <input [value]="preview().proficiencyBonus" /></label><label class="wide">Salvaciones <textarea rows="2" [value]="preview().saves.join(' · ')"></textarea></label><label class="wide">Habilidades <textarea rows="5" [value]="preview().skills.join(' · ')"></textarea></label><label class="wide">Ataques de armas <textarea rows="4" [value]="preview().attacks.join('\n')"></textarea></label><label class="wide">Rasgos de linaje, trasfondo y clase <textarea rows="7" [value]="preview().features.join('\n\n')"></textarea></label></fieldset>
   @if(active){<details><summary>Cómo se han calculado</summary><ul>@for(formula of calculation.formulas;track formula){<li>{{formula}}</li>}</ul></details>}

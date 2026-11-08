@@ -40,6 +40,10 @@ export interface CharacterBuild {
     hpRolls: number[];
     resilientAbility: Ability;
     fightingStyle: string;
+    /** Elecciones pendientes en guardados anteriores; nunca se deducen del libro. */
+    ritualSpellIds?: string[];
+    ritualAbility?: Ability;
+    mounted?: boolean;
     divineOrder: 'protector' | 'thaumaturge';
     primalOrder: 'magician' | 'warden';
 }

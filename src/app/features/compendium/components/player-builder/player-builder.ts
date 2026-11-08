@@ -4,7 +4,7 @@ import { GameStatBlock, PlayerOption } from '../../../../core/models/campaign';
 import { Ability, CharacterBuild } from '../../../../core/models/character-build';
 import { RuleSpell, RulesCompendium } from '../../../../core/models/rules';
 import { CHARACTER_BACKGROUNDS, CHARACTER_ORIGINS } from '../../../../core/data/character-origins';
-import { ABILITIES, CLASS_RULES, CharacterCalculation, availableSpells, calculateCharacter, featLevels, initialBuild, magicProgression, originMagic } from '../../../../core/services/character-builder';
+import { ABILITIES, CLASS_RULES, CharacterCalculation, availableSpells, alwaysPreparedSpellIds, calculateCharacter, featLevels, initialBuild, magicProgression, normalizeBuildChoices, originMagic } from '../../../../core/services/character-builder';
 export interface PlayerBuilderValue {
     build: CharacterBuild;
     calculation: CharacterCalculation;
@@ -47,7 +47,7 @@ export class PlayerBuilder implements OnChanges {
         this.active = true;
         this.changed();
     }
-    protected changed(): void { this.calculation = calculateCharacter(this.build, this.rules, this.sheet); this.valueChange.emit(this.active ? { build: structuredClone(this.build), calculation: this.calculation } : undefined); }
+    protected changed(): void { this.build = normalizeBuildChoices(this.build); this.calculation = calculateCharacter(this.build, this.rules, this.sheet); this.valueChange.emit(this.active ? { build: structuredClone(this.build), calculation: this.calculation } : undefined); }
     protected changeClass(): void { this.build.subclass = ''; this.build.classSkills = []; this.build.expertise = []; this.build.cantripIds = []; this.build.preparedIds = []; this.build.spellbookIds = []; this.build.fightingStyle = ''; this.changed(); }
     protected changeLevel(): void {
         if (this.build.level < 3)
@@ -87,6 +87,11 @@ export class PlayerBuilder implements OnChanges {
     protected setBoost(id: Ability, value: number): void { this.build.backgroundBoosts[id] = Number(value); this.changed(); }
     protected spellName(id: string): string { return this.rules.spells.find((s) => s.id === id)?.name ?? (id || 'Selección vacía'); }
     protected featName(id: string): string { return this.rules.feats.find((f) => f.id === id)?.name ?? id; }
+    protected automaticSpellNames(): string { return alwaysPreparedSpellIds(this.build).map((id) => this.spellName(id)).join(' · '); }
+    protected ritualOptions(): RuleSpell[] { return this.rules.spells.filter((s) => s.level === 1 && /ritual/i.test(s.castingTime)); }
+    protected ritualChoice(index: number, id: string): void { this.build.ritualSpellIds ??= []; this.build.ritualSpellIds[index] = id; this.changed(); }
+    protected hasRitualCaster(): boolean { return this.build.featIds.includes('lanzador-ritual'); }
+    protected hasLance(): boolean { return this.build.equipment.some((item) => item.id === 'lanza-de-caballeria'); }
     protected skillNames(ids: string[]): string { return ids.map((id) => this.rules.skills.find((s) => s.id === id)?.name ?? id).join(', '); }
     protected versatile(id: string): boolean { return this.rules.equipment.find((e) => e.id === id)?.properties.some((p) => p.toLowerCase().includes('versatil')) ?? false; }
     protected itemName(id: string): string { return this.rules.equipment.find((e) => e.id === id)?.name ?? id; }

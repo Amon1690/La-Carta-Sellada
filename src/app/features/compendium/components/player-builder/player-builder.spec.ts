@@ -1,3 +1,4 @@
+import { CharacterBuild } from '../../../../core/models/character-build';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { PlayerBuilder, PlayerBuilderValue } from './player-builder';
@@ -16,4 +17,27 @@ describe('Editor guiado de PJ', () => {
     it('recalcula al editar características y deshabilita elecciones durante el guardado', async () => { fixture.componentRef.setInput('sheet', { ...oldSheet(), build: warrior() }); fixture.detectChanges(); await fixture.whenStable(); await change('build-ability-constitution', '18'); expect(last?.calculation.stats.hitPoints).toBe(59); fixture.componentRef.setInput('busy', true); fixture.detectChanges(); expect(find('build-level').matches(':disabled')).toBeTrue(); });
     it('permite retirar los conjuros que dejan de estar disponibles al bajar el nivel', async () => { const build = warrior(); build.classId = 'guerrero'; build.subclass = 'Caballero arcano'; build.level = 3; build.cantripIds = ['luz']; build.preparedIds = ['escudo']; fixture.componentRef.setInput('sheet', { ...oldSheet(), build }); fixture.detectChanges(); await fixture.whenStable(); await change('build-level', '2'); expect(find('build-cantrip-0')).not.toBeNull(); expect(find('build-prepared-0')).not.toBeNull(); await change('build-cantrip-0', ''); await change('build-prepared-0', ''); expect(last?.build.cantripIds).toEqual([]); expect(last?.build.preparedIds).toEqual([]); });
     it('conserva visibles los conjuros del libro que ya no están al alcance y no añade placeholders', async () => { const build = warrior(); build.classId = 'mago'; build.subclass = 'Evocador'; build.spellbookIds = ['bola-de-fuego']; fixture.componentRef.setInput('sheet', { ...oldSheet(), build }); fixture.detectChanges(); await fixture.whenStable(); await change('build-level', '4'); expect(fixture.nativeElement.textContent).toContain('Quitar Bola de fuego'); await change('build-book-add', ''); expect(last?.build.spellbookIds).toEqual(['bola-de-fuego']); const buttons = Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLButtonElement[]; buttons.find((b) => b.textContent?.includes('Quitar Bola de fuego'))!.click(); fixture.detectChanges(); expect(last?.build.spellbookIds).toEqual([]); });
+});
+
+describe('Editor de conjuros de la ficha guiada', () => {
+  it('libera las casillas cuando la subclase convierte elecciones anteriores en conjuros automáticos', async () => {
+    TestBed.configureTestingModule({providers: [provideZonelessChangeDetection()]});
+    const build = warrior();
+    build.classId = 'paladin'; build.subclass = 'Juramento de gloria';
+    build.preparedIds = ['escudo-de-fe', 'auxilio'];
+    const sheet = { ...calculateCharacter(build, rules).stats, id:'valian', name:'Valian', ancestry:'Enano', className:'Paladín', subclass:build.subclass, background:'Soldado', level:5, feat:'', hook:'', build } as PlayerOption;
+    const fixture = TestBed.createComponent(PlayerBuilder);
+    fixture.componentRef.setInput('rules', rules);
+    fixture.componentRef.setInput('sheet', sheet);
+    fixture.detectChanges(); await fixture.whenStable();
+    const component = fixture.componentInstance as unknown as {build:CharacterBuild; slotsFilled(cantrip:boolean):number};
+    expect(component.slotsFilled(false)).toBe(2);
+    const select = fixture.nativeElement.querySelector('select[name="build-subclass"]') as HTMLSelectElement;
+    select.value = 'Juramento de entrega'; select.dispatchEvent(new Event('change'));
+    await fixture.whenStable(); fixture.detectChanges();
+    expect(component.build.preparedIds).toEqual([]);
+    expect(component.slotsFilled(false)).toBe(0);
+    expect(sheet.build!.preparedIds).toEqual(['escudo-de-fe','auxilio']);
+    expect(fixture.nativeElement.textContent).toContain('Siempre preparados por clase o juramento');
+  });
 });
