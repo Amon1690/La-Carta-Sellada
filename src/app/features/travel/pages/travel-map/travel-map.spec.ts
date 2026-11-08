@@ -175,4 +175,86 @@ describe('Viajes independientes por grupo', () => {
     expect(saved.hoveredLocationId).toBeUndefined();
   });
 
+
+  function preciseJourney(points: { x: number; y: number }[]): any {
+    legacy(); const view = make(); view.skipPendingEncounter(); view.logs.set([]); view.route.set(points);
+    view.groups.update((items: any[]) => items.map((g) => g.id === 'a' ? { ...g, ...points[0] } : g));
+    spyOn(view, 'resolveRoleEvents').and.returnValue([]); spyOn(view, 'rollWeather').and.returnValue('Despejado');
+    return view;
+  }
+  it('conserva 1,222 km y sitúa el primer kilómetro dentro del segundo tramo', () => {
+    const view = preciseJourney([{ x: 20, y: 20 }, { x: 20.01, y: 20 }, { x: 20.02, y: 20 }]);
+    expect(view.routeDistance()).toBeCloseTo(1.222, 10);
+    view.positionGroupAlongRoute(1);
+    expect(view.groups()[0].x).toBeCloseTo(20 + 1 / 61.1, 10);
+    expect(view.groups()[0].y).toBe(20);
+  });
+  it('una ruta inferior a medio kilómetro sigue pendiente y llega exactamente', () => {
+    const view = preciseJourney([{ x: 20, y: 20 }, { x: 20.004, y: 20 }]);
+    expect(view.remainingDistance()).toBeCloseTo(0.2444, 10);
+    view.resolveDay();
+    expect(view.logs().length).toBe(1); expect(view.travelledDistance()).toBeCloseTo(0.2444, 10);
+    expect(view.groups()[0].x).toBe(20.004); expect(view.remainingDistance()).toBe(0);
+  });
+  it('muchos tramos cortos avanzan la misma distancia que su geometría total', () => {
+    const points = Array.from({ length: 1001 }, (_, i) => ({ x: 20 + i * 0.001, y: 20 }));
+    const view = preciseJourney(points);
+    expect(view.routeDistance()).toBeCloseTo(61.1, 9);
+    view.resolveDay(); expect(view.groups()[0].x).toBeCloseTo(20 + 36 / 61.1, 9);
+    view.resolveDay(); expect(view.groups()[0].x).toBe(21); expect(view.remainingDistance()).toBe(0);
+    const before = view.groups()[0].x; view.resolveDay(); expect(view.logs().length).toBe(2); expect(view.groups()[0].x).toBe(before);
+  });
+  it('los tramos nulos no alteran la interpolación ni la llegada a los bordes', () => {
+    const view = preciseJourney([{ x: 2, y: 2 }, { x: 2, y: 2 }, { x: 0, y: 2 }, { x: 0, y: 2 }]);
+    view.positionGroupAlongRoute(61.1); expect(view.groups()[0].x).toBeCloseTo(1, 10);
+    view.positionGroupAlongRoute(view.routeDistance()); expect(view.groups()[0].x).toBe(0);
+    expect(Number.isFinite(view.groups()[0].y)).toBeTrue();
+    view.route.set([{ x: 5, y: 5 }, { x: 5, y: 5 }]); expect(view.routeDistance()).toBe(0);
+  });
+  it('mantiene fracciones de capacidad diaria y modificadores en vez de redondear el avance', () => {
+    const view = preciseJourney([{ x: 20, y: 20 }, { x: 30, y: 20 }]);
+    view.planFieldChanged('hours', 7); expect(view.dailyDistance()).toBe(31.5);
+    spyOn(view, 'aggregateEventEffects').and.returnValue({ foodKg: 0, waterLiters: 0, gold: 0, fatigue: 0, distancePercent: 0.1, distanceKm: 0 });
+    view.resolveDay(); expect(view.logs()[0].distance).toBeCloseTo(34.65, 10);
+    expect(view.groups()[0].x).toBeCloseTo(20 + 34.65 / 61.1, 9);
+  });
+  it('conserva jornadas antiguas sin reescribir consumos ni mover grupos al leer', () => {
+    legacy(); const old = JSON.parse(values.get(KEY)!); old.logs = [{ ...log(), distance: 1, totalDistance: 1 }];
+    old.groups[0].x = 20.01; old.groups[0].y = 20;
+    old.route = [{ x: 20, y: 20 }, { x: 20.01, y: 20 }, { x: 20.02, y: 20 }];
+    const raw = JSON.stringify(old); values.set(KEY, raw); const view = make();
+    expect(view.logs()).toEqual(old.logs); expect(view.groups()[0].x).toBe(20.01); expect(values.get(KEY)).toBe(raw);
+    expect(view.plan().foodKg).toBe(10); expect(view.travelledDistance()).toBe(1);
+  });
+  it('restaura distancias fraccionarias y posiciones de dos grupos y campañas', () => {
+    let id = 'precision-one';
+    TestBed.overrideProvider(ACCESS_CONTEXT, { useValue: { user: () => ({ role: 'director' }) } });
+    TestBed.configureTestingModule({ providers: [{ provide: ActivatedRoute, useValue: { snapshot: { get paramMap() { return convertToParamMap({ campaignId: id }); } } } }] });
+    TestBed.overrideProvider(CampaignDataService, { useValue: { getCampaignById: (campaignId: string) => of({ id: campaignId, playerCharacters: [], playerOptions: [], npcs: [] }) } });
+    const view = make(); view.groups.set(groups()); view.selectGroup('a');
+    view.route.set([{ x: 20, y: 20 }, { x: 20.004, y: 20 }]); view.guideChanged('player-option-scout');
+    spyOn(view, 'resolveRoleEvents').and.returnValue([]); spyOn(view, 'rollWeather').and.returnValue('Despejado');
+    view.resolveDay(); const first = structuredClone(view.logs()); view.selectGroup('b');
+    view.route.set([{ x: 30, y: 30 }, { x: 30.006, y: 30 }]); view.guideChanged('player-option-scout'); view.resolveDay();
+    const second = structuredClone(view.logs()); const restored = make();
+    expect(restored.logs()).toEqual(second); expect(restored.groups()[1].x).toBe(30.006);
+    restored.selectGroup('a'); expect(restored.logs()).toEqual(first); expect(restored.groups()[0].x).toBe(20.004);
+    id = 'precision-two'; expect(make().groups()).toEqual([]);
+    id = 'precision-one'; expect(make().logs()).toEqual(first);
+  });
+
+  it('cierra la última jornada sin consumir otra por un residuo de coma flotante', () => {
+    const view = preciseJourney([{ x: 20, y: 20 }, { x: 20.99513, y: 20 }]);
+    const neutral = { foodKg: 0, waterLiters: 0, gold: 0, fatigue: 0, distancePercent: 0, distanceKm: 0 };
+    const effects = spyOn(view, 'aggregateEventEffects').and.returnValue({ ...neutral, distancePercent: -0.2 });
+    view.resolveDay(); expect(view.logs()[0].distance).toBe(28.8);
+    effects.and.returnValue(neutral); view.resolveDay();
+    expect(view.remainingDistance()).toBe(0); expect(view.estimatedDays()).toBe(0);
+    expect(view.logs()[1].totalDistance).toBe(view.routeDistance()); expect(view.groups()[0].x).toBe(20.99513);
+    const provisions = structuredClone(view.plan()); view.resolveDay();
+    expect(view.logs().length).toBe(2); expect(view.plan()).toEqual(provisions);
+    const tiny = preciseJourney([{ x: 20, y: 20 }, { x: 20.00000001, y: 20 }]);
+    expect(tiny.remainingDistance()).toBeGreaterThan(0); // No se confunde precisión de presentación con cero real.
+  });
+
 });

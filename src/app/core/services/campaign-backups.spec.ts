@@ -80,4 +80,17 @@ describe('Copias de seguridad por campaña',()=>{
    expect(storage.writes).toBe(0); expect(put).not.toHaveBeenCalled();
  });
 
+ it('exporta y restaura sin redondear jornadas y posiciones de dos grupos de viaje', async () => {
+   const original = travel() as any;
+   const daily = (distance: number) => ({ day: 1, weather: 'Despejado', distance, totalDistance: distance, encounter: 'Sin encuentro', resources: 'Consumo ya registrado', position: 'En ruta', pendingDecision: false });
+   const first = { route: [{ x: 20, y: 20 }, { x: 20.004, y: 20 }], plan: plan(), logs: [daily(0.2444)] };
+   const second = { route: [{ x: 30, y: 30 }, { x: 30.006, y: 30 }], plan: { ...plan(), foodKg: 73 }, logs: [daily(0.3666)] };
+   original.groups = [{ ...original.groups[0], x: 20.004, y: 20 }, { ...original.groups[0], id: 'south', name: 'Sur', x: 30.006, y: 30 }];
+   original.journeys = { grupo: first, south: second }; Object.assign(original, first);
+   const preview = await store.preview(file({ [travelStorageKey(campaign)]: original }), campaign); await store.restore(preview);
+   const exported = parseCampaignBackup(await store.export(campaign), campaign);
+   expect(exported.local[travelStorageKey(campaign)]).toEqual(original);
+   expect(JSON.parse(storage.getItem(travelStorageKey(campaign))!)).toEqual(original);
+ });
+
 });
