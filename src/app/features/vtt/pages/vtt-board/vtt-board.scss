@@ -279,7 +279,7 @@ button {
 .fog-draft {
   position: absolute;
   z-index: 20;
-  background: rgb(5 7 8 / 96%);
+  background: #050708;
   pointer-events: none;
 }
 
@@ -477,7 +477,7 @@ button {
 
 .sidebar-tabs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   border-bottom: 1px solid #45484d;
 }
 
@@ -879,3 +879,6 @@ button {
 .vtt-token.attack-target { outline: 4px solid #efb857; outline-offset: 4px; }
 .combat-log ol { max-height: 220px; overflow: auto; padding-left: 22px; }
 .combat-log li { margin: 8px 0; }
+
+.vision-layer { z-index: 22; }
+.vision-panel fieldset { display: block; border: 0; }

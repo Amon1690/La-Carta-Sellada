@@ -5,6 +5,7 @@ import { AccessUser } from './access';
 import { calculateCharacter } from './character-builder';
 import { rules, warrior } from './character-builder.fixture';
 import { emptyBoardVision } from './vision-state';
+import { previewSight, previewTokenVisible } from './vision-preview';
 
 class MemoryStorage implements Storage {
   values=new Map<string,string>();writes=0;failAt=new Set<number>();
@@ -70,6 +71,21 @@ describe('Copias de seguridad por campaña',()=>{
    const result = parseCampaignBackup(await store.export(campaign), campaign);
    expect((result.sheets.created[0] as any).vision).toEqual(input.sheets.created[0].vision);
    expect((result.local[boardKey] as any).fogRects).toEqual(input.local[boardKey].fogRects);
+ });
+ it('mantiene la previsualización y la exploración al restaurar dos listas de observadores', async () => {
+   const source = { kind: 'director' as const, reference: 'Fixture de copia de previsualización' };
+   const tokens = ['a','b'].map((instanceId,i) => ({ instanceId, actorId: 'player:custom-backup', name: instanceId,
+     image: '', x: 100 + i * 700, y: 100, size: 1, hp: 7, maxHp: 20, initiative: 0, hidden: false, conditions: [] }));
+   const vision = { ...emptyBoardVision(), enabled: true, environment: { illumination: 'bright' as const, timeOfDay: 'unknown' as const, weather: 'clear' as const, source },
+     groups: [{ id:'one',name:'Uno',observerIds:['a'] },{ id:'two',name:'Dos',observerIds:['b'] }], activeGroupId:'one' };
+   const fogRects = [{ id:'unexplored',x:0,y:0,width:50,height:50 }];
+   const input = JSON.parse(file({[boardKey]: {...board(),tokens,vision,fogRects}}));
+   input.sheets.created[0].vision = {version:1,senses:[{sense:'normal',rangeFeet:20,source}]};
+   await store.restore(await store.preview(JSON.stringify(input),campaign));
+   const restored = parseCampaignBackup(await store.export(campaign),campaign).local[boardKey] as any;
+   expect(restored.vision).toEqual(vision); expect(restored.fogRects).toEqual(fogRects);
+   const sight = previewSight(restored.vision,restored.tokens,new Map(tokens.map((t)=>[t.instanceId,input.sheets.created[0].vision])),51.2,1536,1024);
+   expect(restored.tokens.filter((t:any)=>previewTokenVisible(t,sight.circles,restored.fogRects,51.2)).map((t:any)=>t.instanceId)).toEqual(['a']);
  });
  it('rechaza perfiles, versiones y referencias de visión inválidos sin escribir nada', async () => {
    for (const invalid of [{ ...emptyBoardVision(), version: 2 }, { ...emptyBoardVision(), groups: [{ id: 'x', name: 'x', observerIds: ['missing'] }] }]) {

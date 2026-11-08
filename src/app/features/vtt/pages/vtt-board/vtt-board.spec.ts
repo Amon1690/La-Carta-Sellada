@@ -430,6 +430,74 @@ describe('Multiselección de fichas en VTT', () => {
       { id: 'two', name: 'Dos', observerIds: ['C'] },
     ], activeGroupId: 'one' };
   }
+
+  function confirmedPreview(): any {
+    const view = fixture.componentInstance as any;
+    const source = { kind: 'director' as const, reference: 'Fixture de previsualización' };
+    spyOn(sheets, 'visionProfile').and.returnValue({ version: 1, senses: [{ sense: 'normal', rangeFeet: 10, source }] });
+    view.tokens.update((tokens: any[]) => tokens.map((t) => ({ ...t, conditions: [] })));
+    view.setBoardVision({ ...boardVision(), groups: [{ id: 'one', name: 'Uno', observerIds: ['A'] }, { id: 'two', name: 'Dos', observerIds: ['C'] }],
+      environment: { illumination: 'bright', timeOfDay: 'unknown', weather: 'clear', source } });
+    return view;
+  }
+  it('la vista previa elimina del DOM fichas, etiquetas, PG, turnos, fichas completas y objetivos no visibles', () => {
+    const view = confirmedPreview();
+    clickToken('C'); board.activeTurnId.set('C'); doubleClickToken('C');
+    view.tokens.update((tokens: any[]) => tokens.map((t) => t.instanceId === 'C' ? { ...t, name: 'Enemigo secreto de prueba' } : t));
+    view.toggleVisionPreview(); fixture.detectChanges();
+    expect(view.displayedTokens().map((t: Token) => t.instanceId)).toEqual(['A']);
+    expect(fixture.nativeElement.querySelector('[data-token-instance="C"]')).toBeNull();
+    expect(fixture.nativeElement.textContent).not.toContain('Enemigo secreto de prueba');
+    for (const selector of ['.token-library', '.turn-panel', '.token-inspector header', 'app-vtt-token-sheet', 'app-vtt-combat', 'app-vtt-attack', '.tool-group']) {
+      expect(fixture.nativeElement.querySelector(selector)).withContext(selector).toBeNull();
+    }
+    expect(board.selectedTokenIds()).toEqual([]); expect(view.openedTokenSheet()).toBeUndefined();
+    view.beginAttack('C'); view.selectAllTokens(); view.openTokenSheet('C', new MouseEvent('click'));
+    map.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Delete' }));
+    expect(view.attackingId()).toBeUndefined(); expect(board.selectedTokenIds()).toEqual([]); expect(board.tokens().length).toBe(3);
+  });
+  it('la exploración opaca prevalece aunque el director haya ocultado su capa de edición', () => {
+    const view = confirmedPreview(); view.toggleLayer('fog');
+    view.fogRects.set([{ id: 'unexplored', x: GRID * 2, y: GRID * 2, width: 5, height: 5 }]);
+    view.toggleVisionPreview(); fixture.detectChanges();
+    expect(view.displayedTokens()).toEqual([]); expect(fixture.nativeElement.querySelectorAll('.fog-rect').length).toBe(1);
+    expect(fixture.nativeElement.querySelector('.vision-layer')).not.toBeNull();
+    expect(view.fogRects()).toEqual([{ id: 'unexplored', x: GRID * 2, y: GRID * 2, width: 5, height: 5 }]);
+  });
+  it('cambia la unión al elegir otra lista y al mover observadores sin depender del turno', () => {
+    const view = confirmedPreview(); view.toggleVisionPreview(); board.activeTurnId.set('C');
+    expect(view.displayedTokens().map((t: Token) => t.instanceId)).toEqual(['A']);
+    view.chooseVisionGroup('two');
+    expect(view.displayedTokens().map((t: Token) => t.instanceId)).toEqual(['C']);
+    board.tokens.update((tokens) => tokens.map((t) => t.instanceId === 'C' ? { ...t, x: 1200, y: 900 } : t));
+    expect(view.previewGeometry().circles[0].x).toBeCloseTo(1200 + GRID);
+    view.toggleVisionPreview(); fixture.detectChanges(); expect(fixture.nativeElement.querySelector('.token-library')).not.toBeNull();
+  });
+  it('conserva listas elegidas y exploración tras recargar; el modo de dirección vuelve explícitamente', async () => {
+    const view = confirmedPreview(); view.createVisionGroup('Nueva lista'); view.toggleVisionObserver('B', true);
+    const fog = [{ id: 'known-fog', x: 900, y: 600, width: 20, height: 20 }]; view.fogRects.set(fog); view.persist();
+    const saved = localStorage.getItem(key()); view.toggleVisionPreview();
+    routeParams.next(params()); fixture.detectChanges(); await fixture.whenStable();
+    expect(view.visionObserverIds()).toEqual(['B']); expect(view.fogRects()).toEqual(fog);
+    expect(view.visionPreview()).toBeFalse(); expect(localStorage.getItem(key())).toBe(saved);
+  });
+  it('muestra la lista guardada en el desplegable al abrir Visión por primera vez', () => {
+    const view = confirmedPreview(); view.setSidebarTab('vision'); fixture.detectChanges();
+    const select = fixture.nativeElement.querySelector('.vision-panel select') as HTMLSelectElement;
+    expect(select.value).toBe('one'); expect(select.selectedOptions[0].textContent).toBe('Uno');
+    view.chooseVisionGroup('two'); fixture.detectChanges(); expect(select.value).toBe('two');
+  });
+  it('guarda datos explícitos de vista normal en el servicio compartido sin cambiar otros sentidos', async () => {
+    const view = fixture.componentInstance as any, generic = sheets.genericNpcs()[0]; actorFor('A', `generic:${generic.id}`);
+    const source = { kind: 'director' as const, reference: 'Otro sentido de prueba' };
+    await sheets.saveVisionProfile(campaign('vtt-selection-test'), `generic:${generic.id}`, { version: 1, senses: [{ sense: 'darkvision', rangeFeet: 30, source }] });
+    await view.saveNormalVision('A', '15', false, 'Alcance registrado por el director');
+    const result = sheets.visionProfile(campaign('vtt-selection-test'), `generic:${generic.id}`)!;
+    expect(result.senses.find((sense) => sense.sense === 'normal')?.rangeFeet).toBe(15);
+    expect(result.senses.find((sense) => sense.sense === 'darkvision')).toEqual({ sense: 'darkvision', rangeFeet: 30, source });
+    await view.saveNormalVision('A', '', false, '');
+    expect(sheets.visionProfile(campaign('vtt-selection-test'), `generic:${generic.id}`)).toEqual(result);
+  });
   it('migra un tablero antiguo sin alterar niebla manual ni escribir al leer', async () => {
     const view = fixture.componentInstance as any;
     view.fogRects.set([{ id: 'old-fog', x: 5, y: 6, width: 20, height: 30 }]); view.persist();

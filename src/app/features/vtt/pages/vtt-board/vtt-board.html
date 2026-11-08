@@ -1,6 +1,6 @@
 @if (vm$ | async; as vm) {
   @if (vm; as boardVm) {
-    <main class="vtt-shell">
+    <main class="vtt-shell" [class.vision-preview]="visionPreview()">
       <header class="vtt-toolbar">
         <div class="board-title">
           <span class="vtt-mark">VTT</span>
@@ -10,6 +10,7 @@
           </div>
         </div>
 
+        @if (!visionPreview()) {
         <div class="tool-group" role="toolbar" aria-label="Herramientas del tablero">
           <button
             type="button"
@@ -47,8 +48,11 @@
             (click)="setMode('measure')"
           ><span aria-hidden="true">⌁</span><b>Medir</b></button>
         </div>
+        }
 
         <div class="toolbar-actions">
+          <button type="button" class="dice-button" [disabled]="combat.busy() || (!visionPreview() && (!vision().enabled || visionStorageBlocked))"
+            [attr.aria-pressed]="visionPreview()" (click)="toggleVisionPreview()">{{ visionPreview() ? 'Volver a dirección' : 'Previsualizar visión' }}</button>
           <div class="zoom-control" aria-label="Zoom">
             <button type="button" title="Alejar" (click)="zoomBy(-0.1)">−</button>
             <output>{{ (zoom() * 100).toFixed(0) }}%</output>
@@ -56,6 +60,7 @@
             <button type="button" title="Ajustar mapa" (click)="fitMap()">Ajustar</button>
           </div>
 
+          @if (!visionPreview()) {
           <div class="dice-control">
             <button
               type="button"
@@ -74,6 +79,7 @@
           </div>
 
           <span class="save-state">{{ saveStatus() }}</span>
+          }
         </div>
       </header>
 
@@ -95,7 +101,7 @@
               class="map-board"
               tabindex="0"
               role="group"
-              aria-label="Mapa de juego. Arrastra para seleccionar fichas."
+              [attr.aria-label]="visionPreview() ? 'Previsualización local del mapa. Arrastra para desplazar.' : 'Mapa de juego. Arrastra para seleccionar fichas.'"
               [class.targeting]="targeting()"
               [class.drawing]="mode() === 'fog' || mode() === 'reveal' || mode() === 'measure'"
               [style.width.px]="mapWidth"
@@ -117,7 +123,7 @@
                 ></div>
               }
 
-              @if (layers().fog) {
+              @if (layers().fog || visionPreview()) {
                 @for (fog of fogRects(); track fog.id) {
                   <div
                     class="fog-rect"
@@ -127,6 +133,18 @@
                     [style.height.px]="fog.height"
                   ></div>
                 }
+              }
+
+              @if (visionPreview()) {
+                <svg class="map-image vision-layer" [attr.viewBox]="'0 0 ' + mapWidth + ' ' + mapHeight" aria-hidden="true">
+                  <defs><mask [attr.id]="visionMaskId" maskUnits="userSpaceOnUse">
+                    <rect x="0" y="0" [attr.width]="mapWidth" [attr.height]="mapHeight" fill="white" />
+                    @for (circle of previewGeometry().circles; track circle.id) {
+                      <circle [attr.cx]="circle.x" [attr.cy]="circle.y" [attr.r]="circle.radius" fill="black" />
+                    }
+                  </mask></defs>
+                  <rect x="0" y="0" [attr.width]="mapWidth" [attr.height]="mapHeight" fill="#000" opacity="0.82" [attr.mask]="'url(#' + visionMaskId + ')'" />
+                </svg>
               }
 
               @if (draftFog(); as draft) {
@@ -150,7 +168,7 @@
               }
 
               @if (layers().tokens) {
-                @for (token of tokens(); track token.instanceId) {
+                @for (token of displayedTokens(); track token.instanceId) {
                   <button
                     type="button"
                     class="vtt-token"
@@ -165,7 +183,7 @@
                     [attr.aria-label]="token.name"
                     [attr.aria-pressed]="isTokenSelected(token.instanceId)"
                     [attr.data-token-instance]="token.instanceId"
-                    [title]="targeting() ? 'Atacar a ' + token.name : 'Doble clic para abrir la ficha'"
+                    [title]="visionPreview() ? 'Ficha visible' : targeting() ? 'Atacar a ' + token.name : 'Doble clic para abrir la ficha'"
                     (pointerdown)="tokenPointerDown(token, $event)"
                     (click)="selectToken(token.instanceId, $event)"
                     (dblclick)="openTokenSheet(token.instanceId, $event)"
@@ -191,13 +209,67 @@
         </section>
 
         <aside class="vtt-sidebar">
+          @if (visionPreview()) {
+            <div class="sidebar-tabs"><strong>Visión compartida</strong></div>
+            <section class="sidebar-content token-inspector">
+              <h2>Previsualización local</h2>
+              <p>Visión compartida de las instancias elegidas. Esta vista no se transmite a jugadores.</p>
+              <p>Vista geométrica provisional: los muros, otros sentidos y efectos requieren revisión del director.</p>
+              <p>Negro: sin explorar. Oscuro: explorado sin visión. Iluminado: visión de los observadores.</p>
+              @if (previewGeometry().pending) { <p role="status">Hay datos de visión pendientes. Las zonas sin confirmar permanecen oscuras.</p> }
+              <h3>Fichas visibles</h3>
+              <ul>@for (token of displayedTokens(); track token.instanceId) { <li>{{ token.name }}</li> }</ul>
+            </section>
+          } @else {
           <nav class="sidebar-tabs" aria-label="Panel de herramientas">
             <button type="button" [class.active]="sidebarTab() === 'tokens'" (click)="setSidebarTab('tokens')">Fichas</button>
             <button type="button" [class.active]="sidebarTab() === 'layers'" (click)="setSidebarTab('layers')">Capas</button>
             <button type="button" [class.active]="sidebarTab() === 'turns'" (click)="setSidebarTab('turns')">Turnos</button>
+            <button type="button" [class.active]="sidebarTab() === 'vision'" (click)="setSidebarTab('vision')">Visión</button>
           </nav>
 
           <div #sideContent class="sidebar-content">
+            @if (sidebarTab() === 'vision') {
+              <section class="vision-panel token-inspector">
+                <h2>Visión compartida</h2>
+                <p>Herramientas de dirección. Guarda listas independientes del turno y de la selección de fichas.</p>
+                <fieldset class="field-grid" [disabled]="visionStorageBlocked">
+                  <label class="check-field"><input type="checkbox" [checked]="vision().enabled" (change)="enableVision($any($event.target).checked)" /> Activar niebla de guerra</label>
+                  <label>Lista de observadores<select [value]="vision().activeGroupId ?? ''" (change)="chooseVisionGroup($any($event.target).value)">
+                    <option value="" [selected]="!vision().activeGroupId">Sin lista activa</option>
+                    @for (group of vision().groups; track group.id) { <option [value]="group.id" [selected]="vision().activeGroupId === group.id">{{ group.name }}</option> }
+                  </select></label>
+                  <label>Nueva lista<input #groupName type="text" maxlength="500" placeholder="Nombre de la lista" /></label>
+                  <button type="button" class="open-token-sheet" (click)="createVisionGroup(groupName.value); groupName.value = ''">Crear lista</button>
+                  <div class="observer-list">
+                    @for (token of tokens(); track token.instanceId) {
+                      <label class="check-field"><input type="checkbox" [disabled]="!vision().activeGroupId" [checked]="visionObserverIds().includes(token.instanceId)"
+                        (change)="toggleVisionObserver(token.instanceId, $any($event.target).checked)" /> {{ token.name }} <small>({{ $index + 1 }})</small></label>
+                    }
+                  </div>
+                  <h3>Entorno de juego</h3>
+                  <label>Iluminación<select [value]="vision().environment.illumination" (change)="setPreviewEnvironment('illumination', $any($event.target).value)">
+                    <option value="unknown">Sin confirmar</option><option value="bright">Luz intensa</option><option value="dim">Penumbra</option><option value="darkness">Oscuridad</option>
+                  </select></label>
+                  <label>Clima<select [value]="vision().environment.weather" (change)="setPreviewEnvironment('weather', $any($event.target).value)">
+                    <option value="unknown">Sin confirmar</option><option value="clear">Despejado</option><option value="rain">Lluvia</option><option value="snow">Nieve</option><option value="fog">Niebla</option><option value="other">Otro</option>
+                  </select></label>
+                  <p>Por ahora se muestra la vista normal confirmada con luz intensa o penumbra y clima despejado. Oscuridad, clima adverso y efectos quedan pendientes de resolver.</p>
+                  <h3>Datos de las fichas</h3>
+                  <p>Completa la vista normal y confirma las condiciones de cada observador en Fichas. El alcance no se deduce del nombre ni del linaje.</p>
+                  @for (token of tokens(); track token.instanceId) {
+                    <details><summary>{{ token.name }} · {{ normalVisionRange(token.instanceId) === undefined ? 'Vista sin confirmar' : normalVisionRange(token.instanceId) === null ? 'Sin límite registrado' : normalVisionRange(token.instanceId) + ' pies' }}</summary>
+                      <label>Alcance de vista normal (pies)<input #sightRange type="number" min="0" max="100000" [value]="normalVisionRange(token.instanceId) ?? ''" /></label>
+                      <label class="check-field"><input #unlimited type="checkbox" [checked]="normalVisionRange(token.instanceId) === null" /> Vista normal sin límite de alcance registrado</label>
+                      <label>Fuente o decisión del director<input #sightSource type="text" maxlength="2000" /></label>
+                      <button type="button" class="open-token-sheet" (click)="saveNormalVision(token.instanceId, sightRange.value, unlimited.checked, sightSource.value)">Guardar vista normal</button>
+                    </details>
+                  }
+                </fieldset>
+                @if (visionMessage()) { <p role="status">{{ visionMessage() }}</p> }
+                <p>La previsualización es local y provisional; no abre el tablero a jugadores.</p>
+              </section>
+            }
             @if (sidebarTab() === 'tokens') {
               <section class="selection-tools" aria-label="Selección de fichas">
                 <p>Mayús/Ctrl/⌘ + clic para añadir o quitar. Arrastra sobre el mapa para seleccionar un área.</p>
@@ -269,12 +341,12 @@
               <section class="layer-panel">
                 <h2>Visibilidad</h2>
                 <label><span><b>Cuadrícula</b><small>30 × 20 casillas</small></span><input type="checkbox" [checked]="layers().grid" (change)="toggleLayer('grid')" /></label>
-                <label><span><b>Niebla</b><small>Zonas ocultas</small></span><input type="checkbox" [checked]="layers().fog" (change)="toggleLayer('fog')" /></label>
+                <label><span><b>Exploración manual</b><small>Zonas sin explorar; siempre opacas en la previsualización</small></span><input type="checkbox" [checked]="layers().fog" (change)="toggleLayer('fog')" /></label>
                 <label><span><b>Fichas</b><small>PJ y PNJ</small></span><input type="checkbox" [checked]="layers().tokens" (change)="toggleLayer('tokens')" /></label>
                 <label><span><b>Nombres</b><small>Etiquetas de fichas</small></span><input type="checkbox" [checked]="layers().labels" (change)="toggleLayer('labels')" /></label>
               </section>
               <section class="fog-actions">
-                <h2>Niebla de guerra</h2>
+                <h2>Exploración manual</h2>
                 <div><button type="button" (click)="coverMap()">Ocultar todo</button><button type="button" (click)="revealMap()">Revelar todo</button></div>
               </section>
               <button type="button" class="reset-button" (click)="resetBoard()">Restablecer tablero</button>
@@ -312,10 +384,13 @@
               </section>
             }
           </div>
+          }
         </aside>
       </div>
+      @if (!visionPreview()) {
       <app-vtt-token-sheet [sheet]="openedTokenSheet()" (closed)="tokenSheetClosed()" />
       <app-vtt-combat (resolved)="showLatestCombat()" [combat]="combat" />
+      }
     </main>
   } @else {
     <main class="vtt-missing"><h1>Mapa no encontrado</h1><p>Este tablero no está disponible en la campaña.</p></main>
