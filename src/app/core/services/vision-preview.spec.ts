@@ -7,7 +7,7 @@ describe('Geometría de la previsualización local', () => {
   const source = { kind: 'director' as const, reference: 'Datos sintéticos de prueba, sin reglas de personajes' };
   const token = (id: string, x = 0): PreviewToken => ({ instanceId: id, x, y: 0, size: 1, hidden: false, conditions: [] });
   const profile = (rangeFeet: number | null): VisionProfile => ({ version: 1, senses: [{ sense: 'normal', rangeFeet, source }] });
-  const state = (): BoardVisionState => ({ ...emptyBoardVision(), enabled: true,
+  const state = (): BoardVisionState => ({ ...emptyBoardVision(), enabled: true, obstacles: [],
     environment: { illumination: 'bright', timeOfDay: 'unknown', weather: 'clear', source },
     groups: [{ id: 'one', name: 'Uno', observerIds: ['A', 'B'] }, { id: 'two', name: 'Dos', observerIds: ['C'] }], activeGroupId: 'one' });
   it('une únicamente observadores elegidos y convierte pies con la escala existente del mapa', () => {
@@ -48,11 +48,12 @@ describe('Geometría de la previsualización local', () => {
     const result = previewSight(value, tokens, profiles, grid, 1536, 1024);
     expect(result.circles).toEqual([]); expect(result.pending).toBeTrue();
   });
-  it('el entorno sin confirmar y todos los climas conservan el alcance; oscuridad sin sentidos ni luz no concede visión', () => {
+  it('el entorno sin confirmar no concede vista y la oscuridad sin sentidos ni luz tampoco', () => {
     const profiles = new Map([['A', profile(null)]]);
     for (const weather of ['unknown', 'clear', 'fog', 'rain', 'snow', 'other'] as const) {
       const value = state(); value.environment.weather = weather; value.environment.illumination = 'unknown';
-      expect(previewSight(value, [token('A')], profiles, grid, 1536, 1024).circles[0].radius).toBe(Math.hypot(1536, 1024));
+      const result = previewSight(value, [token('A')], profiles, grid, 1536, 1024);
+      expect(result.circles).toEqual([]); expect(result.pending).toBeTrue();
     }
     const value = state(); value.environment.illumination = 'darkness';
     expect(previewSight(value, [token('A')], profiles, grid, 1536, 1024).circles).toEqual([]);
@@ -79,9 +80,9 @@ describe('Geometría de la previsualización local', () => {
     const value = state(), tokens = [token('A')], profiles = new Map([['A', profile(60)]]), point = { x: 100, y: 25.6 };
     value.environment.illumination = 'dim';
     expect(assessSight(value, tokens, profiles, 'A', point)).toEqual(jasmine.objectContaining({ visible: true, perception: 'disadvantage' }));
-    value.environment.illumination = 'bright'; value.environment.weather = 'fog';
+    value.environment.illumination = 'bright'; value.environment.weather = 'fog'; value.environment.obscurement = 'light';
     expect(assessSight(value, tokens, profiles, 'A', point).perception).toBe('disadvantage');
-    value.environment.weather = 'rain'; expect(assessSight(value, tokens, profiles, 'A', point).perception).toBe('normal');
+    value.environment.weather = 'rain'; value.environment.obscurement = 'none'; expect(assessSight(value, tokens, profiles, 'A', point).perception).toBe('normal');
   });
   it('una luz de otro token revela solo la intersección con el alcance y acompaña al portador', () => {
     const value = state(), tokens = [token('A'), token('B', 300)], profiles = new Map([['A', profile(60)]]);
@@ -134,5 +135,26 @@ describe('Geometría de la previsualización local', () => {
     value.effects = [{ id: 'zero', name: 'Zona vacía', kind: 'magical-darkness', source,
       scope: { kind: 'circle', x: 25.6, y: 25.6, radiusFeet: 0 }, active: true, duration: { kind: 'until-ended' } }];
     expect(assessSight(value, tokens, profiles, 'A', { x: 125.6, y: 25.6 }).visible).toBeTrue();
+  });
+  it('paredes y puertas recortan la unión sin revelar invisibles, incluso con origen en la pared', () => {
+    const value = state(), tokens = [token('A'), token('B', 300)], profiles = new Map([['A', profile(60)]]);
+    value.obstacles = [{ id: 'door', name: 'Puerta sintética', kind: 'door', open: false, source,
+      start: { x: 175, y: 0 }, end: { x: 175, y: 100 }, blocksSight: true, blocksEffect: true }];
+    const visible = () => previewTokenVisible(tokens[1], previewSight(value, tokens, profiles, grid, 1536, 1024).circles, [], grid);
+    expect(visible()).toBeFalse(); expect(assessSight(value, tokens, profiles, 'A', { x: 325.6, y: 25.6 }).visible).toBeFalse();
+    value.obstacles[0].open = true; expect(visible()).toBeTrue();
+    tokens[1].conditions = ['invisible']; expect(visible()).toBeFalse();
+    profiles.set('A', { version: 1, senses: [{ sense: 'blindsight', rangeFeet: 60, source }] }); expect(visible()).toBeTrue();
+    value.obstacles[0].open = false; value.obstacles[0].start = { x: 25.6, y: 25.6 }; expect(visible()).toBeFalse();
+    delete value.obstacles; expect(previewSight(value, tokens, profiles, grid, 1536, 1024)).toEqual({ circles: [], pending: true });
+  });
+  it('omite condiciones desconocidas del objetivo salvo visión ciega y conserva la incertidumbre del observador', () => {
+    const value = state(), tokens = [token('A'), { ...token('B', 100), conditions: undefined }], profiles = new Map([['A', profile(60)]]);
+    const visible = () => previewTokenVisible(tokens[1], previewSight(value, tokens, profiles, grid, 1536, 1024).circles, [], grid);
+    expect(visible()).toBeFalse();
+    profiles.set('A', { version: 1, senses: [{ sense: 'truesight', rangeFeet: 60, source }] }); expect(visible()).toBeFalse();
+    profiles.set('A', { version: 1, senses: [{ sense: 'blindsight', rangeFeet: 60, source }] }); expect(visible()).toBeTrue();
+    tokens[0].conditions = undefined; expect(visible()).toBeTrue();
+    profiles.set('A', profile(60)); expect(visible()).toBeFalse(); expect(previewSight(value, tokens, profiles, grid, 1536, 1024).pending).toBeTrue();
   });
 });

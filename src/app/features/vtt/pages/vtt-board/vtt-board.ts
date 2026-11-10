@@ -15,9 +15,11 @@ import { map, shareReplay, skip, switchMap } from 'rxjs';
 import { HttpErrorResponse } from '@angular/common/http';
 
 import { Campaign } from '../../../../core/models/campaign';
-import { BoardVisionState, VisionProfile, VisionSense } from '../../../../core/models/vision';
+import { BoardVisionState, VisionEffect, VisionProfile, VisionSense } from '../../../../core/models/vision';
+import { advanceVisionEffects, endVisionConcentration, endVisionEffect } from '../../../../core/services/vision-effects';
 import { assertBoardVision, emptyBoardVision, withoutRemovedObservers } from '../../../../core/services/vision-state';
-import { assessSight, previewSight, previewTokenVisible } from '../../../../core/services/vision-preview';
+import { previewSight, previewTokenVisible } from '../../../../core/services/vision-preview';
+import { evaluateVision } from '../../../../core/services/vision-engine';
 import { ENCOUNTER_PUBLISHER, SharingSnapshot } from '../../../../core/services/encounter-sharing';
 import { CampaignDataService } from '../../../../core/services/campaign-data';
 import { CharacterSheetsService } from '../../../../core/services/character-sheets';
@@ -221,8 +223,7 @@ export class VttBoard {
   }, undefined, (observerId, targetId) => {
     if (!this.vision().enabled) return undefined;
     const target = this.tokens().find((token) => token.instanceId === targetId);
-    return target ? assessSight(this.vision(), this.tokens(), this.tokenVisionProfiles(), observerId,
-      { x: target.x + target.size * this.gridSize / 2, y: target.y + target.size * this.gridSize / 2 }) : undefined;
+    return target ? evaluateVision(this.vision(), this.tokens(), this.tokenVisionProfiles(), observerId, targetId, this.gridSize) : undefined;
   }, (result) => {
     if (!this.currentCampaign) return [];
     const sheets = this.characterSheets.playerSheets(this.currentCampaign);
@@ -615,6 +616,112 @@ export class VttBoard {
   }
 
   protected enableVision(enabled: boolean): void { this.setBoardVision({ ...this.vision(), enabled }); }
+  protected confirmVisionGeometry(): void {
+    if (this.combat.busy()) return;
+    this.setBoardVision({ ...this.vision(), obstacles: this.vision().obstacles ?? [] });
+  }
+  protected addVisionObstacle(form: HTMLFormElement): void {
+    if (this.combat.busy()) return;
+    const data = new FormData(form), value = (name: string) => String(data.get(name) ?? '').trim();
+    const kind = value('kind');
+    if (!['wall', 'door'].includes(kind) || !value('name') || !value('source') || ['x1', 'y1', 'x2', 'y2'].some((k) => !value(k))) {
+      this.visionMessage.set('Completa nombre, fuente y los dos puntos del obstáculo.'); return;
+    }
+    const obstacle = { id: this.newId('obstacle'), name: value('name'), kind: kind as 'wall' | 'door',
+      start: { x: Number(value('x1')), y: Number(value('y1')) }, end: { x: Number(value('x2')), y: Number(value('y2')) },
+      blocksSight: data.has('blocksSight'), blocksEffect: data.has('blocksEffect'),
+      source: { kind: 'director' as const, reference: value('source') }, ...(kind === 'door' ? { open: false } : {}) };
+    try { this.setBoardVision({ ...this.vision(), obstacles: [...(this.vision().obstacles ?? []), obstacle] }); this.visionMessage.set('Obstáculo guardado.'); }
+    catch { this.visionMessage.set('Revisa la fuente y los dos puntos distintos del obstáculo.'); }
+  }
+  protected changeVisionObstacle(id: string, remove = false): void {
+    if (this.combat.busy()) return;
+    this.setBoardVision({ ...this.vision(), obstacles: this.vision().obstacles?.filter((o) => !remove || o.id !== id)
+      .map((o) => o.id === id && o.kind === 'door' ? { ...o, open: !o.open } : o) });
+  }
+  protected setVisionGameTime(day: string, minute: string, period: string): void {
+    if (this.combat.busy() || !day.trim() || !minute.trim() || !['unknown', 'dawn', 'day', 'dusk', 'night'].includes(period)) return;
+    try { this.setBoardVision({ ...this.vision(), environment: { ...this.vision().environment,
+      timeOfDay: period as BoardVisionState['environment']['timeOfDay'], gameTime: { day: Number(day), minuteOfDay: Number(minute), second: 0 },
+      source: { kind: 'director', reference: 'Reloj del mundo de juego declarado por dirección' } } }); }
+    catch { this.visionMessage.set('Indica un día válido y un minuto del día entre 0 y 1439.'); }
+  }
+  protected setVisionObscurement(value: string): void {
+    if (this.combat.busy() || !['unknown', 'none', 'light', 'heavy'].includes(value)) return;
+    this.setBoardVision({ ...this.vision(), environment: { ...this.vision().environment,
+      obscurement: value as NonNullable<BoardVisionState['environment']['obscurement']>,
+      source: { kind: 'director', reference: 'Oscurecimiento del entorno declarado por dirección' } } });
+  }
+  protected advanceVisionTime(kind: 'rounds' | 'minutes', amount: string): void {
+    if (this.combat.busy() || !amount.trim()) return;
+    try { this.setBoardVision(advanceVisionEffects(this.vision(), { kind, amount: Number(amount) })); this.visionMessage.set('Tiempo de juego y duraciones actualizados.'); }
+    catch { this.visionMessage.set('Indica un número entero no negativo dentro del reloj de juego.'); }
+  }
+  protected finishVisionEffect(id: string): void {
+    if (!this.combat.busy()) this.setBoardVision(endVisionEffect(this.vision(), id));
+  }
+  protected visionDurationLabel(effect: VisionEffect): string {
+    const labels = { unknown: 'Duración sin confirmar', 'until-ended': 'Hasta terminar', rounds: 'asaltos', minutes: 'minutos' };
+    return 'remaining' in effect.duration ? `${effect.duration.remaining} ${labels[effect.duration.kind]}` : labels[effect.duration.kind];
+  }
+  protected finishVisionConcentration(id: string): void {
+    if (!this.combat.busy()) this.setBoardVision(endVisionConcentration(this.vision(), id));
+  }
+  protected visionContactValue(id: string, key: 'surfaceId' | 'airborne' | 'moving' | 'subjectKind' | 'source'): string {
+    const contact = this.vision().contacts?.find((c) => c.tokenId === id);
+    if (key === 'source') return contact?.source.reference ?? '';
+    const value = contact?.[key]; return value === undefined ? (key === 'surfaceId' ? '' : 'unknown') : String(value);
+  }
+  protected saveVisionContact(id: string, form: HTMLFormElement): void {
+    if (this.combat.busy() || !this.tokens().some((t) => t.instanceId === id)) return;
+    const data = new FormData(form), value = (name: string) => String(data.get(name) ?? '').trim();
+    if (!value('source') || !['unknown', 'creature', 'object'].includes(value('subjectKind')) ||
+        ['airborne', 'moving'].some((key) => !['unknown', 'true', 'false'].includes(value(key)))) {
+      this.visionMessage.set('Confirma el contacto y su fuente, dejando sin confirmar los datos que falten.'); return;
+    }
+    const contact = { tokenId: id, source: { kind: 'director' as const, reference: value('source') },
+      ...(value('surfaceId') ? { surfaceId: value('surfaceId') } : {}),
+      ...(value('airborne') !== 'unknown' ? { airborne: value('airborne') === 'true' } : {}),
+      ...(value('moving') !== 'unknown' ? { moving: value('moving') === 'true' } : {}),
+      ...(value('subjectKind') !== 'unknown' ? { subjectKind: value('subjectKind') as 'creature' | 'object' } : {}),
+    };
+    try { this.setBoardVision({ ...this.vision(), contacts: [...(this.vision().contacts ?? []).filter((c) => c.tokenId !== id), contact] });
+      this.visionMessage.set('Contacto guardado solo para esta instancia y encuentro.'); }
+    catch { this.visionMessage.set('No se pudo guardar el contacto: revisa los datos y su fuente.'); }
+  }
+  protected assessVisionDetection(observerId: string, targetId: string): void {
+    const result = evaluateVision(this.vision(), this.tokens(), this.tokenVisionProfiles(), observerId, targetId, this.gridSize);
+    const label = (value: boolean | undefined) => value === undefined ? 'sin confirmar' : value ? 'sí' : 'no';
+    this.visionMessage.set(`Vista: ${label(result.visible)} · Detección de posición: ${label(result.detected)} · Línea de efecto: ${label(result.lineOfEffect)}. ${result.reasons.join(' ')}`);
+  }
+  protected addVisionEffect(form: HTMLFormElement): void {
+    if (this.combat.busy()) return;
+    const data = new FormData(form), value = (name: string) => String(data.get(name) ?? '').trim();
+    const kind = value('kind'), durationKind = value('duration');
+    if (!value('name') || !value('source') || !['light', 'magical-darkness', 'obscurement', 'blinded', 'sense'].includes(kind) ||
+      !['unknown', 'until-ended', 'rounds', 'minutes'].includes(durationKind)) {
+      this.visionMessage.set('Completa el nombre, tipo, fuente y duración del efecto.'); return;
+    }
+    const onToken = ['blinded', 'sense'].includes(kind);
+    if (onToken ? !value('token') : ['x', 'y', 'radius'].some((k) => !value(k))) {
+      this.visionMessage.set(onToken ? 'Elige la instancia afectada por el efecto.' : 'Indica el centro y radio de la zona.'); return;
+    }
+    if (['rounds', 'minutes'].includes(durationKind) && !value('remaining')) { this.visionMessage.set('Indica la duración restante.'); return; }
+    const effect: VisionEffect = { id: this.newId('vision-effect'), name: value('name'), kind: kind as VisionEffect['kind'], active: true,
+      source: { kind: 'director', reference: value('source') },
+      scope: onToken ? { kind: 'tokens', tokenIds: [value('token')] } : { kind: 'circle', x: Number(value('x')), y: Number(value('y')), radiusFeet: Number(value('radius')) },
+      duration: (['rounds', 'minutes'].includes(durationKind) ? { kind: durationKind, remaining: Number(value('remaining')) } : { kind: durationKind }) as VisionEffect['duration'],
+      ...(value('concentration') ? { concentrationTokenId: value('concentration') } : {}),
+      ...(kind === 'light' ? { illumination: value('illumination') as 'bright' | 'dim' } : {}),
+      ...(kind === 'obscurement' ? { obscurement: value('obscurement') as 'light' | 'heavy' } : {}),
+      ...(kind === 'sense' ? { grantedSense: { sense: value('sense') as VisionSense, rangeFeet: Number(value('range')),
+        source: { kind: 'director' as const, reference: value('source') } } } : {}),
+    };
+    if (kind === 'sense' && !value('range')) { this.visionMessage.set('Indica el alcance del sentido concedido.'); return; }
+    if ('remaining' in effect.duration && effect.duration.remaining === 0) effect.active = false;
+    try { this.setBoardVision({ ...this.vision(), effects: [...this.vision().effects, effect] }); this.visionMessage.set('Efecto guardado con su fuente y duración.'); }
+    catch { this.visionMessage.set('Revisa los alcances, duración, ámbito y fuente del efecto.'); }
+  }
   protected createVisionGroup(name: string): void {
     const trimmed = name.trim(); if (!trimmed || trimmed.length > 500 || this.vision().groups.length >= 100) return;
     const id = this.newId('observers');
@@ -643,7 +750,7 @@ export class VttBoard {
 
   protected async saveSense(id: string, sense: string, range: string, unlimited: boolean, reference: string): Promise<void> {
     if (this.visionPreview() || this.visionStorageBlocked || !this.currentCampaign) return;
-    if (!['normal', 'darkvision', 'blindsight', 'truesight'].includes(sense) || (unlimited && sense !== 'normal')) return;
+    if (!['normal', 'darkvision', 'blindsight', 'truesight', 'tremorsense'].includes(sense) || (unlimited && sense !== 'normal')) return;
     const token = this.tokens().find((item) => item.instanceId === id); if (!token) return;
     const amount = unlimited ? null : Number(range);
     if ((!unlimited && (!range.trim() || !Number.isFinite(amount) || amount! < 0 || amount! > 100000)) || !reference.trim()) {
@@ -687,8 +794,7 @@ export class VttBoard {
   protected rollVisualPerception(id: string, targetId: string, bonusText: string): void {
     const observer = this.tokens().find((token) => token.instanceId === id), target = this.tokens().find((token) => token.instanceId === targetId) ?? observer;
     if (!observer || !target || !bonusText.trim() || !Number.isFinite(Number(bonusText))) { this.perceptionMessage.set('Indica el bonificador de Percepción de la ficha.'); return; }
-    const assessment = assessSight(this.vision(), this.tokens(), this.tokenVisionProfiles(), id,
-      { x: target.x + target.size * this.gridSize / 2, y: target.y + target.size * this.gridSize / 2 });
+    const assessment = evaluateVision(this.vision(), this.tokens(), this.tokenVisionProfiles(), id, target.instanceId, this.gridSize);
     if (assessment.perception === 'unknown' || assessment.perception === 'automatic-failure') { this.perceptionMessage.set(assessment.reasons.join(' ')); return; }
     const dice = assessment.perception === 'disadvantage' ? [this.roll(20), this.roll(20)] : [this.roll(20)];
     const result = `${observer.name} · Percepción visual: ${Math.min(...dice) + Number(bonusText)} (${dice.join(', ')}; ${assessment.perception === 'disadvantage' ? 'desventaja' : 'normal'})`;

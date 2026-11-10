@@ -502,7 +502,7 @@ describe('Multiselección de fichas en VTT', () => {
 
 
   function boardVision(): BoardVisionState {
-    return { ...emptyBoardVision(), enabled: true, groups: [
+    return { ...emptyBoardVision(), enabled: true, obstacles: [], groups: [
       { id: 'one', name: 'Uno', observerIds: ['A', 'B'] },
       { id: 'two', name: 'Dos', observerIds: ['C'] },
     ], activeGroupId: 'one' };
@@ -595,6 +595,26 @@ describe('Multiselección de fichas en VTT', () => {
     random.calls.reset(); view.setPreviewEnvironment('illumination', 'darkness');
     view.rollVisualPerception('A', '', '5'); expect(view.perceptionMessage()).toContain('falla'); expect(random).not.toHaveBeenCalled();
   });
+  it('Percepción usa las condiciones del objetivo real y no tira ante invisibilidad o condiciones desconocidas', () => {
+    const view = confirmedPreview(), random = spyOn(Math, 'random').and.returnValue(.4);
+    view.tokens.update((tokens: any[]) => tokens.map((t) => t.instanceId === 'B' ? { ...t, x: 102.4, y: 102.4, conditions: ['invisible'] } : t));
+    view.rollVisualPerception('A', 'B', '5'); expect(view.perceptionMessage()).toContain('falla'); expect(random).not.toHaveBeenCalled();
+    view.tokens.update((tokens: any[]) => tokens.map((t) => t.instanceId === 'B' ? { ...t, conditions: undefined } : t));
+    view.rollVisualPerception('A', 'B', '5'); expect(view.perceptionMessage()).toContain('Faltan'); expect(random).not.toHaveBeenCalled();
+  });
+  it('guarda un obstáculo desde el formulario, abre puerta y persiste el tiempo y expiración', async () => {
+    const view = confirmedPreview(); view.setSidebarTab('vision'); fixture.detectChanges();
+    const form = fixture.nativeElement.querySelector('[data-vision-obstacle-form]') as HTMLFormElement;
+    for (const [name, value] of Object.entries({ name: 'Puerta de prueba', kind: 'door', x1: '100', y1: '0', x2: '100', y2: '300', source: 'Decisión sintética' })) {
+      (form.elements.namedItem(name) as HTMLInputElement).value = value;
+    }
+    view.addVisionObstacle(form); expect(view.vision().obstacles[0].open).toBeFalse();
+    view.changeVisionObstacle(view.vision().obstacles[0].id); expect(view.vision().obstacles[0].open).toBeTrue();
+    view.setVisionGameTime('4', '1439', 'night'); view.advanceVisionTime('rounds', '10');
+    expect(view.vision().environment.gameTime).toEqual({ day: 5, minuteOfDay: 0, second: 0 });
+    const saved = localStorage.getItem(key()); routeParams.next(params()); fixture.detectChanges(); await fixture.whenStable();
+    expect(localStorage.getItem(key())).toBe(saved); expect(view.vision().obstacles[0].name).toBe('Puerta de prueba');
+  });
   it('migra un tablero antiguo sin alterar niebla manual ni escribir al leer', async () => {
     const view = fixture.componentInstance as any;
     view.fogRects.set([{ id: 'old-fog', x: 5, y: 6, width: 20, height: 30 }]); view.persist();
@@ -604,6 +624,31 @@ describe('Multiselección de fichas en VTT', () => {
     expect(view.vision()).toEqual(emptyBoardVision()); expect(view.fogRects()).toEqual(old.fogRects);
     expect(localStorage.getItem(key())).toBe(raw);
     view.persist(); expect(JSON.parse(localStorage.getItem(key())!).fogRects).toEqual(old.fogRects);
+  });
+  it('guarda contactos por instancia, restaura sus controles y no los arrastra a otra ejecución', async () => {
+    const view = confirmedPreview(); view.setSidebarTab('vision'); fixture.detectChanges();
+    const form = fixture.nativeElement.querySelector('[data-vision-contact-form]') as HTMLFormElement;
+    for (const [name, value] of Object.entries({ surfaceId: 'suelo', airborne: 'false', moving: 'unknown', subjectKind: 'creature', source: 'Datos sintéticos' })) {
+      (form.elements.namedItem(name) as HTMLInputElement).value = value;
+    }
+    view.saveVisionContact('A', form); expect(view.vision().contacts).toEqual([{ tokenId: 'A', surfaceId: 'suelo', airborne: false, subjectKind: 'creature', source: { kind: 'director', reference: 'Datos sintéticos' } }]);
+    routeParams.next(params()); fixture.detectChanges(); await fixture.whenStable(); view.setSidebarTab('vision'); fixture.detectChanges();
+    const restored = fixture.nativeElement.querySelector('[data-vision-contact-form]') as HTMLFormElement;
+    expect((restored.elements.namedItem('airborne') as HTMLSelectElement).value).toBe('false');
+    expect((restored.elements.namedItem('moving') as HTMLSelectElement).value).toBe('unknown');
+    routeParams.next(params('other-selection-test')); fixture.detectChanges(); await fixture.whenStable(); expect(view.vision().contacts).toBeUndefined();
+  });
+  it('crea un efecto desde el formulario, expira y conserva otro lanzador y la fuente al recargar', async () => {
+    const view = confirmedPreview(); view.setSidebarTab('vision'); fixture.detectChanges();
+    const form = fixture.nativeElement.querySelector('[data-vision-effect-form]') as HTMLFormElement;
+    for (const [name, value] of Object.entries({ name: 'Cegado de prueba', kind: 'blinded', token: 'A', duration: 'rounds', remaining: '1', concentration: 'B', source: 'Fixture sintética' })) {
+      (form.elements.namedItem(name) as HTMLInputElement).value = value;
+    }
+    view.addVisionEffect(form); expect(view.vision().effects.length).toBe(1); expect(view.vision().effects[0].concentrationTokenId).toBe('B');
+    view.finishVisionConcentration('A'); expect(view.vision().effects[0].active).toBeTrue();
+    view.advanceVisionTime('rounds', '1'); expect(view.vision().effects[0].active).toBeFalse();
+    routeParams.next(params()); fixture.detectChanges(); await fixture.whenStable(); expect(view.vision().effects[0].duration).toEqual({ kind: 'rounds', remaining: 0 });
+    expect(view.vision().effects[0].source.reference).toBe('Fixture sintética');
   });
   it('persiste listas elegidas, ignora turno/selección y aísla campaña y ejecución de encuentro', async () => {
     const view = fixture.componentInstance as any;
