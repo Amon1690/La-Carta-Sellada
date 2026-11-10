@@ -135,6 +135,7 @@
         <span><i aria-hidden="true"></i>{{ status() }}</span>
         <span>{{ activePaceLabel() }} · {{ formatDistance(dailyDistance()) }} km/día · Atlas AideDD / Mike Schley</span>
       </footer>
+      @if(canManageNetwork()){<app-route-network-editor [campaignId]="campaignId" [point]="networkPoint()" />}
     </div>
 
     <aside class="travel-sidebar">

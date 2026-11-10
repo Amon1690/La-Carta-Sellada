@@ -33,6 +33,7 @@ import {
 import { CharacterSheetsService } from '../../../../core/services/character-sheets';
 import { Campaign } from '../../../../core/models/campaign';
 import { CampaignDataService } from '../../../../core/services/campaign-data';
+import { RouteNetworkEditor } from '../../components/route-network-editor/route-network-editor';
 
 type MapMode = 'select' | 'place' | 'route' | 'pan';
 type SideTab = 'groups' | 'plan' | 'days';
@@ -182,7 +183,7 @@ const DISTANCE_FORMAT = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 
 
 @Component({
   selector: 'app-travel-map',
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouteNetworkEditor],
   templateUrl: './travel-map.html',
   styleUrl: './travel-map.scss',
 })
@@ -192,7 +193,7 @@ export class TravelMap implements AfterViewInit {
 
   private readonly routeInfo = inject(ActivatedRoute, { optional: true });
   private readonly access = inject(ACCESS_CONTEXT);
-  private readonly campaignId = this.routeInfo?.snapshot.paramMap.get('campaignId') ?? '';
+  protected readonly campaignId = this.routeInfo?.snapshot.paramMap.get('campaignId') ?? '';
   private readonly storageKey = this.access ? `${STORAGE_KEY}:campaign:${this.campaignId}` : STORAGE_KEY;
   protected readonly legacyTravelAvailable = signal(false);
   private readonly campaignData = inject(CampaignDataService);
@@ -200,6 +201,8 @@ export class TravelMap implements AfterViewInit {
   private readonly sheetsVersion = toSignal(this.characterSheets.changes$, { initialValue: 0 });
   private dragState?: DragState;
   private suppressMapClick = false;
+  protected canManageNetwork():boolean {const user=this.access?.user();return user?.role==='director'&&user.campaigns.includes(this.campaignId);}
+  protected networkPoint():FaerunTravelLocation|undefined {return LOCATIONS.find((location)=>location.id===this.selectedLocationId());}
   private journeys: Record<string, GroupJourney> = Object.create(null);
   private unassignedJourney?: GroupJourney;
   private legacySource?: string;

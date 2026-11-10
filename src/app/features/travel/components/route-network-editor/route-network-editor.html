@@ -1,0 +1,22 @@
+<details class="network-editor">
+  <summary>Red de caminos y vías acuáticas</summary>
+  <p>Red propia del director, guardada por campaña en este navegador. El atlas y las rutas manuales se conservan. No se deducen caminos por cercanía entre lugares.</p>
+  @if(display();as network){
+    <p>{{preview()?'Vista previa':'Red guardada'}}: <strong>{{network.name}}</strong> · revisión {{network.revision}} · {{network.nodes.length}} nodos · {{network.edges.length}} tramos.</p>
+    @if(network.dataKind==='synthetic'){<p class="notice">Datos sintéticos: no representan caminos reales.</p>}
+    <p>Cobertura declarada: {{network.coverage.length}} zonas. Fuera de ellas no hay red cartográfica disponible. La cobertura no garantiza una conexión entre dos puntos.</p>
+    <ul>@for(area of network.coverage;track area.id){<li>{{area.name}}: X {{area.bounds.minX}}–{{area.bounds.maxX}} %, Y {{area.bounds.minY}}–{{area.bounds.maxY}} %.</li>}</ul>
+    @if(point){<p role="status">Lugar seleccionado: {{covered()?'dentro de la cobertura declarada':'sin cobertura de red'}}.</p>}
+    <details><summary>Procedencia declarada</summary><p>La importación comprueba la estructura; el director debe verificar las fuentes y su permiso de uso.</p><ul>@for(source of network.sources;track source.id){<li>{{source.name}} · {{source.reference}} · {{source.attribution}} · {{source.license}}</li>}</ul></details>
+  }@else{<p class="notice">No hay una red guardada con cobertura válida. El trazado manual sigue disponible.</p>}
+  @if(error()){<p class="notice" role="alert">{{error()}}</p>}
+  @if(message()){<p role="status">{{message()}}</p>}
+  @if(loadError()){<p>El original se conserva. Descárgalo para revisarlo; no se reemplazará un guardado ilegible o de una versión desconocida.</p><button type="button" (click)="download(true)">Descargar original</button>}
+  <fieldset [disabled]="busy()||loadError()">
+    <legend>Importar o editar una red propia</legend>
+    <label>Archivo de red (máximo 1 MiB)<input type="file" accept=".json,application/json" (change)="importFile($event)" /></label>
+    <details><summary>Editar el documento de red</summary><p>Coordenadas porcentuales del atlas: X de izquierda a derecha, Y de arriba abajo. Declara fuentes, cobertura, nodos, tramos, medios y pasos acuáticos. Aumenta la revisión al modificar una red guardada.</p><label>Documento de red<textarea name="network-document" rows="14" [attr.maxlength]="maxBytes" [ngModel]="draft()" (ngModelChange)="edit($event)"></textarea></label></details>
+    <div class="actions"><button type="button" (click)="validate()">Validar red</button><button type="button" (click)="download()">Descargar documento</button><button type="button" [disabled]="!preview()" (click)="save()">Guardar red validada</button></div>
+  </fieldset>
+  <button type="button" [disabled]="busy()" (click)="reload()">Volver a cargar la red guardada</button>
+</details>
