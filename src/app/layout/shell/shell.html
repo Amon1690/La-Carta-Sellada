@@ -3,7 +3,7 @@
 <div class="workspace">
   <app-sidebar></app-sidebar>
 
-  <main>
+  <main [class.encounter-open]="encounterOpen()">
     <router-outlet></router-outlet>
   </main>
 </div>

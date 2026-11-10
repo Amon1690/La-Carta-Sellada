@@ -46,11 +46,14 @@ export interface CombatPending {
   factor: number; reduction: number; cancelled: boolean; redirected: boolean;
   manual: boolean; manualRequested?: boolean; effectsConfirmed: boolean; reactions: string[];
 }
+export interface CombatResolution { attackerId: string; targetId: string; hit: boolean; damage: number }
+export interface CombatNarrativeMessage { observerId: string; audience: string[]; text: string }
+export interface CombatNarrativeEvent { id: string; messages: CombatNarrativeMessage[] }
 export interface CombatState {
   version: 1; started: boolean; round: number; turnId?: string;
   usedAttacks: number; spellUsed: boolean; reactionUsed: string[];
   armorEffects: Record<string, number>; resources: Record<string, Record<string, number>>;
-  log: string[]; pending?: CombatPending;
+  log: string[]; narrative?: CombatNarrativeEvent[]; pending?: CombatPending;
   context?: { advantage: boolean; disadvantage: boolean; armorAdjustment: number; damageFactor: number; rangeResolved?: boolean; confirmed: boolean };
   slotsSpent: string[];
   queue: { attackerId: string; action: CombatAction; targetId: string; reactionAttack?: boolean; castApproved?: boolean }[];

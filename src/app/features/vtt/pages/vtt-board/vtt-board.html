@@ -114,6 +114,7 @@
               (lostpointercapture)="boardPointerCancel($event)"
             >
               <img class="map-image" [src]="boardVm.entry.mapUrl" [alt]="'Mapa de ' + boardVm.entry.name" draggable="false" />
+              <app-weather-overlay [weather]="vision().environment.weather" />
 
               @if (layers().grid) {
                 <div
@@ -137,10 +138,21 @@
 
               @if (visionPreview()) {
                 <svg class="map-image vision-layer" [attr.viewBox]="'0 0 ' + mapWidth + ' ' + mapHeight" aria-hidden="true">
-                  <defs><mask [attr.id]="visionMaskId" maskUnits="userSpaceOnUse">
+                  <defs>
+                    @for (circle of previewGeometry().circles; track circle.id; let i = $index) {
+                      @if (circle.clip; as clip) { <clipPath [attr.id]="visionMaskId + '-clip-' + i"><circle [attr.cx]="clip.x" [attr.cy]="clip.y" [attr.r]="clip.radius" /></clipPath> }
+                      <mask [attr.id]="visionMaskId + '-area-' + i" maskUnits="userSpaceOnUse" x="0" y="0" [attr.width]="mapWidth" [attr.height]="mapHeight">
+                        <circle [attr.cx]="circle.x" [attr.cy]="circle.y" [attr.r]="circle.radius" fill="white" />
+                        @for (excluded of circle.exclude ?? []; track $index) { <circle [attr.cx]="excluded.x" [attr.cy]="excluded.y" [attr.r]="excluded.radius" fill="black" /> }
+                        @for (polygon of circle.shadows ?? []; track $index) { <polygon [attr.points]="shadowPoints(polygon)" fill="black" /> }
+                      </mask>
+                    }
+                    <mask [attr.id]="visionMaskId" maskUnits="userSpaceOnUse">
                     <rect x="0" y="0" [attr.width]="mapWidth" [attr.height]="mapHeight" fill="white" />
-                    @for (circle of previewGeometry().circles; track circle.id) {
-                      <circle [attr.cx]="circle.x" [attr.cy]="circle.y" [attr.r]="circle.radius" fill="black" />
+                    @for (circle of previewGeometry().circles; track circle.id; let i = $index) {
+                      <g [attr.clip-path]="circle.clip ? 'url(#' + visionMaskId + '-clip-' + i + ')' : null">
+                        <rect x="0" y="0" [attr.width]="mapWidth" [attr.height]="mapHeight" fill="black" [attr.mask]="'url(#' + visionMaskId + '-area-' + i + ')'" />
+                      </g>
                     }
                   </mask></defs>
                   <rect x="0" y="0" [attr.width]="mapWidth" [attr.height]="mapHeight" fill="#000" opacity="0.82" [attr.mask]="'url(#' + visionMaskId + ')'" />
@@ -214,7 +226,7 @@
             <section class="sidebar-content token-inspector">
               <h2>Previsualización local</h2>
               <p>Visión compartida de las instancias elegidas. Esta vista no se transmite a jugadores.</p>
-              <p>Vista geométrica provisional: los muros, otros sentidos y efectos requieren revisión del director.</p>
+              <p>Alcances y luz registrados por personaje. El clima es visual; la niebla manual sigue delimitando muros y zonas ocultas.</p>
               <p>Negro: sin explorar. Oscuro: explorado sin visión. Iluminado: visión de los observadores.</p>
               @if (previewGeometry().pending) { <p role="status">Hay datos de visión pendientes. Las zonas sin confirmar permanecen oscuras.</p> }
               <h3>Fichas visibles</h3>
@@ -232,6 +244,12 @@
             @if (sidebarTab() === 'vision') {
               <section class="vision-panel token-inspector">
                 <h2>Visión compartida</h2>
+                <h3>Encuentros de los jugadores</h3>
+                <p>Comparte el nombre de este tablero y una vista personal por cada PJ asignado. Las listas de observadores de dirección no conceden visión a jugadores.</p>
+                <p>Revisa la niebla antes de compartir: la vista no calcula muros. Los alcances y fuentes de luz se registran explícitamente.</p>
+                <button type="button" class="open-token-sheet" [disabled]="!sharingReady() || (visionStorageBlocked && !encounterShared())" [attr.aria-pressed]="encounterShared()" (click)="toggleEncounterSharing()">{{ encounterShared() ? 'Dejar de compartir encuentro' : 'Compartir encuentro con jugadores' }}</button>
+                @if (sharingMessage()) { <p role="status">{{ sharingMessage() }}</p> }
+                @if (sharingReady()) { <button type="button" class="open-token-sheet" (click)="retryEncounterSharing()">Actualizar estado compartido</button> }
                 <p>Herramientas de dirección. Guarda listas independientes del turno y de la selección de fichas.</p>
                 <fieldset class="field-grid" [disabled]="visionStorageBlocked">
                   <label class="check-field"><input type="checkbox" [checked]="vision().enabled" (change)="enableVision($any($event.target).checked)" /> Activar niebla de guerra</label>
@@ -254,7 +272,7 @@
                   <label>Clima<select [value]="vision().environment.weather" (change)="setPreviewEnvironment('weather', $any($event.target).value)">
                     <option value="unknown">Sin confirmar</option><option value="clear">Despejado</option><option value="rain">Lluvia</option><option value="snow">Nieve</option><option value="fog">Niebla</option><option value="other">Otro</option>
                   </select></label>
-                  <p>Por ahora se muestra la vista normal confirmada con luz intensa o penumbra y clima despejado. Oscuridad, clima adverso y efectos quedan pendientes de resolver.</p>
+                  <p>El clima no reduce el alcance del mapa. En oscuridad se ven las zonas iluminadas o cubiertas por los sentidos registrados. La penumbra y la niebla ligera afectan a Percepción visual; no penalizan ataques por sí solas.</p>
                   <h3>Datos de las fichas</h3>
                   <p>Completa la vista normal y confirma las condiciones de cada observador en Fichas. El alcance no se deduce del nombre ni del linaje.</p>
                   @for (token of tokens(); track token.instanceId) {
@@ -263,6 +281,18 @@
                       <label class="check-field"><input #unlimited type="checkbox" [checked]="normalVisionRange(token.instanceId) === null" /> Vista normal sin límite de alcance registrado</label>
                       <label>Fuente o decisión del director<input #sightSource type="text" maxlength="2000" /></label>
                       <button type="button" class="open-token-sheet" (click)="saveNormalVision(token.instanceId, sightRange.value, unlimited.checked, sightSource.value)">Guardar vista normal</button>
+                      <p>{{ specialSenseSummary(token.instanceId) }}</p>
+                      <label>Sentido especial<select #specialSense><option value="darkvision">Visión en la oscuridad</option><option value="blindsight">Visión ciega</option><option value="truesight">Visión verdadera</option></select></label>
+                      <label>Alcance del sentido especial (pies)<input #specialRange type="number" min="0" max="100000" /></label>
+                      <label>Fuente del sentido<input #specialSource type="text" maxlength="2000" /></label>
+                      <button type="button" class="open-token-sheet" (click)="saveSense(token.instanceId, specialSense.value, specialRange.value, false, specialSource.value)">Guardar sentido especial</button>
+                      <h3>Objeto o fuente de luz</h3>
+                      <p>Indica radios totales desde el objeto, según su ficha. La luz acompaña a esta instancia y permite ver a otros personajes.</p>
+                      <label>Radio de luz intensa (pies)<input #brightLight type="number" min="0" max="100000" [value]="tokenLightRange(token.instanceId, 'bright')" /></label>
+                      <label>Radio total hasta el fin de la penumbra (pies)<input #dimLight type="number" min="0" max="100000" [value]="tokenLightRange(token.instanceId, 'dim')" /></label>
+                      <label>Objeto y fuente de sus alcances<input #lightSource type="text" maxlength="2000" /></label>
+                      <button type="button" class="open-token-sheet" (click)="saveTokenLight(token.instanceId, brightLight.value, dimLight.value, lightSource.value)">Guardar fuente de luz</button>
+                      <button type="button" class="open-token-sheet" (click)="removeTokenLight(token.instanceId)">Apagar fuente de luz</button>
                     </details>
                   }
                 </fieldset>
@@ -304,6 +334,13 @@
                     <button type="button" [disabled]="combat.busy()" (click)="clearTokenConditions(token.instanceId)">Sin condiciones</button>
                   </div></details>
                   <button type="button" class="open-token-sheet" (click)="openTokenSheet(token.instanceId, $event)">Ver ficha completa</button>
+                  <details><summary>Percepción visual</summary>
+                    <p>Se aplica la iluminación del lugar observado y los sentidos del personaje. Las pruebas basadas en oído u otros sentidos se resuelven aparte.</p>
+                    <label>Zona observada<select #perceptionTarget><option value="">Entorno inmediato</option>@for (target of tokens(); track target.instanceId) { <option [value]="target.instanceId">Posición de {{ target.name }}</option> }</select></label>
+                    <label>Bonificador de Percepción de la ficha<input #perceptionBonus type="number" /></label>
+                    <button type="button" class="open-token-sheet" (click)="rollVisualPerception(token.instanceId, perceptionTarget.value, perceptionBonus.value)">Tirar Percepción visual</button>
+                    @if (perceptionMessage()) { <p role="status">{{ perceptionMessage() }}</p> }
+                  </details>
                   @if (token.maxHp <= 0) {
                     <p>PG sin registrar. Introduce los PG máximos para este combate. Completar la ficha del personaje se aplicará a las nuevas fichas que añadas.</p>
                   }

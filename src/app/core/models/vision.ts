@@ -26,6 +26,8 @@ export interface VisionEffect {
   kind: 'light' | 'magical-darkness' | 'obscurement' | 'blinded' | 'sense';
   source: VisionSource; scope: VisionScope; duration: VisionDuration; active: boolean;
   concentrationTokenId?: string;
+  /** Una luz de objeto se desplaza con esta instancia; no implica concentración. */
+  anchorTokenId?: string;
   illumination?: 'bright' | 'dim';
   obscurement?: 'light' | 'heavy';
   grantedSense?: SourcedSense;

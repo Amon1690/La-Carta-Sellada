@@ -1,5 +1,11 @@
 # Propuesta pendiente: entrega del VTT a jugadores
 
+La petición directa del 7 de noviembre de 2026 autoriza una primera entrega
+de consulta mediante imágenes personales ya compuestas por el director.
+Consulta [Encuentros del jugador](player-encounters.md). El resto de esta
+propuesta se refiere a una futura sincronización completa del tablero y sus
+acciones; esa fase no se implementa mediante las imágenes de consulta.
+
 Este documento propone una fase posterior para revisión humana. No habilita
 rutas, acceso externo, permisos, sincronización ni nuevos servicios.
 

@@ -54,4 +54,19 @@ describe('Situación automática de un ataque en el mapa', () => {
     const result = attackSituation(a, b, { ...action, resolution: 'save' }, [a, b], facts());
     expect(result.context.advantage).toBeFalse(); expect(result.context.disadvantage).toBeFalse();
   });
+  it('usa visión personal para ataques sin convertir penumbra en desventaja de ataque', () => {
+    const visible = { visible: true, perception: 'disadvantage' as const, reasons: [] };
+    const result = attackSituation(a, b, action, [a, b], facts(), () => visible);
+    expect(result.context.advantage).toBeFalse(); expect(result.context.disadvantage).toBeFalse();
+    const hidden = { visible: false, perception: 'automatic-failure' as const, reasons: [] };
+    expect(attackSituation(a, b, action, [a, b], facts(), (id) => id === a.id ? hidden : visible).context.disadvantage).toBeTrue();
+    const both = attackSituation(a, b, action, [a, b], facts(), () => hidden);
+    expect(both.context.advantage).toBeTrue(); expect(both.context.disadvantage).toBeTrue();
+  });
+  it('un adversario cercano cegado que ve con visión ciega sigue amenazando un ataque a distancia', () => {
+    b.conditions = ['blinded']; action = { ...action, kind: 'ranged', range: 30 };
+    const result = attackSituation(a, b, action, [a, b], facts(), () => ({ visible: true, perception: 'normal', reasons: [] }));
+    expect(result.reasons).toContain('Enemigo próximo que puede verte y actuar: desventaja');
+    expect(result.context.disadvantage).toBeTrue();
+  });
 });

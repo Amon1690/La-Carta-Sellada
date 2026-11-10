@@ -1,5 +1,7 @@
-import { Component } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
+import { Component, inject } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
+import { filter, map, startWith } from 'rxjs';
 
 import { SidebarComponent } from '../sidebar/sidebar';
 import { ToolbarComponent } from '../toolbar/toolbar';
@@ -16,4 +18,10 @@ import { StatusbarComponent } from '../statusbar/statusbar';
   templateUrl: './shell.html',
   styleUrl: './shell.scss',
 })
-export class ShellComponent {}
+export class ShellComponent {
+  private readonly router = inject(Router);
+  protected readonly encounterOpen = toSignal(this.router.events.pipe(
+    filter((event) => event instanceof NavigationEnd), startWith(null),
+    map(() => /^\/campanas\/[^/]+\/encuentros$/.test(this.router.url.split('?')[0]) && !!this.router.parseUrl(this.router.url).queryParams['encuentro'])
+  ), { initialValue: false });
+}

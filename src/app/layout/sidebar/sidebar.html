@@ -13,7 +13,7 @@
   @if (campaignId()) {
     <h3 class="campaign-heading">{{ campaignName() }}</h3>
     @for (item of campaignItems; track item.path) {
-      @if (access.user()?.role === 'director' || item.path === 'fichas-pjs') {
+      @if (access.user()?.role === 'director' || ['fichas-pjs', 'encuentros'].includes(item.path)) {
         <a [routerLink]="campaignPath(item.path)" routerLinkActive="active">{{ item.label }}</a>
       }
     }

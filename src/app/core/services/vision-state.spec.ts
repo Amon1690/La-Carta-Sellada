@@ -58,6 +58,12 @@ describe('Contrato de visión versionado', () => {
       { ...state(), effects: [{ ...state().effects[0], concentrationTokenId: 'missing' }] },
     ]) expect(() => assertBoardVision(invalid, ids)).toThrow();
   });
+  it('una luz anclada se conserva al cargar y se retira al borrar su portador sin alterar otras referencias', () => {
+    const value = state(); value.effects = [{ ...value.effects[0], id: 'lamp', kind: 'light', illumination: 'bright', concentrationTokenId: undefined, anchorTokenId: 'a' }];
+    expect(() => assertBoardVision(value, ids)).not.toThrow();
+    expect(withoutRemovedObservers(value, new Set(['b', 'c'])).effects).toEqual([]);
+    value.effects[0].anchorTokenId = 'missing'; expect(() => assertBoardVision(value, ids)).toThrow();
+  });
   it('valida el reloj de juego y una fuente para cualquier entorno conocido', () => {
     const s = state();
     s.environment = { illumination: 'dim', weather: 'fog', timeOfDay: 'night', gameTime: { day: 4, minuteOfDay: 120 }, source };

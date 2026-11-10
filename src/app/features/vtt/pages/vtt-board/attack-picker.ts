@@ -46,10 +46,14 @@ export class VttAttackPicker implements OnChanges {
   }
   situation() {
     const actor = this.actor(), target = this.target(), action = this.selected();
-    return actor && target && action ? attackSituation(actor, target, action, this.combat().combatants(), this.facts) : undefined;
+    return actor && target && action ? attackSituation(actor, target, action, this.combat().combatants(), this.facts, this.combat().sight) : undefined;
+  }
+  private sightSignature(): unknown {
+    const sight = this.combat().sight;
+    return sight ? this.combat().combatants().map((actor) => [actor.id, sight(actor.id, this.actorId() ?? ''), sight(this.actorId() ?? '', actor.id), sight(actor.id, this.targetId() ?? '')]) : undefined;
   }
   private signature(): string {
-    return JSON.stringify([this.actorId(), this.targetId(), this.selected(), this.combat().combatants().map((a) => [a.id, a.x, a.y, a.size, a.hp > 0, a.hp * 2 <= a.maxHp, a.armorClass, a.side, a.conditions, a.notes, a.actions, a.reactions])]);
+    return JSON.stringify([this.actorId(), this.targetId(), this.selected(), this.sightSignature(), this.combat().combatants().map((a) => [a.id, a.x, a.y, a.size, a.hp > 0, a.hp * 2 <= a.maxHp, a.armorClass, a.side, a.conditions, a.notes, a.actions, a.reactions])]);
   }
   choose(action: CombatAction): void {
     if (this.submitting()) return;
@@ -69,7 +73,7 @@ export class VttAttackPicker implements OnChanges {
       if (!this.facts.reviewed || (situation.threatUnknown && this.facts.nearbyThreat === undefined) || situation.spellTypeUnknown) throw new Error('Resuelve las dudas indicadas antes de lanzar');
       if (situation.blocked) throw new Error(situation.blocked);
       if (!Number.isInteger(this.count) || this.count < 1 || this.count > action.targets || (this.count > 1 && !action.repeatTargets)) throw new Error('Este ataque no permite ese número de impactos en el mismo objetivo');
-      const world = () => JSON.stringify(this.combat().combatants().map((a) => [a.id, a.x, a.y, a.hp, a.maxHp, a.armorClass, a.conditions, a.side]));
+      const world = () => JSON.stringify([this.sightSignature(), this.combat().combatants().map((a) => [a.id, a.x, a.y, a.hp, a.maxHp, a.armorClass, a.conditions, a.side])]);
       const initialWorld = world(), initialFacts = JSON.stringify(this.facts), count = this.count;
       if (!actor.actions.find((a) => a.source === action.source)?.reviewed) {
         const saved = this.combat().configure(actor.id, action); if (saved) await saved;

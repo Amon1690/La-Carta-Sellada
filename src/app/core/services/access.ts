@@ -29,7 +29,7 @@ export const accessGuard: CanActivateFn & CanActivateChildFn = async (route, sta
   const campaign = path.match(/^\/(?:campanas|vtt)\/([^/]+)/)?.[1];
   if (campaign && !user.campaigns.includes(decodeURIComponent(campaign))) return router.parseUrl('/');
   if (user.role === 'jugador') {
-    const allowed = /^\/$|^\/(?:hechizos|dotes|habilidades|equipo|rasgos-clase)(?:\/[^/]+)?$|^\/campanas\/[^/]+\/fichas-pjs$|^\/error-campana$/;
+    const allowed = /^\/$|^\/(?:hechizos|dotes|habilidades|equipo|rasgos-clase)(?:\/[^/]+)?$|^\/campanas\/[^/]+\/(?:fichas-pjs|encuentros)$|^\/error-campana$/;
     if (!allowed.test(path)) return router.parseUrl('/');
   }
   return true;

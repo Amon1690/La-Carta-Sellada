@@ -10,6 +10,7 @@ import { VttBoard } from './vtt-board';
 import { emptyBoardVision } from '../../../../core/services/vision-state';
 import { BoardVisionState, VisionProfile } from '../../../../core/models/vision';
 import { RulesDataService } from '../../../../core/services/rules-data';
+import { ENCOUNTER_PUBLISHER, EncounterSharingService, SharingSnapshot } from '../../../../core/services/encounter-sharing';
 
 interface Token {
   instanceId: string; actorId: string; name: string; image: string;
@@ -45,13 +46,18 @@ describe('Multiselección de fichas en VTT', () => {
   let routeParams: BehaviorSubject<ReturnType<typeof params>>;
   let previous: Map<string, string | null>;
   let sheets: CharacterSheetsService;
+  let publisher: jasmine.SpyObj<EncounterSharingService>;
 
   beforeEach(async () => {
     previous = new Map([key(), key('other-selection-test')].map((k) => [k, localStorage.getItem(k)]));
     previous.forEach((_, k) => localStorage.removeItem(k));
     routeParams = new BehaviorSubject(params());
+    publisher = jasmine.createSpyObj<EncounterSharingService>('publisher', ['status', 'publish', 'unshare', 'sheetRevision']);
+    publisher.sheetRevision.and.returnValue(0);
+    publisher.status.and.resolveTo({ shared: false }); publisher.publish.and.resolveTo(); publisher.unshare.and.resolveTo({});
     TestBed.configureTestingModule({ providers: [
       provideZonelessChangeDetection(),
+      { provide: ENCOUNTER_PUBLISHER, useValue: publisher },
       { provide: RulesDataService, useValue: { getRules: () => of({ spells: [], equipment: [] }) } },
       { provide: CampaignDataService, useValue: { getCampaignById: (id: string) => of(campaign(id)) } },
       { provide: CHARACTER_SHEET_STORAGE, useValue: (() => {
@@ -81,6 +87,77 @@ describe('Multiselección de fichas en VTT', () => {
   });
 
   const button = (id: string): HTMLElement => fixture.nativeElement.querySelector(`.vtt-token[aria-label="${id}"]`);
+  it('adopta movimientos remotos sin republicarlos y conserva cambios locales en conflicto', () => {
+    const view = fixture.componentInstance as any;
+    view.persist(); view.sharingDirty = true;
+    const state = view.captureBoardState(); state.tokens[0].x = 700;
+    const conflictKey = `la-carta-sellada:encounter-conflict:${key()}`, old = localStorage.getItem(conflictKey);
+    try {
+      view.acceptRemoteEncounter({ shared: true, revision: 5, state }, false);
+      expect(board.tokens()[0].x).toBe(700); expect(view.sharingRevision).toBe(5);
+      expect(JSON.parse(localStorage.getItem(conflictKey)!).at(-1).state.tokens[0].x).toBe(GRID * 2);
+      expect(publisher.publish).not.toHaveBeenCalled();
+    } finally { view.encounterShared.set(false); old === null ? localStorage.removeItem(conflictKey) : localStorage.setItem(conflictKey, old); }
+  });
+  it('una consulta de ausencia anterior no cancela la primera publicación local pendiente', () => {
+    const view = fixture.componentInstance as any;
+    view.encounterShared.set(true); view.sharingDirty = true; view.sharingRevision = 0;
+    view.acceptRemoteEncounter({ shared: false, revision: 0 }, false);
+    expect(view.encounterShared()).toBeTrue(); expect(view.sharingDirty).toBeTrue();
+    view.acceptRemoteEncounter({ shared: false, revision: 1 }, false);
+    expect(view.encounterShared()).toBeFalse();
+  });
+  it('procesa un movimiento de jugador solo en el turno activo y publica el acuse', () => {
+    const view = confirmedPreview(); actorFor('A', 'player:hero');
+    board.activeTurnId.set('A'); view.combat.start('A');
+    view.acceptRemoteEncounter({ shared: true, revision: 3, state: view.captureBoardState(), pendingCommand: {
+      id: 'player-move', observerId: 'A', userId: 'u', type: 'move', cell: 63, sheetRevision: 0, expiresAt: Date.now() + 15000,
+    } }, false);
+    expect(board.tokens()[0].x).toBe(GRID * 3); expect(view.pendingAck.status).toBe('applied');
+    expect(view.pendingAck.id).toBe('player-move');
+  });
+  it('no resuelve automáticamente un ataque si falta confirmar la visión del objetivo', () => {
+    const view = confirmedPreview(); actorFor('A', 'generic:guardia-veterano'); actorFor('B', 'generic:guardia');
+    (sheets.visionProfile as jasmine.Spy).and.callFake((_campaign, actorId: string) => actorId === 'generic:guardia' ? undefined : {
+      version: 1, senses: [{ sense: 'normal', rangeFeet: 60, source: { kind: 'director', reference: 'Prueba' } }],
+    });
+    view.sheetRevision.update((revision: number) => revision + 1);
+    const action = view.combat.find('A').actions[0], begin = spyOn(view.combat, 'begin');
+    spyOn(view, 'playerControls').and.returnValue({ A: { canAttack: true, attacks: [{ source: action.source, targetIds: ['B'] }] } });
+    view.applyPlayerCommand({ id: 'uncertain', observerId: 'A', userId: 'u', type: 'attack', source: action.source, targetId: 'B', sheetRevision: 0, expiresAt: Date.now() + 15000 });
+    expect(begin).not.toHaveBeenCalled(); expect(view.pendingAck.status).toBe('rejected');
+  });
+  it('al salir antes del debounce publica la niebla final y no conserva la imagen anterior', async () => {
+    const sharing = fixture.componentInstance as unknown as {
+      encounterShared: WritableSignal<boolean>; fogRects: WritableSignal<{ id: string; x: number; y: number; width: number; height: number }[]>;
+      persist(): void; sharingChain: Promise<void>;
+    };
+    sharing.encounterShared.set(true);
+    publisher.sheetRevision.and.returnValue(1);
+    sharing.fogRects.set([{ id: 'new-fog', x: 0, y: 0, width: 400, height: 400 }]);
+    sharing.persist(); fixture.destroy();
+    publisher.sheetRevision.and.returnValue(2);
+    await sharing.sharingChain;
+    expect(publisher.publish).toHaveBeenCalledTimes(1);
+    const snapshot: SharingSnapshot = publisher.publish.calls.mostRecent().args[2];
+    expect(snapshot.fog).toEqual([jasmine.objectContaining({ x: 0, y: 0, width: 400, height: 400 })]);
+    expect(snapshot.sheetRevision).toBe(1);
+    expect(publisher.publish.calls.mostRecent().args[3]()).toBeTrue();
+  });
+  it('retira la publicación si falla la actualización final, sin borrar el guardado local', async () => {
+    publisher.publish.and.rejectWith(new Error('Sin conexión durante la composición'));
+    const sharing = fixture.componentInstance as unknown as { encounterShared: WritableSignal<boolean>; persist(): void; sharingChain: Promise<void>; };
+    sharing.encounterShared.set(true); sharing.persist(); fixture.destroy(); await sharing.sharingChain;
+    expect(publisher.unshare).toHaveBeenCalledWith('vtt-selection-test', key(), 0);
+    expect(localStorage.getItem(key())).not.toBeNull();
+  });
+  it('retirar un encuentro con visión inválida se completa aunque se destruya inmediatamente el tablero', async () => {
+    const sharing = fixture.componentInstance as unknown as { encounterShared: WritableSignal<boolean>; visionStorageBlocked: boolean; toggleEncounterSharing(): void; sharingChain: Promise<void>; };
+    sharing.encounterShared.set(true); sharing.visionStorageBlocked = true;
+    sharing.toggleEncounterSharing(); fixture.destroy(); await sharing.sharingChain;
+    expect(publisher.unshare).toHaveBeenCalledWith('vtt-selection-test', key());
+    expect(publisher.publish).not.toHaveBeenCalled();
+  });
   function pointer(target: HTMLElement, type: string, x: number, y: number, options: PointerEventInit = {}): void {
     const bounds = map.getBoundingClientRect();
     target.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: 7, button: 0,
@@ -497,6 +574,26 @@ describe('Multiselección de fichas en VTT', () => {
     expect(result.senses.find((sense) => sense.sense === 'darkvision')).toEqual({ sense: 'darkvision', rangeFeet: 30, source });
     await view.saveNormalVision('A', '', false, '');
     expect(sheets.visionProfile(campaign('vtt-selection-test'), `generic:${generic.id}`)).toEqual(result);
+  });
+  it('la luz sigue al token, se guarda por instancia y se conserva al recargar', async () => {
+    const view = confirmedPreview();
+    view.saveTokenLight('A', '10', '20', 'Objeto de prueba con radios confirmados');
+    view.setPreviewEnvironment('illumination', 'darkness');
+    expect(view.vision().effects.every((effect: any) => effect.anchorTokenId === 'A')).toBeTrue();
+    expect(view.previewGeometry().circles.length).toBe(2);
+    board.tokens.update((tokens) => tokens.map((token) => token.instanceId === 'A' ? { ...token, x: 400 } : token));
+    expect(view.previewGeometry().circles[0].clip.x).toBeCloseTo(425.6);
+    view.persist(); routeParams.next(params()); fixture.detectChanges(); await fixture.whenStable();
+    expect(view.tokenLightRange('A', 'dim')).toBe(20);
+    expect(view.vision().effects[0].anchorTokenId).toBe('A');
+    view.removeTokenLight('A'); expect(view.previewGeometry().circles).toEqual([]);
+  });
+  it('la tirada de Percepción visual aplica dos dados en penumbra y falla sin tirar en oscuridad no visible', () => {
+    const view = confirmedPreview(), random = spyOn(Math, 'random').and.returnValue(.4);
+    view.setPreviewEnvironment('illumination', 'dim');
+    view.rollVisualPerception('A', '', '5'); expect(view.perceptionMessage()).toContain('14 (9, 9; desventaja)');
+    random.calls.reset(); view.setPreviewEnvironment('illumination', 'darkness');
+    view.rollVisualPerception('A', '', '5'); expect(view.perceptionMessage()).toContain('falla'); expect(random).not.toHaveBeenCalled();
   });
   it('migra un tablero antiguo sin alterar niebla manual ni escribir al leer', async () => {
     const view = fixture.componentInstance as any;

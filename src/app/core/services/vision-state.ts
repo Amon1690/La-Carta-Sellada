@@ -56,7 +56,7 @@ export function assertBoardVision(v: unknown, tokenIds: ReadonlySet<string>): as
   if (b['activeGroupId'] !== undefined && (!text(b['activeGroupId']) || !groupIds.has(b['activeGroupId']))) fail();
   const effectIds = new Set<string>();
   for (const item of list(b['effects'], 1000)) {
-    const effect = record(item, ['id', 'name', 'kind', 'source', 'scope', 'duration', 'active', 'concentrationTokenId', 'illumination', 'obscurement', 'grantedSense']);
+    const effect = record(item, ['id', 'name', 'kind', 'source', 'scope', 'duration', 'active', 'concentrationTokenId', 'anchorTokenId', 'illumination', 'obscurement', 'grantedSense']);
     if (!text(effect['id']) || !text(effect['name']) || effectIds.has(effect['id']) || typeof effect['active'] !== 'boolean' ||
         !choice(effect['kind'], ['light', 'magical-darkness', 'obscurement', 'blinded', 'sense'])) fail();
     effectIds.add(effect['id'] as string); source(effect['source']);
@@ -69,6 +69,7 @@ export function assertBoardVision(v: unknown, tokenIds: ReadonlySet<string>): as
       if (!numeric(duration['remaining'], 1000000) || (duration['kind'] === 'rounds' && !Number.isInteger(duration['remaining']))) fail();
     } else if (!choice(duration['kind'], ['unknown', 'until-ended']) || duration['remaining'] !== undefined) fail();
     if (effect['concentrationTokenId'] !== undefined && (!text(effect['concentrationTokenId']) || !tokenIds.has(effect['concentrationTokenId']))) fail();
+    if (effect['anchorTokenId'] !== undefined && (effect['kind'] !== 'light' || scope['kind'] !== 'circle' || !text(effect['anchorTokenId']) || !tokenIds.has(effect['anchorTokenId']))) fail();
     if (effect['kind'] === 'light' ? !choice(effect['illumination'], ['bright', 'dim']) : effect['illumination'] !== undefined) fail();
     if (effect['kind'] === 'obscurement' ? !choice(effect['obscurement'], ['light', 'heavy']) : effect['obscurement'] !== undefined) fail();
     if (effect['kind'] === 'sense') sense(effect['grantedSense']);
@@ -83,7 +84,7 @@ export function emptyBoardVision(): BoardVisionState {
 export function withoutRemovedObservers(state: BoardVisionState, ids: ReadonlySet<string>): BoardVisionState {
   return { ...state,
     groups: state.groups.map((g) => ({ ...g, observerIds: g.observerIds.filter((id) => ids.has(id)) })),
-    effects: state.effects.filter((e) => !e.concentrationTokenId || ids.has(e.concentrationTokenId)).flatMap((e) => {
+    effects: state.effects.filter((e) => (!e.concentrationTokenId || ids.has(e.concentrationTokenId)) && (!e.anchorTokenId || ids.has(e.anchorTokenId))).flatMap((e) => {
       if (e.scope.kind === 'circle') return [e];
       const tokenIds = e.scope.tokenIds.filter((id) => ids.has(id));
       return tokenIds.length ? [{ ...e, scope: { ...e.scope, tokenIds } }] : [];

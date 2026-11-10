@@ -92,7 +92,7 @@ export class VttCombatPanel implements AfterViewInit {
   }); }
   responseSituation() {
     const p = this.combat().state().pending, actor = this.combat().find(p?.attackerId), target = this.combat().find(p?.targetId);
-    return p && actor && target ? attackSituation(actor, target, p.action, this.combat().combatants(), this.responseFacts) : undefined;
+    return p && actor && target ? attackSituation(actor, target, p.action, this.combat().combatants(), this.responseFacts, this.combat().sight) : undefined;
   }
   cancelResponse(): void { this.attempt(() => { this.combat().cancelResponse(); this.settleQuick(); }); }
   resolveResponse(): void { this.attempt(() => {

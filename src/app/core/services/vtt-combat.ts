@@ -1,5 +1,6 @@
 import { signal } from '@angular/core';
-import { CombatAction, Combatant, CombatCost, CombatPending, CombatProfile, CombatReaction, CombatResource, CombatRoll, CombatState } from '../models/combat';
+import type { SightAssessment } from './vision-preview';
+import { CombatAction, Combatant, CombatCost, CombatNarrativeMessage, CombatPending, CombatProfile, CombatReaction, CombatResolution, CombatResource, CombatRoll, CombatState } from '../models/combat';
 import { actionProblem, combatDistance, diceParts, normalizeCombat, reactionProblem, rollDice } from './combat-rules';
 
 const fresh = (): CombatState => ({ version: 1, started: false, round: 1, usedAttacks: 0, spellUsed: false,
@@ -16,7 +17,9 @@ export class VttCombat {
   constructor(readonly combatants: () => Combatant[], readonly activeId: () => string | undefined,
     private readonly commit: (hp?: { id: string; hp: number }) => void,
     private readonly saveProfile: (id: string, profile: CombatProfile) => void | Promise<void>,
-    private readonly die: (sides: number) => number = (sides) => Math.floor(Math.random() * sides) + 1) {}
+    private readonly die: (sides: number) => number = (sides) => Math.floor(Math.random() * sides) + 1,
+    readonly sight?: (observerId: string, targetId: string) => SightAssessment | undefined,
+    private readonly narrate?: (result: CombatResolution) => CombatNarrativeMessage[]) {}
 
   find(id: string | undefined): Combatant | undefined { return this.combatants().find((a) => a.id === id); }
   busy(): boolean { return this.saving() || !!this.state().pending || this.invalid !== undefined; }
@@ -43,12 +46,12 @@ export class VttCombat {
   reset(): void { this.invalid = undefined; this.error.set(''); this.state.set(fresh()); this.commit(); }
   end(): void {
     if (this.busy()) throw new Error('Resuelve el ataque pendiente');
-    const s = this.state(); this.state.set({ ...fresh(), resources: s.resources, log: this.log('Combate finalizado. PG y recursos se conservan.', s.log) }); this.commit();
+    const s = this.state(); this.state.set({ ...fresh(), resources: s.resources, narrative: s.narrative, log: this.log('Combate finalizado. PG y recursos se conservan.', s.log) }); this.commit();
   }
   start(id: string): void {
     if (this.busy() || this.state().started || !this.find(id)) throw new Error('Resuelve primero la acción pendiente');
     const resources = this.state().resources;
-    this.state.set({ ...fresh(), started: true, turnId: id, resources, log: this.log('Combate iniciado. Los recursos disponibles se conservan.', this.state().log) });
+    this.state.set({ ...fresh(), started: true, turnId: id, resources, narrative: this.state().narrative, log: this.log('Combate iniciado. Los recursos disponibles se conservan.', this.state().log) });
     this.commit();
   }
   turn(id: string, nextRound = false): void {
@@ -136,7 +139,10 @@ export class VttCombat {
     if (!job) { this.state.update((s) => ({ ...s, pending: undefined, queue: [] })); this.commit(hp); return; }
     const actor = this.find(job.attackerId), target = this.find(job.targetId);
     if (!actor || !target || target.armorClass === undefined) throw new Error('Falta la ficha de una acción pendiente');
-    const context: Omit<AttackContext, 'confirmed'> = job.reactionAttack ? { advantage: false, disadvantage: false, armorAdjustment: 0, damageFactor: 1 } : this.context;
+    let context: Omit<AttackContext, 'confirmed'> = job.reactionAttack ? { advantage: false, disadvantage: false, armorAdjustment: 0, damageFactor: 1 } : this.context;
+    if (!context.rangeResolved && job.action.resolution === 'attack' && this.sight) context = { ...context,
+      disadvantage: context.disadvantage || this.sight(actor.id, target.id)?.visible === false,
+      advantage: context.advantage || this.sight(target.id, actor.id)?.visible === false };
     const long = combatDistance(actor, target) > job.action.range! + 0.001;
     const response = !!job.reactionAttack;
     const casting = response || (job.action.kind === 'spell' && !job.castApproved);
@@ -252,7 +258,9 @@ export class VttCombat {
     const attack = p.roll ? `d20 [${p.roll.dice.join(', ')}]${signed(p.roll.bonus)} = ${p.roll.total}; CA ${this.armor(p)}${p.roll.natural === 20 ? ' (crítico)' : ''}` : p.save ? `salvación ${p.save.natural}${signed(p.save.bonus)} = ${p.save.total}; CD ${p.action.dc}` : 'impacto automático';
     const dice = p.damage.map((d) => `${d.type}: [${d.dice.join(', ')}]${signed(d.bonus)} = ${d.rolled}`).join('; ');
     const message = `${this.find(p.attackerId)?.name ?? p.attackerId} → ${target.name}, ${p.action.name}: ${attack}. ${this.hit(p) ? 'Impacto' : 'Fallo'}. ${dice}. Daño final ${damage}. ${p.reactions.join(' ')} ${manualNote}`;
-    this.state.update((s) => ({ ...s, pending: undefined, log: this.log(message, s.log) }));
+    const messages = this.narrate?.({ attackerId: p.attackerId, targetId: p.targetId, hit: this.hit(p), damage }) ?? [];
+    this.state.update((s) => ({ ...s, pending: undefined, log: this.log(message, s.log),
+      ...(messages.length ? { narrative: [...(s.narrative ?? []), { id: crypto.randomUUID(), messages }].slice(-200) } : {}) }));
     this.next({ id: target.id, hp: Math.max(0, target.hp - damage) });
   }
   private rollDefense(p: CombatPending, context: Omit<AttackContext, 'confirmed'>): CombatPending {
@@ -333,6 +341,10 @@ function isMagicMissile(action: CombatAction): boolean { return action.resolutio
 export function validState(value: unknown): value is CombatState {
   if (!value || typeof value !== 'object') return false;
   const s = value as CombatState;
+  if (s.narrative !== undefined && (!Array.isArray(s.narrative) || s.narrative.length > 200 || s.narrative.some((event) =>
+    !event || typeof event.id !== 'string' || !Array.isArray(event.messages) || event.messages.some((message) =>
+      !message || typeof message.observerId !== 'string' || !Array.isArray(message.audience) || message.audience.some((id) => typeof id !== 'string') ||
+      typeof message.text !== 'string' || message.text.length > 2000)))) return false;
   if (!Array.isArray(s.slotsSpent) || s.slotsSpent.some((id) => typeof id !== 'string') || (s.started && typeof s.turnId !== 'string')) return false;
   if (s.context?.rangeResolved !== undefined && typeof s.context.rangeResolved !== 'boolean') return false;
   if (s.context && (typeof s.context.advantage !== 'boolean' || typeof s.context.disadvantage !== 'boolean' || !Number.isFinite(s.context.armorAdjustment) || ![0, .5, 1, 2].includes(s.context.damageFactor))) return false;

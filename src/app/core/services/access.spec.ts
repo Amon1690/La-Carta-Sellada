@@ -26,10 +26,11 @@ describe('Permisos de navegación', () => {
     for (const url of ['/', '/criaturas', '/campanas/one/fichas-pjs', '/campanas/one/viajes', '/vtt/one/scene/s']) expect(await enter(url)).toBeTrue();
     for (const url of ['/usuarios', '/campanas/two/actos', '/vtt/two/scene/s']) expect((await enter(url) as UrlTree).toString()).toBe('/');
   });
-  it('jugador solo ve las cinco secciones de reglas y sus fichas', async () => {
+  it('jugador ve reglas, sus fichas y los encuentros de su campaña', async () => {
     current.set(asUser('jugador'));
-    for (const url of ['/', '/hechizos', '/dotes', '/habilidades', '/equipo', '/rasgos-clase', '/rasgos-clase/mago', '/campanas/one/fichas-pjs']) expect(await enter(url)).toBeTrue();
+    for (const url of ['/', '/hechizos', '/dotes', '/habilidades', '/equipo', '/rasgos-clase', '/rasgos-clase/mago', '/campanas/one/fichas-pjs', '/campanas/one/encuentros', '/campanas/one/encuentros?encuentro=scene:one']) expect(await enter(url)).toBeTrue();
     for (const url of ['/usuarios', '/criaturas', '/fichas-genericas', '/encuentros-genericos', '/campanas/one/actos', '/campanas/one/viajes', '/vtt/one/scene/s', '/campanas/two/fichas-pjs']) expect((await enter(url) as UrlTree).toString()).toBe('/');
+    for (const url of ['/campanas/two/encuentros', '/vtt/one/encounter/test', '/encuentros']) expect((await enter(url) as UrlTree).toString()).toBe('/');
   });
 });
 describe('Sesión de servidor', () => {
