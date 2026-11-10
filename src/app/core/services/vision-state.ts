@@ -33,21 +33,48 @@ function references(v: unknown, tokenIds: ReadonlySet<string>, max = 1000): stri
   return ids as string[];
 }
 export function assertBoardVision(v: unknown, tokenIds: ReadonlySet<string>): asserts v is BoardVisionState {
-  const b = record(v, ['version', 'enabled', 'environment', 'groups', 'activeGroupId', 'effects']);
+  const b = record(v, ['version', 'enabled', 'environment', 'groups', 'activeGroupId', 'effects', 'obstacles', 'contacts']);
   if (b['version'] !== 1 || typeof b['enabled'] !== 'boolean') fail();
-  const env = record(b['environment'], ['illumination', 'timeOfDay', 'weather', 'gameTime', 'source']);
+  const env = record(b['environment'], ['illumination', 'timeOfDay', 'weather', 'gameTime', 'source', 'obscurement']);
   if (!choice(env['illumination'], ['unknown', 'bright', 'dim', 'darkness']) ||
       !choice(env['timeOfDay'], ['unknown', 'dawn', 'day', 'dusk', 'night']) ||
       !choice(env['weather'], ['unknown', 'clear', 'rain', 'snow', 'fog', 'other'])) fail();
   if (env['gameTime'] !== undefined) {
-    const time = record(env['gameTime'], ['day', 'minuteOfDay']);
+    const time = record(env['gameTime'], ['day', 'minuteOfDay', 'second']);
     if (!numeric(time['day'], 1000000) || !Number.isInteger(time['day']) ||
-        !numeric(time['minuteOfDay'], 1439) || !Number.isInteger(time['minuteOfDay'])) fail();
+        !numeric(time['minuteOfDay'], 1439) || !Number.isInteger(time['minuteOfDay']) ||
+        (time['second'] !== undefined && (!numeric(time['second'], 59) || !Number.isInteger(time['second'])))) fail();
   }
   if (env['source'] !== undefined) source(env['source']);
+  if (env['obscurement'] !== undefined && !choice(env['obscurement'], ['unknown', 'none', 'light', 'heavy'])) fail();
   if ((env['illumination'] !== 'unknown' || env['timeOfDay'] !== 'unknown' ||
-       env['weather'] !== 'unknown' || env['gameTime'] !== undefined) && env['source'] === undefined) fail();
+       env['weather'] !== 'unknown' || env['gameTime'] !== undefined ||
+       (env['obscurement'] !== undefined && env['obscurement'] !== 'unknown')) && env['source'] === undefined) fail();
+  if (b['obstacles'] !== undefined) {
+    const obstacleIds = new Set<string>();
+    for (const item of list(b['obstacles'], 1000)) {
+      const obstacle = record(item, ['id', 'name', 'kind', 'start', 'end', 'source', 'blocksSight', 'blocksEffect', 'open']);
+      if (!text(obstacle['id']) || !text(obstacle['name']) || obstacleIds.has(obstacle['id']) ||
+          !choice(obstacle['kind'], ['wall', 'door']) || typeof obstacle['blocksSight'] !== 'boolean' || typeof obstacle['blocksEffect'] !== 'boolean') fail();
+      obstacleIds.add(obstacle['id'] as string); source(obstacle['source']);
+      const start = record(obstacle['start'], ['x', 'y']), end = record(obstacle['end'], ['x', 'y']);
+      if (![start['x'], start['y'], end['x'], end['y']].every((n) => numeric(n)) ||
+          (start['x'] === end['x'] && start['y'] === end['y'])) fail();
+      if (obstacle['kind'] === 'door' ? typeof obstacle['open'] !== 'boolean' : obstacle['open'] !== undefined) fail();
+    }
+  }
   const groupIds = new Set<string>();
+  if (b['contacts'] !== undefined) {
+    const contactIds = new Set<string>();
+    for (const item of list(b['contacts'], 1000)) {
+      const contact = record(item, ['tokenId', 'surfaceId', 'airborne', 'moving', 'subjectKind', 'source']);
+      if (!text(contact['tokenId']) || !tokenIds.has(contact['tokenId']) || contactIds.has(contact['tokenId'])) fail();
+      contactIds.add(contact['tokenId'] as string); source(contact['source']);
+      if (contact['surfaceId'] !== undefined && !text(contact['surfaceId'])) fail();
+      for (const key of ['airborne', 'moving']) if (contact[key] !== undefined && typeof contact[key] !== 'boolean') fail();
+      if (contact['subjectKind'] !== undefined && !choice(contact['subjectKind'], ['creature', 'object'])) fail();
+    }
+  }
   for (const item of list(b['groups'], 100)) {
     const group = record(item, ['id', 'name', 'observerIds']);
     if (!text(group['id']) || !text(group['name']) || groupIds.has(group['id'])) fail();
@@ -83,6 +110,7 @@ export function emptyBoardVision(): BoardVisionState {
 /** Limpieza solo tras borrar tokens conocidos; no normaliza una importación inválida. */
 export function withoutRemovedObservers(state: BoardVisionState, ids: ReadonlySet<string>): BoardVisionState {
   return { ...state,
+    ...(state.contacts === undefined ? {} : { contacts: state.contacts.filter((c) => ids.has(c.tokenId)) }),
     groups: state.groups.map((g) => ({ ...g, observerIds: g.observerIds.filter((id) => ids.has(id)) })),
     effects: state.effects.filter((e) => (!e.concentrationTokenId || ids.has(e.concentrationTokenId)) && (!e.anchorTokenId || ids.has(e.anchorTokenId))).flatMap((e) => {
       if (e.scope.kind === 'circle') return [e];

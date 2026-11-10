@@ -7,7 +7,7 @@ describe('Imagen personal de encuentros', () => {
   beforeEach(() => {
     snapshot = {
       sheetRevision: 0, title: 'Encuentro', mapUrl: 'mapa-original', fog: [], actors: ['hero'],
-      vision: { ...emptyBoardVision(), enabled: true,
+      vision: { ...emptyBoardVision(), enabled: true, obstacles: [],
         environment: { illumination: 'bright', weather: 'clear', timeOfDay: 'day' },
         groups: [{ id: 'director', name: 'Otra vista', observerIds: ['other'] }], activeGroupId: 'director' },
       profiles: new Map(['hero', 'other'].map((id) => [id, { version: 1, senses: [{ sense: 'normal', rangeFeet: 10, source: { kind: 'director', reference: 'Prueba' } }] }])),
@@ -68,9 +68,21 @@ describe('Imagen personal de encuentros', () => {
     expect(color(await pixels(), 180, 100)).toEqual([9, 12, 16, 255]);
   });
   it('el efecto cosmético de niebla se limita al área visible', async () => {
-    snapshot.vision.environment.weather = 'fog'; const ctx = await pixels();
+    snapshot.vision.environment.weather = 'fog'; snapshot.vision.environment.obscurement = 'light'; const ctx = await pixels();
     expect(color(ctx, 180, 100)).not.toEqual([9, 12, 16, 255]);
     expect(color(ctx, 1000, 100)).toEqual([9, 12, 16, 255]);
+  });
+  it('recorta paredes también en el raster y una puerta abierta deja pasar', async () => {
+    const source = { kind: 'director' as const, reference: 'Puerta sintética' };
+    snapshot.vision.obstacles = [{ id: 'door', name: 'Puerta', kind: 'door', open: false, start: { x: 150, y: 0 }, end: { x: 150, y: 300 }, blocksSight: true, blocksEffect: true, source }];
+    expect(color(await pixels(), 180, 100)).toEqual([9, 12, 16, 255]);
+    snapshot.vision.obstacles[0].open = true; expect(color(await pixels(), 180, 100)).toEqual([255, 0, 0, 255]);
+  });
+  it('no carga la imagen ni el nombre de una ficha con condiciones pendientes y vista normal', async () => {
+    snapshot.tokens[2].hidden = false; snapshot.tokens[2].conditions = undefined;
+    await pixels(); expect(load.calls.allArgs().flat()).not.toContain('secreta');
+    snapshot.tokens[0].conditions = undefined; load.calls.reset();
+    const result = await renderPersonalView(snapshot, 'hero', load); expect(result.pending).toBeTrue(); expect(load).not.toHaveBeenCalled();
   });
   it('un token oculto conserva sus efectos de ocultación en el raster y no revela su imagen', async () => {
     const source = { kind: 'director' as const, reference: 'Ocultación de prueba' };

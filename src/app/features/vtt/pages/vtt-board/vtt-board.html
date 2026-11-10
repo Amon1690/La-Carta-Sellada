@@ -226,7 +226,7 @@
             <section class="sidebar-content token-inspector">
               <h2>Previsualización local</h2>
               <p>Visión compartida de las instancias elegidas. Esta vista no se transmite a jugadores.</p>
-              <p>Alcances y luz registrados por personaje. El clima es visual; la niebla manual sigue delimitando muros y zonas ocultas.</p>
+              <p>Alcances y luz registrados por personaje, con obstáculos e intensidad del clima confirmados por dirección. La exploración manual se conserva por separado.</p>
               <p>Negro: sin explorar. Oscuro: explorado sin visión. Iluminado: visión de los observadores.</p>
               @if (previewGeometry().pending) { <p role="status">Hay datos de visión pendientes. Las zonas sin confirmar permanecen oscuras.</p> }
               <h3>Fichas visibles</h3>
@@ -246,12 +246,12 @@
                 <h2>Visión compartida</h2>
                 <h3>Encuentros de los jugadores</h3>
                 <p>Comparte el nombre de este tablero y una vista personal por cada PJ asignado. Las listas de observadores de dirección no conceden visión a jugadores.</p>
-                <p>Revisa la niebla antes de compartir: la vista no calcula muros. Los alcances y fuentes de luz se registran explícitamente.</p>
+                <p>Revisa la exploración y los obstáculos antes de compartir. Los muros, alcances y fuentes de luz se registran explícitamente.</p>
                 <button type="button" class="open-token-sheet" [disabled]="!sharingReady() || (visionStorageBlocked && !encounterShared())" [attr.aria-pressed]="encounterShared()" (click)="toggleEncounterSharing()">{{ encounterShared() ? 'Dejar de compartir encuentro' : 'Compartir encuentro con jugadores' }}</button>
                 @if (sharingMessage()) { <p role="status">{{ sharingMessage() }}</p> }
                 @if (sharingReady()) { <button type="button" class="open-token-sheet" (click)="retryEncounterSharing()">Actualizar estado compartido</button> }
                 <p>Herramientas de dirección. Guarda listas independientes del turno y de la selección de fichas.</p>
-                <fieldset class="field-grid" [disabled]="visionStorageBlocked">
+                <fieldset class="field-grid" [disabled]="visionStorageBlocked || combat.busy()">
                   <label class="check-field"><input type="checkbox" [checked]="vision().enabled" (change)="enableVision($any($event.target).checked)" /> Activar niebla de guerra</label>
                   <label>Lista de observadores<select [value]="vision().activeGroupId ?? ''" (change)="chooseVisionGroup($any($event.target).value)">
                     <option value="" [selected]="!vision().activeGroupId">Sin lista activa</option>
@@ -272,7 +272,62 @@
                   <label>Clima<select [value]="vision().environment.weather" (change)="setPreviewEnvironment('weather', $any($event.target).value)">
                     <option value="unknown">Sin confirmar</option><option value="clear">Despejado</option><option value="rain">Lluvia</option><option value="snow">Nieve</option><option value="fog">Niebla</option><option value="other">Otro</option>
                   </select></label>
-                  <p>El clima no reduce el alcance del mapa. En oscuridad se ven las zonas iluminadas o cubiertas por los sentidos registrados. La penumbra y la niebla ligera afectan a Percepción visual; no penalizan ataques por sí solas.</p>
+                  <label>Oscurecimiento por clima<select [value]="vision().environment.obscurement ?? (vision().environment.weather === 'clear' ? 'none' : 'unknown')" (change)="setVisionObscurement($any($event.target).value)">
+                    <option value="unknown">Sin confirmar</option><option value="none">Ninguno</option><option value="light">Ligero</option><option value="heavy">Fuerte</option>
+                  </select></label>
+                  <p>El nombre del clima no decide su intensidad. La iluminación y el oscurecimiento sin confirmar quedan pendientes. Ninguna hora del ordenador cambia el entorno de juego.</p>
+                  <details><summary>Reloj del mundo de juego</summary>
+                    <p>{{ vision().environment.gameTime ? 'Día ' + vision().environment.gameTime!.day + ' · minuto ' + vision().environment.gameTime!.minuteOfDay + ' · segundo ' + (vision().environment.gameTime!.second ?? 0) : 'Hora sin confirmar' }}</p>
+                    <label>Día<input #gameDay type="number" min="0" max="1000000" [value]="vision().environment.gameTime?.day ?? ''" /></label>
+                    <label>Minuto del día (0–1439)<input #gameMinute type="number" min="0" max="1439" [value]="vision().environment.gameTime?.minuteOfDay ?? ''" /></label>
+                    <label>Momento del día<select #gamePeriod [value]="vision().environment.timeOfDay"><option value="unknown">Sin confirmar</option><option value="dawn">Amanecer</option><option value="day">Día</option><option value="dusk">Anochecer</option><option value="night">Noche</option></select></label>
+                    <button type="button" class="open-token-sheet" (click)="setVisionGameTime(gameDay.value, gameMinute.value, gamePeriod.value)">Guardar hora de juego</button>
+                    <label>Tiempo transcurrido<input #elapsedVision type="number" min="0" step="1" value="1" /></label>
+                    <button type="button" class="open-token-sheet" (click)="advanceVisionTime('rounds', elapsedVision.value)">Avanzar asaltos</button>
+                    <button type="button" class="open-token-sheet" (click)="advanceVisionTime('minutes', elapsedVision.value)">Avanzar minutos</button>
+                    <p>Avanza una sola vez por asalto completo. Cambiar el turno no descuenta tiempo por cada personaje. La luz se confirma por separado.</p>
+                  </details>
+                  <details><summary>Paredes y puertas</summary>
+                    @if (vision().obstacles === undefined) { <p>Geometría sin confirmar: la previsualización permanece cerrada.</p><button type="button" class="open-token-sheet" (click)="confirmVisionGeometry()">Confirmar plano sin obstáculos</button> }
+                    @for (obstacle of vision().obstacles ?? []; track obstacle.id) {
+                      <p>{{ obstacle.name }} · {{ obstacle.kind === 'door' ? (obstacle.open ? 'Puerta abierta' : 'Puerta cerrada') : 'Pared' }}</p>
+                      @if (obstacle.kind === 'door') { <button type="button" class="open-token-sheet" (click)="changeVisionObstacle(obstacle.id)">{{ obstacle.open ? 'Cerrar' : 'Abrir' }} puerta</button> }
+                      <button type="button" class="open-token-sheet" (click)="changeVisionObstacle(obstacle.id, true)">Eliminar {{ obstacle.name }}</button>
+                    }
+                    <form #obstacleForm data-vision-obstacle-form (submit)="$event.preventDefault(); addVisionObstacle(obstacleForm)">
+                      <p>Indica dos puntos del plano del tablero (1536 × 1024). No se extraen paredes de la imagen.</p>
+                      <label>Nombre<input name="name" required maxlength="500" /></label><label>Tipo<select name="kind"><option value="wall">Pared</option><option value="door">Puerta</option></select></label>
+                      <label>Inicio X<input name="x1" type="number" min="0" max="1536" required /></label><label>Inicio Y<input name="y1" type="number" min="0" max="1024" required /></label>
+                      <label>Final X<input name="x2" type="number" min="0" max="1536" required /></label><label>Final Y<input name="y2" type="number" min="0" max="1024" required /></label>
+                      <label class="check-field"><input name="blocksSight" type="checkbox" checked /> Bloquea vista y luz</label><label class="check-field"><input name="blocksEffect" type="checkbox" checked /> Bloquea línea de efecto</label>
+                      <label>Fuente o decisión de dirección<input name="source" required maxlength="2000" /></label><button class="open-token-sheet" type="submit">Añadir obstáculo</button>
+                    </form>
+                  </details>
+                  <details><summary>Efectos de visión</summary>
+                    @for (effect of vision().effects; track effect.id) {
+                      <p>{{ effect.name }} · {{ effect.active ? 'Activo' : 'Finalizado' }} · {{ visionDurationLabel(effect) }}</p>
+                      <button type="button" class="open-token-sheet" [disabled]="!effect.active" (click)="finishVisionEffect(effect.id)">Terminar {{ effect.name }}</button>
+                      @if (effect.concentrationTokenId; as concentrating) { <button type="button" class="open-token-sheet" (click)="finishVisionConcentration(concentrating)">Terminar concentración de este personaje</button> }
+                    }
+                    <form #visionEffectForm data-vision-effect-form (submit)="$event.preventDefault(); addVisionEffect(visionEffectForm)">
+                      <label>Nombre del efecto<input name="name" required maxlength="500" /></label>
+                      <label>Tipo<select #effectKind name="kind"><option value="light">Luz</option><option value="magical-darkness">Oscuridad que bloquea luz y visión en oscuridad</option><option value="obscurement">Nube o zona oscurecida</option><option value="blinded">Cegado</option><option value="sense">Conceder sentido</option></select></label>
+                      <p>Las zonas usan centro del plano y radio en pies. Cegado y sentidos afectan a la instancia elegida. Confirma la regla concreta; no se resuelven anulaciones entre conjuros automáticamente.</p>
+                      <label>Centro X<input name="x" type="number" min="0" max="1536" /></label><label>Centro Y<input name="y" type="number" min="0" max="1024" /></label><label>Radio (pies)<input name="radius" type="number" min="0" max="100000" /></label>
+                      <label>Personaje afectado<select name="token"><option value="">Elegir instancia</option>@for (token of tokens(); track token.instanceId) { <option [value]="token.instanceId">{{ token.name }}</option> }</select></label>
+                      <label>Luz<select name="illumination"><option value="bright">Intensa</option><option value="dim">Penumbra</option></select></label><label>Oscurecimiento<select name="obscurement"><option value="light">Ligero</option><option value="heavy">Fuerte</option></select></label>
+                      <label>Sentido concedido<select name="sense"><option value="darkvision">Visión en oscuridad</option><option value="blindsight">Visión ciega</option><option value="truesight">Visión verdadera</option><option value="tremorsense">Sentido sísmico (solo detección)</option></select></label><label>Alcance del sentido (pies)<input name="range" type="number" min="0" max="100000" /></label>
+                      <label>Duración<select name="duration"><option value="unknown">Sin confirmar</option><option value="until-ended">Hasta terminar</option><option value="rounds">Asaltos</option><option value="minutes">Minutos</option></select></label><label>Duración restante<input name="remaining" type="number" min="0" max="1000000" /></label>
+                      <label>Concentración de<select name="concentration"><option value="">No requiere concentración</option>@for (token of tokens(); track token.instanceId) { <option [value]="token.instanceId">{{ token.name }}</option> }</select></label>
+                      <label>Fuente de regla o decisión de dirección<input name="source" required maxlength="2000" /></label><button class="open-token-sheet" type="submit">Guardar efecto</button>
+                    </form>
+                  </details>
+                  <details><summary>Comprobar vista y detección personal</summary>
+                    <label>Observador<select #detectObserver><option value="">Elegir instancia</option>@for (token of tokens(); track token.instanceId) { <option [value]="token.instanceId">{{ token.name }} ({{ $index + 1 }})</option> }</select></label>
+                    <label>Objetivo<select #detectTarget><option value="">Elegir instancia</option>@for (token of tokens(); track token.instanceId) { <option [value]="token.instanceId">{{ token.name }} ({{ $index + 1 }})</option> }</select></label>
+                    <button type="button" class="open-token-sheet" (click)="assessVisionDetection(detectObserver.value, detectTarget.value)">Comprobar sentidos</button>
+                    <p>Detectar una posición no concede vista. La comprobación usa el personaje elegido y no la visión de sus aliados.</p>
+                  </details>
                   <h3>Datos de las fichas</h3>
                   <p>Completa la vista normal y confirma las condiciones de cada observador en Fichas. El alcance no se deduce del nombre ni del linaje.</p>
                   @for (token of tokens(); track token.instanceId) {
@@ -282,7 +337,7 @@
                       <label>Fuente o decisión del director<input #sightSource type="text" maxlength="2000" /></label>
                       <button type="button" class="open-token-sheet" (click)="saveNormalVision(token.instanceId, sightRange.value, unlimited.checked, sightSource.value)">Guardar vista normal</button>
                       <p>{{ specialSenseSummary(token.instanceId) }}</p>
-                      <label>Sentido especial<select #specialSense><option value="darkvision">Visión en la oscuridad</option><option value="blindsight">Visión ciega</option><option value="truesight">Visión verdadera</option></select></label>
+                      <label>Sentido especial<select #specialSense><option value="darkvision">Visión en la oscuridad</option><option value="blindsight">Visión ciega</option><option value="truesight">Visión verdadera</option><option value="tremorsense">Sentido sísmico (detección)</option></select></label>
                       <label>Alcance del sentido especial (pies)<input #specialRange type="number" min="0" max="100000" /></label>
                       <label>Fuente del sentido<input #specialSource type="text" maxlength="2000" /></label>
                       <button type="button" class="open-token-sheet" (click)="saveSense(token.instanceId, specialSense.value, specialRange.value, false, specialSource.value)">Guardar sentido especial</button>
@@ -293,6 +348,15 @@
                       <label>Objeto y fuente de sus alcances<input #lightSource type="text" maxlength="2000" /></label>
                       <button type="button" class="open-token-sheet" (click)="saveTokenLight(token.instanceId, brightLight.value, dimLight.value, lightSource.value)">Guardar fuente de luz</button>
                       <button type="button" class="open-token-sheet" (click)="removeTokenLight(token.instanceId)">Apagar fuente de luz</button>
+                      <form #contactForm data-vision-contact-form (submit)="$event.preventDefault(); saveVisionContact(token.instanceId, contactForm)">
+                        <h3>Contacto para detección</h3><p>El mismo nombre de superficie indica contacto confirmado con el mismo suelo, pared o líquido. No se deduce de la imagen del mapa.</p>
+                        <label>Superficie compartida<input name="surfaceId" maxlength="500" [value]="visionContactValue(token.instanceId, 'surfaceId')" /></label>
+                        <label>Está en el aire<select name="airborne" [value]="visionContactValue(token.instanceId, 'airborne')"><option value="unknown">Sin confirmar</option><option value="true">Sí</option><option value="false">No</option></select></label>
+                        <label>Está en movimiento<select name="moving" [value]="visionContactValue(token.instanceId, 'moving')"><option value="unknown">Sin confirmar</option><option value="true">Sí</option><option value="false">No</option></select></label>
+                        <label>Tipo de objetivo<select name="subjectKind" [value]="visionContactValue(token.instanceId, 'subjectKind')"><option value="unknown">Sin confirmar</option><option value="creature">Criatura</option><option value="object">Objeto</option></select></label>
+                        <label>Fuente o decisión de dirección<input name="source" required maxlength="2000" [value]="visionContactValue(token.instanceId, 'source')" /></label>
+                        <button class="open-token-sheet" type="submit">Guardar contacto de esta instancia</button>
+                      </form>
                     </details>
                   }
                 </fieldset>

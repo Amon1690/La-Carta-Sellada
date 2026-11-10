@@ -7,7 +7,7 @@ describe('Registro público del combate', () => {
   const profile: VisionProfile = { version: 1, senses: [{ sense: 'normal', rangeFeet: 60, source }] };
   const tokens = () => [{ instanceId: 'bandit', name: 'El bandido', x: 102.4, y: 51.2, size: 1, hidden: false, conditions: [] },
     { instanceId: 'hero', name: 'Valian Foregon', x: 51.2, y: 51.2, size: 1, hidden: false, conditions: [] }];
-  const vision = () => ({ ...emptyBoardVision(), enabled: true, environment: { illumination: 'bright' as const, timeOfDay: 'day' as const, weather: 'clear' as const, source } });
+  const vision = () => ({ ...emptyBoardVision(), enabled: true, obstacles: [], environment: { illumination: 'bright' as const, timeOfDay: 'day' as const, weather: 'clear' as const, source } });
   const observers = [{ instanceId: 'hero', audience: ['player'] }];
   const profiles = new Map([['hero', profile]]);
   function narrate(hit: boolean, damage: number, values = tokens()) {

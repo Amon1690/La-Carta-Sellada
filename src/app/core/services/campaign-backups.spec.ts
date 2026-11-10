@@ -91,7 +91,7 @@ describe('Copias de seguridad por campaña',()=>{
    const source = { kind: 'director' as const, reference: 'Fixture de copia de previsualización' };
    const tokens = ['a','b'].map((instanceId,i) => ({ instanceId, actorId: 'player:custom-backup', name: instanceId,
      image: '', x: 100 + i * 700, y: 100, size: 1, hp: 7, maxHp: 20, initiative: 0, hidden: false, conditions: [] }));
-   const vision = { ...emptyBoardVision(), enabled: true, environment: { illumination: 'bright' as const, timeOfDay: 'unknown' as const, weather: 'clear' as const, source },
+   const vision = { ...emptyBoardVision(), enabled: true, obstacles: [], environment: { illumination: 'bright' as const, timeOfDay: 'unknown' as const, weather: 'clear' as const, source },
      groups: [{ id:'one',name:'Uno',observerIds:['a'] },{ id:'two',name:'Dos',observerIds:['b'] }], activeGroupId:'one' };
    const fogRects = [{ id:'unexplored',x:0,y:0,width:50,height:50 }];
    const input = JSON.parse(file({[boardKey]: {...board(),tokens,vision,fogRects}}));
@@ -109,6 +109,21 @@ describe('Copias de seguridad por campaña',()=>{
    const input = JSON.parse(file()); input.sheets.created[0].vision = { version: 1, senses: [{ sense: 'darkvision', rangeFeet: 60 }] };
    await expectAsync(store.preview(JSON.stringify(input), campaign)).toBeRejected();
    expect(storage.writes).toBe(0); expect(put).not.toHaveBeenCalled();
+ });
+ it('restaura obstáculos, contactos, segundos y efectos temporales sin tocar otra ejecución', async () => {
+   const source = { kind: 'director' as const, reference: 'Datos sintéticos de copia de visión' };
+   const t = { instanceId: 'observer', actorId: 'player:custom-backup', name: 'Prueba', image: '', x: 1, y: 1, size: 1, hp: 5, maxHp: 5, initiative: 0, hidden: false, conditions: [] };
+   const vision = { ...emptyBoardVision(), environment: { illumination: 'darkness', timeOfDay: 'night', weather: 'fog', obscurement: 'light', gameTime: { day: 4, minuteOfDay: 1439, second: 54 }, source },
+     obstacles: [{ id: 'door', name: 'Puerta', kind: 'door', open: true, start: { x: 10, y: 0 }, end: { x: 10, y: 50 }, blocksSight: true, blocksEffect: true, source }],
+     contacts: [{ tokenId: 'observer', surfaceId: 'suelo', airborne: false, subjectKind: 'creature', source }],
+     effects: [{ id: 'lamp', name: 'Luz', kind: 'light', illumination: 'dim', source, scope: { kind: 'circle', x: 10, y: 20, radiusFeet: 30 }, duration: { kind: 'rounds', remaining: 2 }, active: true, concentrationTokenId: 'observer' }] };
+   const other = boardKey + ':otra-ejecucion', original = JSON.stringify(board()); storage.setItem(other, original);
+   await store.restore(await store.preview(file({ [boardKey]: { ...board(), tokens: [t], vision } }), campaign));
+   expect((parseCampaignBackup(await store.export(campaign), campaign).local[boardKey] as any).vision).toEqual(vision);
+   expect(storage.getItem(other)).toBe(original);
+   const writesBefore = storage.writes, invalid = JSON.parse(file({ [boardKey]: { ...board(), tokens: [t], vision } }));
+   invalid.local[boardKey].vision.contacts[0].tokenId = 'otro-token';
+   await expectAsync(store.preview(JSON.stringify(invalid), campaign)).toBeRejected(); expect(storage.writes).toBe(writesBefore);
  });
 
  it('exporta y restaura sin redondear jornadas y posiciones de dos grupos de viaje', async () => {

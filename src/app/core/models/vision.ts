@@ -13,8 +13,27 @@ export interface VisionEnvironment {
   illumination: 'unknown' | 'bright' | 'dim' | 'darkness';
   timeOfDay: 'unknown' | 'dawn' | 'day' | 'dusk' | 'night';
   weather: 'unknown' | 'clear' | 'rain' | 'snow' | 'fog' | 'other';
-  gameTime?: { day: number; minuteOfDay: number };
+  gameTime?: { day: number; minuteOfDay: number; second?: number };
   source?: VisionSource;
+  /** Intensidad declarada: el nombre del clima no determina su penalización. */
+  obscurement?: 'unknown' | 'none' | 'light' | 'heavy';
+}
+export interface VisionPoint { x: number; y: number; }
+/** Segmentos del plano configurados por dirección; nunca deducidos de la imagen. */
+export interface VisionObstacle {
+  id: string; name: string; kind: 'wall' | 'door';
+  start: VisionPoint; end: VisionPoint; source: VisionSource;
+  blocksSight: boolean; blocksEffect: boolean;
+  /** Obligatorio para puertas; una puerta abierta no bloquea. */
+  open?: boolean;
+}
+export interface VisionContact {
+  tokenId: string;
+  surfaceId?: string;
+  airborne?: boolean;
+  moving?: boolean;
+  subjectKind?: 'creature' | 'object';
+  source: VisionSource;
 }
 export interface VisionGroup { id: string; name: string; observerIds: string[]; }
 export type VisionDuration = { kind: 'unknown' | 'until-ended' } |
@@ -39,4 +58,8 @@ export interface BoardVisionState {
   groups: VisionGroup[];
   activeGroupId?: string;
   effects: VisionEffect[];
+  /** Ausente: geometría sin confirmar; []: plano confirmado sin obstáculos. */
+  obstacles?: VisionObstacle[];
+  /** Contacto confirmado por instancia y encuentro para sentidos de detección. */
+  contacts?: VisionContact[];
 }

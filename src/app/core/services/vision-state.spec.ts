@@ -17,6 +17,15 @@ const state = (): BoardVisionState => ({ ...emptyBoardVision(), groups: [
 const ids = new Set(['a', 'b', 'c']);
 
 describe('Contrato de visión versionado', () => {
+  it('valida contactos por instancia, retira solo el borrado y conserva los datos sin confirmar', () => {
+    const s = state(); s.contacts = [{ tokenId: 'a', surfaceId: 'suelo', airborne: false, subjectKind: 'creature', source }, { tokenId: 'b', source }];
+    expect(() => assertBoardVision(s, ids)).not.toThrow();
+    expect(withoutRemovedObservers(s, new Set(['b', 'c'])).contacts).toEqual([{ tokenId: 'b', source }]);
+    expect(s.contacts.length).toBe(2); expect(s.contacts[1].airborne).toBeUndefined();
+    for (const contacts of [[{ tokenId: 'missing', source }], [s.contacts[0], s.contacts[0]], [{ tokenId: 'a', airborne: 'no', source }], [{ tokenId: 'a', source: undefined }]]) {
+      expect(() => assertBoardVision({ ...s, contacts }, ids)).toThrow();
+    }
+  });
   it('empieza desactivado y con entorno desconocido, sin usar reloj ni clima reales', () => {
     const first = emptyBoardVision();
     expect(first.enabled).toBeFalse();
