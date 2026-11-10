@@ -42,6 +42,32 @@ describe('Combate VTT, reglas y recuperación', () => {
   function start(): void { engine.start(active); }
   function attack(): void { engine.begin(sword().source, [learner().id], context); }
 
+  it('publica solo al resolver, usa el daño final y conserva el relato al restaurar o reiniciar turnos', () => {
+    const narrate = jasmine.createSpy('narrate').and.callFake((result) => [{ observerId: 'guard', audience: ['player'], text: `Daño ${result.damage}` }]);
+    learner().reactions = [];
+    engine = new VttCombat(() => actors, () => active, () => {}, () => {}, die, undefined, narrate);
+    start(); attack(); expect(narrate).not.toHaveBeenCalled();
+    engine.finish(true, 14, 'Ajuste privado del director');
+    expect(narrate).toHaveBeenCalledOnceWith({ attackerId: 'guard', targetId: 'apprentice', hit: true, damage: 14 });
+    const event = engine.state().narrative![0]; expect(event.messages[0].text).toBe('Daño 14');
+    engine.restore(structuredClone(engine.serialized())); expect(engine.error()).toBe('');
+    engine.end(); start(); expect(engine.state().narrative).toEqual([event]);
+    expect(engine.state().log.join(' ')).toContain('Ajuste privado');
+    engine.restore({ ...engine.state(), narrative: [{ id: 'invalid', messages: [{ observerId: 'guard', audience: [42], text: 'bad' }] }] });
+    expect(engine.error()).not.toBe('');
+  });
+
+  it('relata un fallo con daño cero y admite guardados antiguos sin convertir el registro privado', () => {
+    const narrate = jasmine.createSpy('narrate').and.returnValue([{ observerId: 'guard', audience: ['player'], text: 'Su ataque falla.' }]);
+    learner().reactions = []; sequence = [1, 5];
+    engine = new VttCombat(() => actors, () => active, () => {}, () => {}, die, undefined, narrate);
+    engine.restore({ ...engine.state(), log: ['Capacidad secreta del PNJ'] });
+    expect(engine.error()).toBe(''); expect(engine.state().narrative).toBeUndefined();
+    start(); attack(); engine.finish(true);
+    expect(narrate).toHaveBeenCalledOnceWith({ attackerId: 'guard', targetId: 'apprentice', hit: false, damage: 0 });
+    expect(engine.state().narrative!.map((event) => event.messages[0].text)).toEqual(['Su ataque falla.']);
+  });
+
   it('audita datos reales sin inventar rangos de ballesta o usos de Escudo', () => {
     expect(guard().armorClass).toBe(17); expect(learner().armorClass).toBe(12);
     expect(guard().attacksPerTurn).toBe(2);
@@ -59,6 +85,16 @@ describe('Combate VTT, reglas y recuperación', () => {
   it('exige combate iniciado y turno activo', () => {
     expect(() => attack()).toThrowError(/turno activo/); start(); active = learner().id;
     expect(() => attack()).toThrowError(/turno activo/); expect(die).not.toHaveBeenCalled();
+  });
+  it('evalúa la visión propia de cada objetivo de una acción con varios impactos', () => {
+    const third = actor('third', 'guardia', 51.2); actors.push(third);
+    Object.assign(sword(), { targets: 2, repeatTargets: false });
+    const sight = (observer: string, target: string) => ({ visible: !(observer === 'guard' && target === 'third'), perception: 'normal' as const, reasons: [] });
+    engine = new VttCombat(() => actors, () => active, () => {}, () => {}, die, sight); start();
+    engine.begin(sword().source, ['apprentice', 'third'], context);
+    expect(engine.state().pending?.roll?.disadvantage).toBeFalse();
+    engine.finish(true); expect(engine.state().pending?.targetId).toBe('third');
+    expect(engine.state().pending?.roll?.disadvantage).toBeTrue();
   });
   it('resuelve el ejemplo 9+4=13, Escudo CA12→17 evita daño y consume una reacción y un uso', () => {
     const reaction = shield(); start(); attack();

@@ -1,6 +1,7 @@
 import { AsyncPipe } from '@angular/common';
 import {
   Component,
+  DestroyRef,
   ElementRef,
   HostListener,
   ViewChild,
@@ -11,18 +12,23 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute } from '@angular/router';
 import { map, shareReplay, skip, switchMap } from 'rxjs';
+import { HttpErrorResponse } from '@angular/common/http';
 
 import { Campaign } from '../../../../core/models/campaign';
-import { BoardVisionState, VisionProfile } from '../../../../core/models/vision';
+import { BoardVisionState, VisionProfile, VisionSense } from '../../../../core/models/vision';
 import { assertBoardVision, emptyBoardVision, withoutRemovedObservers } from '../../../../core/services/vision-state';
-import { previewSight, previewTokenVisible } from '../../../../core/services/vision-preview';
+import { assessSight, previewSight, previewTokenVisible } from '../../../../core/services/vision-preview';
+import { ENCOUNTER_PUBLISHER, SharingSnapshot } from '../../../../core/services/encounter-sharing';
 import { CampaignDataService } from '../../../../core/services/campaign-data';
 import { CharacterSheetsService } from '../../../../core/services/character-sheets';
 import { RulesDataService } from '../../../../core/services/rules-data';
 import { RulesCompendium } from '../../../../core/models/rules';
 import { CombatAction, CombatCondition, CombatSide, Combatant } from '../../../../core/models/combat';
-import { deriveCombat } from '../../../../core/services/combat-rules';
+import { actionProblem, deriveCombat } from '../../../../core/services/combat-rules';
+import { attackSituation, normalAttackFacts } from '../../../../core/services/attack-situation';
+import { CommandReceipt, DirectorEncounter, EncounterCommand, LiveBoardState, PlayerControls } from '../../../../core/models/encounter-live';
 import { VttCombat } from '../../../../core/services/vtt-combat';
+import { combatNarrative } from '../../../../core/services/combat-narrative';
 import { VttCombatPanel } from './combat-panel';
 import { VttAttackPicker } from './attack-picker';
 import { CONDITION_LABELS } from '../../../../core/services/attack-situation';
@@ -32,6 +38,7 @@ import {
 } from '../../../../core/data/generic-encounters';
 
 import { TokenSheet, VttTokenSheet } from './token-sheet';
+import { WeatherOverlay } from '../../components/weather-overlay';
 
 type VttEntryKind = 'scene' | 'encounter' | 'location' | 'generic';
 type ToolMode = 'select' | 'pan' | 'fog' | 'reveal' | 'measure';
@@ -130,7 +137,7 @@ interface StoredBoardState {
 
 @Component({
   selector: 'app-vtt-board',
-  imports: [AsyncPipe, VttTokenSheet, VttCombatPanel, VttAttackPicker],
+  imports: [AsyncPipe, VttTokenSheet, VttCombatPanel, VttAttackPicker, WeatherOverlay],
   templateUrl: './vtt-board.html',
   styleUrl: './vtt-board.scss',
 })
@@ -147,6 +154,7 @@ export class VttBoard {
   protected readonly vision = signal<BoardVisionState>(emptyBoardVision());
   protected readonly visionPreview = signal(false);
   protected readonly visionMessage = signal('');
+  protected readonly perceptionMessage = signal('');
   protected readonly visionMaskId = this.newId('vision-mask');
   protected readonly visionObserverIds = computed(() =>
     this.vision().groups.find((group) => group.id === this.vision().activeGroupId)?.observerIds ?? []
@@ -168,6 +176,23 @@ export class VttBoard {
   protected readonly diceOpen = signal(false);
   protected readonly diceResult = signal<string>('');
   protected readonly saveStatus = signal('Guardado');
+  protected readonly encounterShared = signal(false);
+  protected readonly sharingReady = signal(false);
+  protected readonly sharingMessage = signal('');
+  private readonly publisher = inject(ENCOUNTER_PUBLISHER);
+  private sharingTimer?: ReturnType<typeof setTimeout>;
+  private sharingChain: Promise<void> = Promise.resolve();
+  private sharingGeneration = 0;
+  private sharingEntry?: VttEntry;
+  private sharingRevision = 0;
+  private sharingDirty = false;
+  private sharingBusy = false;
+  private applyingRemote = false;
+  private syncing = false;
+  private syncTimer?: ReturnType<typeof setInterval>;
+  private pendingAck?: CommandReceipt;
+  private syncEpoch = 0;
+  private readonly publishedRevisions = new Map<string, { base: number; revision: number }>();
   protected readonly combatMessage = signal('');
   protected readonly attackingId = signal<string | undefined>(undefined);
   protected readonly attackTargetId = signal<string | undefined>(undefined);
@@ -193,6 +218,18 @@ export class VttBoard {
     const token = this.tokens().find((t) => t.instanceId === id);
     if (!token || !this.currentCampaign) throw new Error('La ficha ya no está disponible');
     return this.characterSheets.saveCombatProfile(this.currentCampaign, token.actorId, profile);
+  }, undefined, (observerId, targetId) => {
+    if (!this.vision().enabled) return undefined;
+    const target = this.tokens().find((token) => token.instanceId === targetId);
+    return target ? assessSight(this.vision(), this.tokens(), this.tokenVisionProfiles(), observerId,
+      { x: target.x + target.size * this.gridSize / 2, y: target.y + target.size * this.gridSize / 2 }) : undefined;
+  }, (result) => {
+    if (!this.currentCampaign) return [];
+    const sheets = this.characterSheets.playerSheets(this.currentCampaign);
+    const observers = this.tokens().filter((token) => token.actorId.startsWith('player:')).map((token) => ({
+      instanceId: token.instanceId, audience: sheets.find((sheet) => sheet.id === token.actorId.slice(7))?.playerIds ?? [],
+    }));
+    return combatNarrative(result, this.tokens(), observers, this.vision(), this.tokenVisionProfiles(), this.fogRects(), this.gridSize, this.mapWidth, this.mapHeight);
   });
   private readonly openedSheetTokenId = signal<string | undefined>(undefined);
   private readonly sheetRevision = signal(0);
@@ -284,9 +321,11 @@ export class VttBoard {
   );
 
   constructor() {
+    inject(DestroyRef).onDestroy(() => { clearInterval(this.syncTimer); this.leaveSharedBoard(); });
     this.rulesData.getRules().pipe(takeUntilDestroyed()).subscribe({ next: (rules) => this.rules.set(rules),
       error: () => this.combatMessage.set('No se pudo leer el compendio de conjuros. Completa los datos desde la ficha antes de resolver acciones.') });
     this.vm$.pipe(takeUntilDestroyed()).subscribe((vm) => {
+      this.leaveSharedBoard();
       this.closeTokenSheet();
       this.combatPanel?.close();
       this.cancelAttack();
@@ -298,6 +337,16 @@ export class VttBoard {
       const runId = this.route.snapshot.queryParamMap.get('run');
       const runSuffix = runId ? `:${runId.replace(/[^a-zA-Z0-9_-]/g, '')}` : '';
       this.storageKey = `la-carta-sellada:vtt:${vm.campaign.id}:${vm.entry.kind}:${vm.entry.id}${runSuffix}`;
+      this.sharingEntry = vm.entry;
+      this.sharingRevision = 0; this.sharingDirty = false; this.pendingAck = undefined;
+      this.encounterShared.set(false); this.sharingReady.set(false); this.sharingMessage.set('');
+      const sharingKey = this.storageKey, generation = ++this.sharingGeneration;
+      if (this.publisher) void this.publisher.status(vm.campaign.id, sharingKey).then((status) => {
+        if (generation !== this.sharingGeneration) return;
+        this.acceptRemoteEncounter(status, true);
+      }).catch(() => { if (generation === this.sharingGeneration) this.sharingMessage.set('No se pudo consultar si el encuentro está compartido. Recarga para reintentar.'); });
+      clearInterval(this.syncTimer);
+      if (this.publisher) this.syncTimer = setInterval(() => void this.syncEncounter(), 1000);
       this.tokenChoices.set(this.buildTokenChoices(vm.campaign));
       const restored = this.loadState();
       if (!restored && vm.entry.seedTokens?.length) {
@@ -308,8 +357,237 @@ export class VttBoard {
     this.characterSheets.changes$.pipe(skip(1), takeUntilDestroyed()).subscribe(() => {
       if (this.currentCampaign) this.tokenChoices.set(this.buildTokenChoices(this.currentCampaign));
       this.sheetRevision.update((revision) => revision + 1);
+      this.scheduleSharing();
     });
   }
+
+  private async syncEncounter(): Promise<void> {
+    const publisher = this.publisher, campaign = this.currentCampaign?.id, key = this.storageKey;
+    if (!publisher || !campaign || this.syncing) return;
+    this.syncing = true;
+    const epoch = this.syncEpoch;
+    try {
+      const status = await publisher.status(campaign, key, this.sharingReady() ? this.sharingRevision : undefined);
+      if (key !== this.storageKey || epoch !== this.syncEpoch || this.sharingBusy) return;
+      const sheetsChanged = status.sheetRevision !== undefined && status.sheetRevision !== publisher.sheetRevision(campaign);
+      if (sheetsChanged) {
+        await publisher.refreshSheets(campaign);
+        if (key !== this.storageKey || epoch !== this.syncEpoch) return;
+        this.sheetRevision.update((revision) => revision + 1);
+        if (this.currentCampaign) this.tokenChoices.set(this.buildTokenChoices(this.currentCampaign));
+      }
+      this.acceptRemoteEncounter(status, !this.sharingReady());
+      if (sheetsChanged && this.encounterShared()) this.scheduleSharing(true);
+    } catch { this.sharingMessage.set('No se puede sincronizar el encuentro. Los cambios locales se conservan; se reintentará automáticamente.'); }
+    finally { this.syncing = false; }
+  }
+
+  private preserveConflict(): void {
+    const raw = localStorage.getItem(this.storageKey);
+    if (!raw) return;
+    const key = `la-carta-sellada:encounter-conflict:${this.storageKey}`;
+    const previous = JSON.parse(localStorage.getItem(key) ?? '[]') as { at: string; state: unknown }[];
+    previous.push({ at: new Date().toISOString(), state: JSON.parse(raw) });
+    localStorage.setItem(key, JSON.stringify(previous));
+  }
+
+  private acceptRemoteEncounter(status: DirectorEncounter, initial: boolean): void {
+    // Una lectura de la misma revisión puede ser anterior a nuestra publicación/retirada local.
+    // Solo una revisión nueva del servidor puede sustituir esa intención en curso.
+    if (!initial && (status.revision ?? 0) === this.sharingRevision) return;
+    const wasShared = this.encounterShared();
+    this.sharingReady.set(true); this.encounterShared.set(status.shared);
+    if (!status.shared) {
+      if (wasShared) { clearTimeout(this.sharingTimer); this.sharingGeneration++; this.sharingDirty = false; this.pendingAck = undefined; }
+      this.sharingRevision = status.revision ?? 0;
+      if (wasShared && !initial) this.sharingMessage.set('Este encuentro se ha dejado de compartir desde otro navegador.');
+      return;
+    }
+    if (status.changed === false) return;
+    const different = (status.revision ?? 0) !== this.sharingRevision || initial || this.sharingRevision < 0;
+    if (!different) return;
+    clearTimeout(this.sharingTimer); this.sharingGeneration++;
+    if (status.state) {
+      const raw = localStorage.getItem(this.storageKey);
+      const local = raw ? JSON.parse(raw) as LiveBoardState : undefined;
+      const contents = (value: LiveBoardState) => JSON.stringify([value.tokens, value.fogRects, value.vision, value.combat, value.activeTurnId]);
+      if (this.sharingDirty || (initial && local && contents(local) !== contents(status.state))) {
+        this.preserveConflict(); this.sharingMessage.set('Se cargó la versión compartida. Tus cambios locales distintos se han conservado en una copia de conflicto.');
+      }
+      this.applyRemoteBoard(status.state);
+    }
+    this.sharingRevision = status.revision ?? 0; this.sharingDirty = false; this.pendingAck = undefined;
+    if (status.pendingCommand) this.applyPlayerCommand(status.pendingCommand);
+    else if (!status.state && initial) this.scheduleSharing(true);
+  }
+
+  private applyRemoteBoard(state: LiveBoardState): void {
+    if (state.vision) assertBoardVision(state.vision, new Set(state.tokens.map((token) => token.instanceId)));
+    this.applyingRemote = true;
+    try {
+      this.cancelInteraction(); this.cancelAttack(); this.closeTokenSheet();
+      this.tokens.set(structuredClone(state.tokens)); this.fogRects.set(structuredClone(state.fogRects));
+      this.vision.set(structuredClone(state.vision ?? emptyBoardVision()));
+      this.layers.set(structuredClone(state.layers)); this.activeTurnId.set(state.activeTurnId);
+      this.combat.restore(state.combat); this.selectedTokenIds.set([]);
+      localStorage.setItem(this.storageKey, JSON.stringify({ ...state, zoom: this.zoom() }));
+      this.visionStorageBlocked = false; this.saveStatus.set('Sincronizado');
+    } finally { this.applyingRemote = false; }
+  }
+
+  private captureBoardState(): StoredBoardState {
+    const origins = new Map(this.tokenDrag?.origins.map((token) => [token.instanceId, token]));
+    return structuredClone({ vision: this.vision(), combat: this.combat.serialized(),
+      tokens: this.tokens().map((token) => ({ ...token, ...(origins.get(token.instanceId) ?? {}) })),
+      fogRects: this.fogRects(), layers: this.layers(), zoom: this.zoom(), activeTurnId: this.activeTurnId() });
+  }
+
+  private playerControls(tokens: BoardToken[]): Record<string, PlayerControls> {
+    const result: Record<string, PlayerControls> = {};
+    const profiles = this.tokenVisionProfiles();
+    for (const token of tokens.filter((token) => token.actorId.startsWith('player:'))) {
+      const state = { ...this.vision(), groups: [{ id: 'personal', name: 'Personal', observerIds: [token.instanceId] }], activeGroupId: 'personal' };
+      const geometry = previewSight(state, tokens, profiles, this.gridSize, this.mapWidth, this.mapHeight);
+      const visible = token.hidden ? [] : tokens.filter((item) => previewTokenVisible(item, geometry.circles, this.fogRects(), this.gridSize));
+      const canMove = !this.tokenDrag && !token.hidden && !geometry.pending && this.vision().enabled && this.combat.state().started &&
+        this.combat.state().turnId === token.instanceId && this.activeTurnId() === token.instanceId && !this.combat.busy() && token.hp > 0 && !token.conditions?.includes('incapacitated');
+      const owner = this.combat.find(token.instanceId);
+      const canAttack = canMove && this.combat.canAttack(token.instanceId);
+      const cells: number[] = [];
+      if (canMove) for (let row = 0; row < 20; row++) for (let column = 0; column < 30; column++) {
+        const x = column * this.gridSize, y = row * this.gridSize;
+        if (x + token.size * this.gridSize > this.mapWidth + .001 || y + token.size * this.gridSize > this.mapHeight + .001) continue;
+        if (previewTokenVisible({ ...token, x, y }, geometry.circles, this.fogRects(), this.gridSize)) cells.push(row * 30 + column);
+      }
+      const targets = visible.filter((item) => item.instanceId !== token.instanceId).map((item) => ({ id: item.instanceId, name: item.name, x: item.x, y: item.y, size: item.size }));
+      const attacks = canAttack && owner ? owner.actions.filter((action) => !actionProblem(action) && this.combat.available(owner, action.cost) >= (action.cost?.amount ?? 0) &&
+        !(action.kind === 'spell' && action.resolution === 'attack' && !action.attackType)).map((action) => ({ source: action.source, name: action.name,
+          targetIds: this.combat.targets(owner, action).filter((actor) => targets.some((target) => target.id === actor.id)).filter((target) => {
+            const info = attackSituation(owner, target, action, this.combatants(), { ...normalAttackFacts(), reviewed: true }, this.combat.sight);
+            return !info.blocked && !info.doubts.length && !info.threatUnknown && !info.spellTypeUnknown;
+          }).map((actor) => actor.id) })) : [];
+      result[token.instanceId] = { position: { x: token.x, y: token.y, size: token.size }, canMove, canAttack, cells, targets, attacks };
+    }
+    return result;
+  }
+
+  private applyPlayerCommand(command: EncounterCommand): void {
+    const before = this.captureBoardState();
+    this.applyingRemote = true;
+    let receipt: CommandReceipt = { id: command.id, status: 'rejected', message: 'La acción ya no es válida. Revisa el turno y vuelve a intentarlo.' };
+    try {
+      if (command.expiresAt < Date.now()) throw new Error('Acción caducada.');
+      if (this.publisher && this.currentCampaign && command.sheetRevision !== this.publisher.sheetRevision(this.currentCampaign.id)) throw new Error('Las fichas cambiaron.');
+      const controls = this.playerControls(this.tokens())[command.observerId];
+      if (command.type === 'move') {
+        if (!controls?.canMove || command.cell === undefined || !controls.cells.includes(command.cell)) throw new Error('Movimiento no permitido.');
+        const cell = command.cell;
+        this.tokens.update((tokens) => tokens.map((token) => token.instanceId === command.observerId ? { ...token, x: cell % 30 * this.gridSize, y: Math.floor(cell / 30) * this.gridSize } : token));
+        receipt = { id: command.id, status: 'applied', message: 'Token movido.' };
+      } else {
+        const owner = this.combat.find(command.observerId), target = this.combat.find(command.targetId);
+        const action = owner?.actions.find((action) => action.source === command.source);
+        if (!owner || !target || !action || !controls?.canAttack || !controls.attacks.some((attack) => attack.source === action.source && attack.targetIds.includes(target.id))) throw new Error('Ataque no permitido.');
+        const situation = attackSituation(owner, target, action, this.combatants(), { ...normalAttackFacts(), reviewed: true }, this.combat.sight);
+        if (situation.blocked || situation.doubts.length || situation.threatUnknown || situation.spellTypeUnknown) throw new Error('El director debe confirmar la situación.');
+        this.combat.begin(action.source, [target.id], situation.context);
+        const roll = this.combat.state().pending?.roll;
+        this.combat.settleAutomatic();
+        receipt = { id: command.id, status: 'applied', message: `${action.name}${roll ? `: d20 [${roll.dice.join(', ')}] + ${roll.bonus} = ${roll.total}.` : '.'} ${this.combat.state().pending ? 'El director resolverá las reacciones o efectos pendientes.' : 'Acción resuelta.'}` };
+      }
+      this.persist();
+    } catch { this.applyRemoteBoard(before); }
+    finally { this.applyingRemote = false; }
+    this.pendingAck = receipt; this.sharingDirty = true; this.scheduleSharing(true);
+  }
+
+  protected toggleEncounterSharing(): void {
+    if (!this.sharingReady() || (this.visionStorageBlocked && !this.encounterShared())) return;
+    if (this.encounterShared() && this.publisher && this.currentCampaign) {
+      this.encounterShared.set(false); clearTimeout(this.sharingTimer);
+      const generation = ++this.sharingGeneration, publisher = this.publisher;
+      const campaignId = this.currentCampaign.id, key = this.storageKey;
+      this.sharingMessage.set('Retirando encuentro…');
+      // Una retirada ya solicitada se completa aunque se cierre o cambie de tablero.
+      this.sharingChain = this.sharingChain.then(() => publisher.unshare(campaignId, key)).then(() => {
+        if (generation === this.sharingGeneration) this.sharingMessage.set('Encuentro retirado de jugadores.');
+      }).catch(() => { if (generation === this.sharingGeneration) this.sharingMessage.set('No se pudo retirar el encuentro. Pulsa Actualizar estado compartido para reintentar.'); });
+      return;
+    }
+    this.encounterShared.update((value) => !value);
+    this.scheduleSharing(true);
+  }
+
+  private sharingSnapshot(): SharingSnapshot | undefined {
+    if (!this.currentCampaign || !this.sharingEntry || this.visionStorageBlocked) return undefined;
+    const state = this.captureBoardState();
+    return {
+      revision: this.sharingRevision, state, controls: this.playerControls(state.tokens), ack: this.pendingAck,
+      sheetRevision: this.publisher?.sheetRevision(this.currentCampaign.id) ?? 0,
+      title: this.sharingEntry.name, mapUrl: this.sharingEntry.mapUrl, vision: structuredClone(this.vision()),
+      tokens: state.tokens,
+      fog: structuredClone(this.fogRects()), profiles: structuredClone(this.tokenVisionProfiles()),
+      actors: this.characterSheets.playerSheets(this.currentCampaign).filter((sheet) => sheet.playerIds?.length).map((sheet) => sheet.id),
+    };
+  }
+
+  private leaveSharedBoard(): void {
+    clearTimeout(this.sharingTimer); this.sharingGeneration++; this.syncEpoch++;
+    const publisher = this.publisher, campaign = this.currentCampaign?.id, key = this.storageKey;
+    if (!publisher || !campaign || !this.sharingReady() || !this.encounterShared()) return;
+    const snapshot = this.sharingSnapshot();
+    // Captura final inmutable: salir antes del debounce no deja una vista anterior sin niebla.
+    // Si no puede actualizarse, retira la publicación y conserva el guardado local.
+    this.sharingChain = this.sharingChain.then(async () => {
+      try {
+        if (!snapshot) throw new Error('Visión sin confirmar.');
+        const ownPublication = this.publishedRevisions.get(key);
+        if (ownPublication && ownPublication.base === snapshot.revision) snapshot.revision = ownPublication.revision;
+        await publisher.publish(campaign, key, snapshot, () => true);
+      } catch (error) {
+        if (error instanceof HttpErrorResponse && error.status === 409) this.preserveConflict();
+        else await publisher.unshare(campaign, key, snapshot?.revision ?? 0);
+      }
+    }).catch(() => { /* El guardado local se conserva si tampoco hay conexión para retirar. */ });
+  }
+
+  private scheduleSharing(force = false): void {
+    if (this.applyingRemote || !this.publisher || !this.sharingReady() || (!force && !this.encounterShared())) return;
+    this.sharingDirty = true;
+    clearTimeout(this.sharingTimer);
+    const generation = ++this.sharingGeneration;
+    this.sharingMessage.set(this.encounterShared() ? 'Actualizando vista de jugadores…' : 'Retirando encuentro…');
+    this.sharingTimer = setTimeout(() => {
+      this.sharingChain = this.sharingChain.then(async () => {
+        const campaign = this.currentCampaign, entry = this.sharingEntry, publisher = this.publisher;
+        if (generation !== this.sharingGeneration || !campaign || !entry || !publisher) return;
+        const current = (): boolean => generation === this.sharingGeneration;
+        try {
+          this.sharingBusy = true;
+          if (!this.encounterShared()) await publisher.unshare(campaign.id, this.storageKey);
+          else {
+            if (this.visionStorageBlocked) throw new Error('Datos de visión no válidos.');
+            const snapshot = this.sharingSnapshot();
+            if (!snapshot) throw new Error('Visión sin confirmar.');
+            const key = this.storageKey;
+            const published = await publisher.publish(campaign.id, key, snapshot, current);
+            if (published) {
+              this.publishedRevisions.set(key, { base: snapshot.revision ?? 0, revision: published.revision });
+              if (key === this.storageKey && snapshot.revision === this.sharingRevision) this.sharingRevision = published.revision;
+            }
+            if (current()) { if (!published) this.sharingRevision++; this.sharingDirty = false; this.pendingAck = undefined; }
+          }
+          if (current()) this.sharingMessage.set(this.encounterShared() ? 'Encuentro compartido y actualizado.' : 'Encuentro retirado de jugadores.');
+        } catch (error) {
+          if (error instanceof HttpErrorResponse && error.status === 409) this.preserveConflict();
+          this.sharingRevision = -1;
+          if (current()) this.sharingMessage.set('No se pudo actualizar el encuentro compartido. Reintenta; si las fichas han cambiado, recarga el tablero.');
+        } finally { this.sharingBusy = false; }
+      });
+    }, force ? 0 : 500);
+  }
+
+  protected retryEncounterSharing(): void { this.scheduleSharing(true); }
 
   protected setMode(mode: ToolMode): void {
     if (this.visionPreview() && mode !== 'pan') return;
@@ -358,19 +636,63 @@ export class VttBoard {
   protected normalVisionRange(id: string): number | null | undefined {
     return this.tokenVisionProfiles().get(id)?.senses.find((sense) => sense.sense === 'normal')?.rangeFeet;
   }
+  protected shadowPoints(points: { x: number; y: number }[]): string { return points.map((point) => `${point.x},${point.y}`).join(' '); }
   protected async saveNormalVision(id: string, range: string, unlimited: boolean, reference: string): Promise<void> {
+    await this.saveSense(id, 'normal', range, unlimited, reference);
+  }
+
+  protected async saveSense(id: string, sense: string, range: string, unlimited: boolean, reference: string): Promise<void> {
     if (this.visionPreview() || this.visionStorageBlocked || !this.currentCampaign) return;
+    if (!['normal', 'darkvision', 'blindsight', 'truesight'].includes(sense) || (unlimited && sense !== 'normal')) return;
     const token = this.tokens().find((item) => item.instanceId === id); if (!token) return;
     const amount = unlimited ? null : Number(range);
     if ((!unlimited && (!range.trim() || !Number.isFinite(amount) || amount! < 0 || amount! > 100000)) || !reference.trim()) {
       this.visionMessage.set('Indica un alcance válido y su fuente; no se deducen de los nombres.'); return;
     }
-    const senses = this.tokenVisionProfiles().get(id)?.senses.filter((sense) => sense.sense !== 'normal') ?? [];
+    const senses = this.tokenVisionProfiles().get(id)?.senses.filter((entry) => entry.sense !== sense) ?? [];
     try {
       await this.characterSheets.saveVisionProfile(this.currentCampaign, token.actorId, { version: 1, senses: [...senses,
-        { sense: 'normal', rangeFeet: amount, source: { kind: 'director', reference: reference.trim() } }] });
-      this.sheetRevision.update((revision) => revision + 1); this.visionMessage.set('Vista normal guardada en la ficha compartida.');
+        { sense: sense as VisionSense, rangeFeet: amount, source: { kind: 'director', reference: reference.trim() } }] });
+      this.sheetRevision.update((revision) => revision + 1); this.visionMessage.set('Sentido guardado en la ficha compartida.'); this.scheduleSharing();
     } catch { this.visionMessage.set('No se pudo guardar la visión. Revisa la ficha y su fuente.'); }
+  }
+
+  protected specialSenseSummary(id: string): string {
+    const names = { normal: 'Vista normal', darkvision: 'Visión en la oscuridad', blindsight: 'Visión ciega', truesight: 'Visión verdadera', tremorsense: 'Sentido sísmico' };
+    return this.tokenVisionProfiles().get(id)?.senses.filter((sense) => sense.sense !== 'normal').map((sense) => `${names[sense.sense]}: ${sense.rangeFeet} pies`).join(' · ') || 'Sin sentidos especiales registrados';
+  }
+
+  protected saveTokenLight(id: string, bright: string, dim: string, reference: string): void {
+    const token = this.tokens().find((item) => item.instanceId === id);
+    const brightFeet = Number(bright), dimFeet = Number(dim);
+    if (!token || !bright.trim() || !dim.trim() || !reference.trim() || !Number.isFinite(brightFeet) || !Number.isFinite(dimFeet) || brightFeet < 0 || dimFeet < brightFeet || dimFeet > 100000) {
+      this.visionMessage.set('Indica radios válidos desde la fuente, penumbra al menos igual que luz intensa y la fuente de esos alcances.'); return;
+    }
+    const effects = this.vision().effects.filter((effect) => !effect.id.startsWith(`token-light:${id}:`));
+    for (const [illumination, radiusFeet] of [['bright', brightFeet], ['dim', dimFeet]] as const) if (radiusFeet > 0) effects.push({
+      id: `token-light:${id}:${illumination}`, name: `Luz de ${token.name}`, kind: 'light', illumination, anchorTokenId: id,
+      source: { kind: 'director', reference: reference.trim() }, scope: { kind: 'circle', x: token.x, y: token.y, radiusFeet },
+      duration: { kind: 'until-ended' }, active: true,
+    });
+    this.setBoardVision({ ...this.vision(), effects }); this.visionMessage.set('Fuente de luz guardada; acompaña a esta instancia.');
+  }
+
+  protected removeTokenLight(id: string): void {
+    this.setBoardVision({ ...this.vision(), effects: this.vision().effects.filter((effect) => !effect.id.startsWith(`token-light:${id}:`)) });
+  }
+  protected tokenLightRange(id: string, illumination: 'bright' | 'dim'): number {
+    const effect = this.vision().effects.find((item) => item.id === `token-light:${id}:${illumination}`);
+    return effect?.scope.kind === 'circle' ? effect.scope.radiusFeet : 0;
+  }
+  protected rollVisualPerception(id: string, targetId: string, bonusText: string): void {
+    const observer = this.tokens().find((token) => token.instanceId === id), target = this.tokens().find((token) => token.instanceId === targetId) ?? observer;
+    if (!observer || !target || !bonusText.trim() || !Number.isFinite(Number(bonusText))) { this.perceptionMessage.set('Indica el bonificador de Percepción de la ficha.'); return; }
+    const assessment = assessSight(this.vision(), this.tokens(), this.tokenVisionProfiles(), id,
+      { x: target.x + target.size * this.gridSize / 2, y: target.y + target.size * this.gridSize / 2 });
+    if (assessment.perception === 'unknown' || assessment.perception === 'automatic-failure') { this.perceptionMessage.set(assessment.reasons.join(' ')); return; }
+    const dice = assessment.perception === 'disadvantage' ? [this.roll(20), this.roll(20)] : [this.roll(20)];
+    const result = `${observer.name} · Percepción visual: ${Math.min(...dice) + Number(bonusText)} (${dice.join(', ')}; ${assessment.perception === 'disadvantage' ? 'desventaja' : 'normal'})`;
+    this.perceptionMessage.set(`${result}. ${assessment.reasons.join(' ')}`); this.diceResult.set(result);
   }
 
   protected setSidebarTab(tab: SidebarTab): void {
@@ -1301,6 +1623,7 @@ export class VttBoard {
     };
     localStorage.setItem(this.storageKey, JSON.stringify(state));
     this.saveStatus.set('Guardado');
+    this.scheduleSharing();
   }
 
   private normalize(value: string): string {

@@ -1,4 +1,5 @@
-import { accessGuard } from './core/services/access';
+import { accessGuard, AccessService } from './core/services/access';
+import { inject } from '@angular/core';
 import { Routes } from '@angular/router';
 import { campaignAvailable } from './core/services/campaign-navigation';
 import { CampaignError } from './features/dashboard/pages/campaign-error/campaign-error';
@@ -252,7 +253,9 @@ export const routes: Routes = [
         canActivate: [accessGuard, campaignAvailable],
         data: { section: 'encounters' },
         loadComponent: () =>
-          import('./features/compendium/pages/compendium/compendium').then(
+          inject(AccessService).user()?.role === 'jugador'
+          ? import('./features/encounters/player-encounters').then((m) => m.PlayerEncounters)
+          : import('./features/compendium/pages/compendium/compendium').then(
             (m) => m.Compendium
           ),
       },

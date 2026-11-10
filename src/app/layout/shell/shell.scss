@@ -18,6 +18,8 @@ main {
   background: var(--surface-page);
 }
 
+main.encounter-open { padding: 0; overflow: hidden; }
+
 @media (max-width: 860px) {
   .workspace {
     grid-template-columns: 1fr;

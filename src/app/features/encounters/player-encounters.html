@@ -1,0 +1,69 @@
+@if (vm$ | async; as vm) {
+  @if (vm.detail; as detail) {
+    <section class="encounter-stage" [attr.aria-label]="detail.title">
+      <div class="map-viewport"><div class="player-board" [class.moving]="moving()" (click)="boardClick($event, detail)">
+        <img [src]="detail.image" [alt]="'Vista del personaje en ' + detail.title" width="1536" height="1024" draggable="false" />
+        <app-weather-overlay [weather]="detail.weather ?? 'unknown'" />
+        @if (detail.controls; as controls) {
+          @if (moving()) { <svg class="move-cells" viewBox="0 0 1536 1024" aria-hidden="true">@for (cell of controls.cells; track cell) { <rect [attr.x]="cell % 30 * 51.2" [attr.y]="(cell - cell % 30) / 30 * 51.2" width="51.2" height="51.2" /> }</svg> }
+          <button type="button" class="own-token" aria-label="Tu token: mover con las flechas o arrastrar" [disabled]="!controls.canMove || busy()"
+            [style.left.%]="controls.position.x / 1536 * 100" [style.top.%]="controls.position.y / 1024 * 100"
+            [style.width.%]="controls.position.size * 51.2 / 1536 * 100" [style.height.%]="controls.position.size * 51.2 / 1024 * 100"
+            (pointerdown)="startDrag($event, detail)" (keydown)="tokenKey($event, detail)" (click)="$event.stopPropagation(); moving.set(!moving()); attacking.set(false)"></button>
+        }
+      </div></div>
+      <aside class="action-dock" aria-label="Acciones de tu personaje">
+        <a routerLink="." [queryParams]="{}">← Encuentros</a>
+        <h1>{{ detail.title }}</h1>
+        <label>Ver como<select [value]="detail.observerId" (change)="chooseCharacter($any($event.target).value)">
+          @for (character of detail.characters; track character.instanceId) { <option [value]="character.instanceId" [selected]="character.instanceId === detail.observerId">{{ character.name }} · {{ $index + 1 }}</option> }
+        </select></label>
+        <p class="turn-status" [class.active]="detail.controls?.canMove">{{ detail.controls?.canMove ? 'Es tu turno' : detail.actionPending ? 'Acción pendiente' : 'Espera tu turno' }}</p>
+        <button class="action-button" type="button" [disabled]="!detail.controls?.canMove || busy()" [attr.aria-pressed]="moving()" (click)="moving.set(!moving()); attacking.set(false)">{{ moving() ? 'Cancelar movimiento' : 'Mover tu token' }}</button>
+        <button class="action-button" type="button" [disabled]="!detail.controls?.canAttack || busy()" [attr.aria-pressed]="attacking()" (click)="attacking.set(!attacking()); moving.set(false)">Atacar</button>
+        @if (moving()) { <small>Arrastra tu token, usa las flechas o elige una casilla iluminada. El director controla el recorrido y el gasto de movimiento.</small> }
+        @if (attacking()) {
+          @if (detail.controls; as controls) {
+            @if (controls.attacks.length) {
+              <label>Ataque preparado<select [disabled]="!controls.canAttack || busy()" [value]="selectedAttack(detail)?.source ?? ''" (change)="attackSource.set($any($event.target).value); targetId.set('')">
+                @for (attack of controls.attacks; track attack.source) { <option [value]="attack.source" [selected]="attack.source === selectedAttack(detail)?.source">{{ attack.name }}</option> }
+              </select></label>
+              <label>Objetivo visible<select [disabled]="!controls.canAttack || busy()" [value]="targetId()" (change)="targetId.set($any($event.target).value)">
+                <option value="">Elige un objetivo</option>
+                @for (target of allowedTargets(detail); track target.id) { <option [value]="target.id">{{ target.name }}</option> }
+              </select></label>
+              <button type="button" [disabled]="!controls.canAttack || busy() || !targetId()" (click)="attack(detail, targetId())">Confirmar ataque</button>
+              @if (!allowedTargets(detail).length) { <small>No hay objetivos con alcance y visión confirmados para este ataque.</small> }
+            } @else { <small>El director debe preparar un ataque válido y sus recursos en la ficha.</small> }
+          }
+        }
+        @if (!detail.directorOnline) { <p class="notice">El director debe abrir este encuentro para resolver las acciones.</p> }
+        @if (detail.pending) { <p class="notice" role="status">Visión pendiente de confirmar por el director.</p> }
+        @if (actionMessage()) { <p role="status" class="notice">{{ actionMessage() }}</p> }
+        @if (waitingId() && !sending()) { <button type="button" (click)="retryPendingAction()">Consultar o reintentar la misma acción</button> }
+        <small class="updated">Actualización automática · {{ detail.updatedAt | date:'HH:mm:ss' }}</small>
+      </aside>
+      <aside class="combat-feed" aria-label="Registro de combate">
+        <button class="feed-heading" type="button" [attr.aria-expanded]="logOpen()" (click)="logOpen.set(!logOpen()); scrollLogToEnd()">Registro de combate <span aria-hidden="true">{{ logOpen() ? '−' : '+' }}</span></button>
+        @if (logOpen()) {
+          <div #combatLog class="feed-lines" role="log" aria-live="polite" aria-relevant="additions" aria-label="Sucesos visibles para tu personaje">
+            @for (entry of detail.combatLog ?? []; track entry.id) { <p>{{ entry.text }}</p> }
+            @empty { <p class="empty-log">Todavía no hay acciones resueltas que haya presenciado tu personaje.</p> }
+          </div>
+        }
+      </aside>
+    </section>
+  } @else {
+    <section class="encounters-page">
+      <header><p class="eyebrow">Campaña · Jugador</p><h1>Encuentros</h1><p>Encuentros compartidos en los que participa alguno de tus personajes asignados.</p></header>
+      @if (vm.loading) { <p role="status">Cargando encuentros…</p> }
+      @if (vm.error) { <p class="notice" role="alert">{{ vm.error }}</p><a routerLink="." [queryParams]="{}">Volver a encuentros</a> }
+      @if (!vm.loading && !vm.error) {
+        @if (!vm.items.length) { <div class="empty-state"><h2>No tienes encuentros disponibles</h2><p>Aparecerán aquí cuando el director comparta un tablero con alguno de tus personajes asignados.</p></div> }
+        <div class="encounter-list">@for (encounter of vm.items; track encounter.id) {
+          <article><h2>{{ encounter.title }}</h2><p>Personajes participantes:</p><ul>@for (character of encounter.characters; track character.instanceId) { <li>{{ character.name }}</li> }</ul><a class="open-encounter" routerLink="." [queryParams]="{ encuentro: encounter.id }">Ver encuentro →</a></article>
+        }</div>
+      }
+    </section>
+  }
+}

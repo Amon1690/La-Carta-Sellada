@@ -1,6 +1,6 @@
 import { BoardVisionState, VisionProfile } from '../models/vision';
 import { emptyBoardVision } from './vision-state';
-import { previewSight, previewTokenVisible, PreviewToken } from './vision-preview';
+import { assessSight, previewSight, previewTokenVisible, PreviewToken } from './vision-preview';
 
 describe('Geometría de la previsualización local', () => {
   const grid = 51.2;
@@ -48,22 +48,91 @@ describe('Geometría de la previsualización local', () => {
     const result = previewSight(value, tokens, profiles, grid, 1536, 1024);
     expect(result.circles).toEqual([]); expect(result.pending).toBeTrue();
   });
-  it('mantiene desconocido el entorno no confirmado, la oscuridad y los efectos aún no resueltos', () => {
+  it('el entorno sin confirmar y todos los climas conservan el alcance; oscuridad sin sentidos ni luz no concede visión', () => {
     const profiles = new Map([['A', profile(null)]]);
-    for (const illumination of ['unknown', 'darkness'] as const) {
-      const value = state(); value.environment.illumination = illumination;
-      expect(previewSight(value, [token('A')], profiles, grid, 1536, 1024).circles).toEqual([]);
+    for (const weather of ['unknown', 'clear', 'fog', 'rain', 'snow', 'other'] as const) {
+      const value = state(); value.environment.weather = weather; value.environment.illumination = 'unknown';
+      expect(previewSight(value, [token('A')], profiles, grid, 1536, 1024).circles[0].radius).toBe(Math.hypot(1536, 1024));
     }
-    const value = state(); value.environment.weather = 'fog';
-    expect(previewSight(value, [token('A')], profiles, grid, 1536, 1024).pending).toBeTrue();
-    value.environment.weather = 'clear';
+    const value = state(); value.environment.illumination = 'darkness';
+    expect(previewSight(value, [token('A')], profiles, grid, 1536, 1024).circles).toEqual([]);
     value.effects = [{ id: 'x', name: 'Efecto de prueba', kind: 'blinded', source, scope: { kind: 'tokens', tokenIds: ['A'] }, duration: { kind: 'unknown' }, active: true }];
     expect(previewSight(value, [token('A')], profiles, grid, 1536, 1024).circles).toEqual([]);
+  });
+  it('la ceguera y los efectos tienen ámbito y no apagan a observadores ajenos', () => {
+    const value = state(), tokens = [token('A'), token('B', 500)];
+    value.effects = [{ id: 'blind', name: 'Ceguera', kind: 'blinded', source, scope: { kind: 'tokens', tokenIds: ['A'] }, active: true, duration: { kind: 'until-ended' } }];
+    expect(previewSight(value, tokens, new Map([['A', profile(60)], ['B', profile(60)]]), grid, 1536, 1024).circles.map((circle) => circle.id)).toEqual(['B']);
+    value.effects[0].duration = { kind: 'rounds', remaining: 0 };
+    expect(previewSight(value, tokens, new Map([['A', profile(60)], ['B', profile(60)]]), grid, 1536, 1024).circles.length).toBe(2);
+  });
+  it('visión en la oscuridad habilita solo su alcance y cambia Percepción según la iluminación', () => {
+    const value = state(), tokens = [token('A')], point = { x: 150, y: 25.6 };
+    const profiles = new Map([['A', { ...profile(60), senses: [...profile(60).senses, { sense: 'darkvision' as const, rangeFeet: 15, source }] }]]);
+    value.environment.illumination = 'dim';
+    expect(assessSight(value, tokens, profiles, 'A', point).perception).toBe('normal');
+    value.environment.illumination = 'darkness';
+    expect(assessSight(value, tokens, profiles, 'A', point).perception).toBe('disadvantage');
+    expect(assessSight(value, tokens, profiles, 'A', { x: 400, y: 25.6 }).visible).toBeFalse();
+  });
+  it('la penumbra y niebla ligera afectan Percepción sin reducir alcance y lluvia no inventa penalizaciones', () => {
+    const value = state(), tokens = [token('A')], profiles = new Map([['A', profile(60)]]), point = { x: 100, y: 25.6 };
+    value.environment.illumination = 'dim';
+    expect(assessSight(value, tokens, profiles, 'A', point)).toEqual(jasmine.objectContaining({ visible: true, perception: 'disadvantage' }));
+    value.environment.illumination = 'bright'; value.environment.weather = 'fog';
+    expect(assessSight(value, tokens, profiles, 'A', point).perception).toBe('disadvantage');
+    value.environment.weather = 'rain'; expect(assessSight(value, tokens, profiles, 'A', point).perception).toBe('normal');
+  });
+  it('una luz de otro token revela solo la intersección con el alcance y acompaña al portador', () => {
+    const value = state(), tokens = [token('A'), token('B', 300)], profiles = new Map([['A', profile(60)]]);
+    value.environment.illumination = 'darkness';
+    value.effects = [{ id: 'lamp', name: 'Lámpara', kind: 'light', illumination: 'bright', anchorTokenId: 'B', source,
+      scope: { kind: 'circle', x: 0, y: 0, radiusFeet: 10 }, active: true, duration: { kind: 'until-ended' } }];
+    const first = previewSight(value, tokens, profiles, grid, 1536, 1024);
+    expect(previewTokenVisible(tokens[1], first.circles, [], grid)).toBeTrue();
+    expect(previewTokenVisible(tokens[0], first.circles, [], grid)).toBeFalse();
+    tokens[1].x = 800;
+    expect(assessSight(value, tokens, profiles, 'A', { x: 325.6, y: 25.6 }).visible).toBeFalse();
+    expect(assessSight(value, tokens, profiles, 'A', { x: 825.6, y: 25.6 }).visible).toBeFalse();
+  });
+  it('excluye oscuridad mágica y zonas fuertemente oscurecidas del mapa y de fichas parcialmente cubiertas', () => {
+    const value = state(), tokens = [token('A'), token('B', 100)], profiles = new Map([['A', profile(60)]]);
+    value.effects = [{ id: 'dark', name: 'Oscuridad mágica', kind: 'magical-darkness', source,
+      scope: { kind: 'circle', x: 125.6, y: 25.6, radiusFeet: 3 }, active: true, duration: { kind: 'until-ended' } }];
+    expect(previewTokenVisible(tokens[1], previewSight(value, tokens, profiles, grid, 1536, 1024).circles, [], grid)).toBeFalse();
+    profiles.set('A', { version: 1, senses: [{ sense: 'truesight', rangeFeet: 60, source }] });
+    expect(previewTokenVisible(tokens[1], previewSight(value, tokens, profiles, grid, 1536, 1024).circles, [], grid)).toBeTrue();
+    value.effects[0] = { ...value.effects[0], kind: 'obscurement', obscurement: 'heavy' };
+    expect(previewTokenVisible(tokens[1], previewSight(value, tokens, profiles, grid, 1536, 1024).circles, [], grid)).toBeFalse();
   });
   it('respeta cero y cegado explícitos; una lista vacía no añade observadores por defecto', () => {
     const value = state();
     expect(previewSight(value, [token('A'), { ...token('B'), conditions: ['blinded'] }], new Map([['A', profile(0)], ['B', profile(null)]]), grid, 1536, 1024).circles).toEqual([]);
     value.activeGroupId = undefined;
     expect(previewSight(value, [token('A')], new Map([['A', profile(null)]]), grid, 1536, 1024).circles).toEqual([]);
+  });
+  it('un efecto con sentido registrado concede visión aunque la ficha todavía no tenga perfil', () => {
+    const value = state(); value.groups[0].observerIds = ['A']; value.effects = [{ id: 'sense', name: 'Sentido concedido', kind: 'sense', source,
+      scope: { kind: 'tokens', tokenIds: ['A'] }, grantedSense: { sense: 'blindsight', rangeFeet: 15, source },
+      active: true, duration: { kind: 'until-ended' } }];
+    const sight = previewSight(value, [{ ...token('A'), conditions: ['blinded'] }], new Map(), grid, 1536, 1024);
+    expect(sight.pending).toBeFalse(); expect(sight.circles.length).toBe(1);
+  });
+  it('una nube fuerte bloquea la zona y lo que hay detrás, sin tapar otros lados ni el sentido ciego', () => {
+    const value = state(), tokens = [token('A'), token('B', 300)], profiles = new Map([['A', profile(60)]]);
+    value.effects = [{ id: 'heavy', name: 'Nube fuerte', kind: 'obscurement', obscurement: 'heavy', source,
+      scope: { kind: 'circle', x: 175.6, y: 25.6, radiusFeet: 3 }, active: true, duration: { kind: 'until-ended' } }];
+    const sight = previewSight(value, tokens, profiles, grid, 1536, 1024);
+    expect(previewTokenVisible(tokens[1], sight.circles, [], grid)).toBeFalse();
+    expect(assessSight(value, tokens, profiles, 'A', { x: 325.6, y: 25.6 }).visible).toBeFalse();
+    expect(assessSight(value, tokens, profiles, 'A', { x: 25.6, y: 325.6 }).visible).toBeTrue();
+    profiles.set('A', { version: 1, senses: [{ sense: 'blindsight', rangeFeet: 60, source }] });
+    expect(assessSight(value, tokens, profiles, 'A', { x: 325.6, y: 25.6 }).visible).toBeTrue();
+  });
+  it('un efecto circular de radio cero no cubre al observador ni apaga su alcance', () => {
+    const value = state(), tokens = [token('A')], profiles = new Map([['A', profile(60)]]);
+    value.effects = [{ id: 'zero', name: 'Zona vacía', kind: 'magical-darkness', source,
+      scope: { kind: 'circle', x: 25.6, y: 25.6, radiusFeet: 0 }, active: true, duration: { kind: 'until-ended' } }];
+    expect(assessSight(value, tokens, profiles, 'A', { x: 125.6, y: 25.6 }).visible).toBeTrue();
   });
 });

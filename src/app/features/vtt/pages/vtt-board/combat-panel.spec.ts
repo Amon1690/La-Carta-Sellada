@@ -21,6 +21,14 @@ function setup() {
   return { engine, actor: () => actors[0], target: () => actors[1] };
 }
 describe('Ventanas de decisión y aclaraciones del VTT', () => {
+  it('no muestra el registro privado al preparar ficha y recursos', () => {
+    const { engine, actor } = setup();
+    engine.state.update((state) => ({ ...state, log: ['Capacidad privada del PNJ: CA 19, Escudo, 3 usos'] }));
+    const fixture = TestBed.createComponent(VttCombatPanel); fixture.componentRef.setInput('combat', engine); fixture.detectChanges();
+    fixture.componentInstance.open(actor().id); fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).not.toContain('Registro de combate');
+    expect(fixture.nativeElement.textContent).not.toContain('Capacidad privada del PNJ'); fixture.destroy();
+  });
   beforeEach(() => TestBed.configureTestingModule({ providers: [provideZonelessChangeDetection(), provideHttpClient(), provideHttpClientTesting()] }));
   it('usar una reacción no aplica PG ni cierra una resolución manual elegida en el formulario', async () => {
     const { engine, actor, target } = setup(); target().resources = [{ id: 'magic', name: 'Magia', maximum: 3 }];

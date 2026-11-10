@@ -1,4 +1,5 @@
 import { NPC_PORTRAITS, GENERIC_MAP_PATHS } from '../shared/assets.mjs';
+import { authorizeCommand, encounterSheets, playerCombatLog, playerControls, validateEncounter, visibleEncounter } from './encounters.mjs';
 import { createServer } from 'node:http';
 import { randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
@@ -42,6 +43,14 @@ export async function createCartaServer({ root = process.cwd(), stateDir = resol
   }
   if (state.version !== 1 || !Array.isArray(state.users) || !object(state.sheets) || !object(state.imports) || !state.users.some((u) => u.role === 'administrador')) throw new Error('Formato de usuarios no admitido; no se modifica el original.');
   const sessions = new Map(), attempts = new Map();
+  const encounterPresence = new Map();
+  const encounterOnline = (campaign, board) => {
+    const presence = encounterPresence.get(`${campaign}/${board}`);
+    return presence && [...presence].some(([token, at]) => {
+      const session = sessions.get(token), owner = session && state.users.find((user) => user.id === session.userId);
+      return now() - at < 10000 && session && now() - session.last < 30 * 60 * 1000 && now() - session.created < 8 * 60 * 60 * 1000 && owner?.role === 'director' && owner.campaigns.includes(campaign);
+    });
+  };
   let queue = Promise.resolve();
   const transaction = (work) => {
     const result = queue.then(async () => {
@@ -55,6 +64,12 @@ export async function createCartaServer({ root = process.cwd(), stateDir = resol
     queue = result.catch(() => {}); return result;
   };
   const sheetsFor = (id, snapshot = state) => snapshot.sheets[id] ?? { edited: {}, created: [], revision: 0 };
+  const encounterRevision = (snapshot, id, boardId) => snapshot.encounterRevisions?.[id]?.[boardId] ?? snapshot.encounters?.[id]?.[boardId]?.revision ?? 0;
+  const nextEncounterRevision = (snapshot, id, boardId) => {
+    const revision = encounterRevision(snapshot, id, boardId) + 1;
+    snapshot.encounterRevisions ??= {}; snapshot.encounterRevisions[id] ??= {}; snapshot.encounterRevisions[id][boardId] = revision;
+    return revision;
+  };
   const sheetView = (collection, user) => {
     const result = clone(collection);
     if (user.role === 'jugador') {
@@ -81,10 +96,10 @@ export async function createCartaServer({ root = process.cwd(), stateDir = resol
     return JSON.parse(await readFile(path, 'utf8'));
   }
   const json = (res, status, body) => { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(body)); };
-  async function body(req) {
+  async function body(req, maximum = 4 * 1024 * 1024) {
     if (!/^application\/json(?:;|$)/i.test(req.headers['content-type'] ?? '')) fail(415, 'Envía datos JSON.');
     let chunks = [], length = 0;
-    for await (const chunk of req) { length += chunk.length; if (length > 4 * 1024 * 1024) fail(413, 'Solicitud demasiado grande.'); chunks.push(chunk); }
+    for await (const chunk of req) { length += chunk.length; if (length > maximum) fail(413, 'Solicitud demasiado grande.'); chunks.push(chunk); }
     let data; try { data = JSON.parse(Buffer.concat(chunks).toString()); } catch { fail(400, 'JSON no válido.'); }
     if (!object(data) || unsafeKeys(data)) fail(400, 'Datos no válidos.');
     return data;
@@ -183,6 +198,105 @@ export async function createCartaServer({ root = process.cwd(), stateDir = resol
       if (path === '/api/players' && req.method === 'GET') {
         if (user.role !== 'director') fail(403, 'Acceso no permitido.');
         return json(res, 200, state.users.filter((u) => u.role === 'jugador').map(({ id, username }) => ({ id, username })));
+      }
+      const encounterMatch = /^\/api\/campaigns\/([a-zA-Z0-9_-]+)\/encounters(?:\/([a-zA-Z0-9_:-]{1,400})(?:\/(actions))?)?$/.exec(path);
+      if (encounterMatch) {
+        const [, id, boardId, operation] = encounterMatch;
+        if (!canCampaign(user, id)) fail(403, 'No tienes acceso a esta campaña.');
+        if (['__proto__', 'constructor', 'prototype'].includes(boardId)) fail(400, 'Encuentro no válido.');
+        if (boardId && state.encounters?.[id]?.[boardId]?.pendingCommand?.expiresAt < now()) await transaction((next) => {
+          const active = liveUser(next); if (!canCampaign(active, id)) fail(403, 'No tienes acceso a esta campaña.');
+          const board = next.encounters?.[id]?.[boardId], command = board?.pendingCommand;
+          if (command && command.expiresAt < now()) {
+            board.receipts = [...(board.receipts ?? []), { id: command.id, userId: command.userId, status: 'rejected', message: 'La acción caducó y no se aplicó. Vuelve a intentarlo.' }].slice(-50);
+            delete board.pendingCommand; board.revision = nextEncounterRevision(next, id, boardId);
+          }
+        });
+        if (operation === 'actions') {
+          if (req.method !== 'POST' || user.role !== 'jugador') fail(403, 'Acción no permitida.');
+          const input = await body(req);
+          const result = await transaction((next) => {
+            const active = liveUser(next); if (active.role !== 'jugador' || !canCampaign(active, id)) fail(403, 'Acción no permitida.');
+            const board = next.encounters?.[id]?.[boardId]; if (!board) fail(404, 'Encuentro no disponible.');
+            const result = authorizeCommand(input, board, active, encounterSheets(sheetsFor(id, next)), encounterOnline(id, boardId), now(), sheetsFor(id, next).revision);
+            if (!result.command) return result;
+            board.pendingCommand = result.command; board.revision = nextEncounterRevision(next, id, boardId);
+            return { pending: true, id: result.command.id };
+          });
+          return json(res, 200, result);
+        }
+        if (req.method === 'GET') {
+          const boards = state.encounters?.[id] ?? {};
+          if (user.role === 'director') {
+            if (!boardId) return json(res, 200, Object.values(boards).map(({ id, title, updatedAt }) => ({ id, title, updatedAt })));
+            const key = `${id}/${boardId}`, presence = encounterPresence.get(key) ?? new Map(); presence.set(cookie, now()); encounterPresence.set(key, presence);
+            const board = boards[boardId];
+            const sheetRevision = sheetsFor(id).revision;
+            if (!board) return json(res, 200, { shared: false, revision: encounterRevision(state, id, boardId), sheetRevision });
+            if (url.searchParams.get('after') === String(board.revision ?? 0)) return json(res, 200, { shared: true, revision: board.revision ?? 0, sheetRevision, changed: false });
+            return json(res, 200, { shared: true, revision: board.revision ?? 0, sheetRevision, state: board.state, pendingCommand: board.pendingCommand, changed: true });
+          }
+          const sheets = encounterSheets(sheetsFor(id));
+          if (!boardId) return json(res, 200, Object.values(boards).flatMap((board) => visibleEncounter(board, user, sheets) ?? []));
+          const board = boards[boardId], summary = board && visibleEncounter(board, user, sheets);
+          const observerId = url.searchParams.get('observer');
+          if (!summary || !summary.characters.some((item) => item.instanceId === observerId)) fail(404, 'Este encuentro o personaje ya no está disponible.');
+          const view = board.views.find((item) => item.instanceId === observerId);
+          if (JSON.stringify(view.vision) !== JSON.stringify(sheets.get(view.actorId)?.vision ?? null)) fail(409, 'La visión ha cambiado. El director debe actualizar el encuentro.');
+          const controls = playerControls(board, view, encounterOnline(id, boardId) && board.sheetRevision === sheetsFor(id).revision);
+          const last = board.receipts?.filter((receipt) => receipt.userId === user.id && (!url.searchParams.has('receipt') || receipt.id === url.searchParams.get('receipt'))).at(-1);
+          const metadata = { ...summary, observerId, pending: view.pending, revision: board.revision ?? 0, controls,
+            combatLog: playerCombatLog(board, observerId, user.id),
+            weather: board.weather ?? 'unknown', directorOnline: !!encounterOnline(id, boardId), actionPending: !!board.pendingCommand,
+            receipt: last && { id: last.id, status: last.status, message: last.message } };
+          if (url.searchParams.get('after') === String(board.revision ?? 0)) return json(res, 200, { ...metadata, unchanged: true });
+          return json(res, 200, { ...metadata, image: view.image });
+        }
+        director(user, id);
+        if (!boardId) fail(405, 'Elige un encuentro.');
+        if (req.method === 'DELETE') {
+          await transaction((next) => {
+            director(liveUser(next), id);
+            const board = next.encounters?.[id]?.[boardId];
+            if (board && url.searchParams.has('revision') && url.searchParams.get('revision') !== String(board.revision ?? 0)) fail(409, 'El encuentro ha cambiado.');
+            if (board) { nextEncounterRevision(next, id, boardId); delete next.encounters[id][boardId]; }
+          });
+          return json(res, 200, {});
+        }
+        if (req.method === 'PUT') {
+          const input = await body(req, 16 * 1024 * 1024);
+          if (!validateEncounter(input)) fail(400, 'Vista de encuentro no válida.');
+          const published = await transaction((next) => {
+            director(liveUser(next), id);
+            const collection = sheetsFor(id, next), sheets = encounterSheets(collection);
+            if (collection.revision !== input.sheetRevision) fail(409, 'Las fichas han cambiado. Recarga el tablero antes de compartir.');
+            next.encounters ??= {}; next.encounters[id] ??= {};
+            const previous = next.encounters[id][boardId];
+            if (previous?.state && !input.state) fail(409, 'El encuentro ya usa sincronización. Recarga este navegador.');
+            if (input.state && input.revision !== encounterRevision(next, id, boardId)) fail(409, 'Otro navegador ha actualizado el encuentro. Se conservarán tus cambios locales.');
+            const command = previous?.pendingCommand;
+            if (command && (!input.ack || input.ack.id !== command.id)) fail(409, 'Hay una acción de jugador pendiente de resolver.');
+            if (input.ack && (!command || !['applied', 'rejected'].includes(input.ack.status) || typeof input.ack.message !== 'string' || input.ack.message.length > 2000)) fail(400, 'Resultado de acción no válido.');
+            if (command && input.ack.status === 'applied') {
+              const player = next.users.find((user) => user.id === command.userId), view = previous.views.find((view) => view.instanceId === command.observerId);
+              if (command.expiresAt < now() || collection.revision !== command.sheetRevision || !player || player.role !== 'jugador' || !canCampaign(player, id) || !view || !view.audience.includes(player.id) || !sheets.get(view.actorId)?.playerIds?.includes(player.id)) fail(409, 'La acción ha caducado, las fichas cambiaron o el personaje ya no está asignado.');
+            }
+            if (!Object.hasOwn(next.encounters[id], boardId) && Object.keys(next.encounters[id]).length >= 100) fail(409, 'Retira un encuentro compartido antes de añadir otro.');
+            const views = input.views.map((view) => {
+              const sheet = sheets.get(view.actorId);
+              if (!sheet) fail(400, 'El personaje no pertenece a esta campaña.');
+              return { instanceId: view.instanceId, actorId: view.actorId, image: view.image, pending: view.pending,
+                audience: [...(sheet.playerIds ?? [])], vision: sheet.vision ?? null, ...(input.state ? { controls: view.controls } : {}) };
+            });
+            const revision = nextEncounterRevision(next, id, boardId);
+            const receipts = command ? [...(previous.receipts ?? []), { ...input.ack, userId: command.userId }].slice(-50) : previous?.receipts ?? [];
+            next.encounters[id][boardId] = { id: boardId, title: input.title, updatedAt: new Date(now()).toISOString(), views, revision, receipts, sheetRevision: input.sheetRevision,
+              ...(input.state ? { state: input.state, weather: input.weather } : {}) };
+            return { shared: true, revision };
+          });
+          return json(res, 200, published);
+        }
+        fail(405, 'Operación no admitida.');
       }
       const match = /^\/api\/campaigns\/([a-zA-Z0-9_-]+)(?:\/(sheets|import))?$/.exec(path);
       if (match) {

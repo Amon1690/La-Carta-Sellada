@@ -133,6 +133,5 @@
         <details><summary>Rasgos y equipo</summary><ul>@for (note of actor.notes; track $index) { <li>{{ note }}</li> }</ul></details>
       }
     }
-    <details><summary>Registro de combate</summary><ol>@for (line of combat().state().log; track $index) { <li>{{ line }}</li> }</ol></details>
   </div>
 </dialog>
