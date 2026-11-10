@@ -2,6 +2,8 @@ import { GENERIC_ENCOUNTERS } from '../data/generic-encounters';
 import { SheetCollection } from './remote-sheets';
 import { validState } from './vtt-combat';
 import { assertVisionProfile, assertBoardVision } from './vision-state';
+import { assertTravelNetwork } from './travel-network-format';
+import { networkStorageKey } from '../models/travel-network';
 
 export const BACKUP_FORMAT = 'la-carta-sellada:campaign-backup';
 export const BACKUP_VERSION = 1;
@@ -158,10 +160,11 @@ export function validateBoard(value:unknown):void {
   }
 }
 export const travelStorageKey = (campaignId:string):string => `la-carta-sellada:travel-map:faerun-atlas-v3:campaign:${campaignId}`;
-export function localBackupKind(key:string,campaignId:string):'npc'|'generic'|'travel'|'board'|undefined {
+export function localBackupKind(key:string,campaignId:string):'npc'|'generic'|'travel'|'board'|'network'|undefined {
   if(key===`la-carta-sellada:editable:${campaignId}:pnjs`)return 'npc';
   if(key===GENERIC_SHEETS_KEY)return 'generic';
   if(key===travelStorageKey(campaignId))return 'travel';
+  if(key===networkStorageKey(campaignId))return 'network';
   if(key.startsWith(`la-carta-sellada:vtt:${campaignId}:`)&&key.length<=500&&/^la-carta-sellada:vtt:[a-zA-Z0-9_:-]+$/.test(key))return 'board';
   return undefined;
 }
@@ -175,7 +178,7 @@ export function parseCampaignBackup(raw:string,campaignId:string):CampaignBackup
   for(const key of Object.keys(b))if(!['format','version','campaignId','createdAt','sheets','local'].includes(key))fail('campo desconocido en la copia');
   validateSheetCollection(b['sheets']);
   if(new TextEncoder().encode(JSON.stringify(b['sheets'])).byteLength>3*1024*1024)fail('colección de fichas demasiado grande');
-  for(const [key,data] of Object.entries(object(b['local'],'datos locales'))){const kind=localBackupKind(key,campaignId);if(kind==='npc'||kind==='generic')validateSheetCollection(data,kind);else if(kind==='travel')validateTravel(data);else if(kind==='board')validateBoard(data);else fail('clave fuera de la campaña');}
+  for(const [key,data] of Object.entries(object(b['local'],'datos locales'))){const kind=localBackupKind(key,campaignId);if(kind==='npc'||kind==='generic')validateSheetCollection(data,kind);else if(kind==='travel')validateTravel(data);else if(kind==='board')validateBoard(data);else if(kind==='network')assertTravelNetwork(data);else fail('clave fuera de la campaña');}
   return b as unknown as CampaignBackup;
 }
 export function withoutAssociations(collection:SheetCollection):SheetCollection {

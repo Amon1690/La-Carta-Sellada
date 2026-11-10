@@ -6,6 +6,8 @@ import { calculateCharacter } from './character-builder';
 import { rules, warrior } from './character-builder.fixture';
 import { emptyBoardVision } from './vision-state';
 import { previewSight, previewTokenVisible } from './vision-preview';
+import { syntheticNetwork } from './travel-network.fixture';
+import { networkStorageKey } from './travel-network-store';
 
 class MemoryStorage implements Storage {
   values=new Map<string,string>();writes=0;failAt=new Set<number>();
@@ -27,6 +29,19 @@ describe('Copias de seguridad por campaña',()=>{
  beforeEach(()=>{storage=new MemoryStorage();current=collection();current.created[0]={...current.created[0],playerIds:['current-player']} as {id:string};user={id:'director',username:'Prueba',role:'director',campaigns:[campaign]};
  put=jasmine.createSpy('put').and.callFake(async(_id:string,sheets:SheetCollection,revision:number)=>{if(revision!==current.revision)throw Object.assign(new Error('Conflict'),{status:409});current=structuredClone({...sheets,revision:revision+1,baseIds:current.baseIds,npcIds:current.npcIds});return structuredClone(current);});
  transport={read:async()=>structuredClone(current),write:put};store=new CampaignBackups(storage,transport,()=>user);});
+ it('exporta y restaura la red propia y rechaza redes inválidas o de otra campaña antes de escribir',async()=>{
+   const key=networkStorageKey(campaign),network=syntheticNetwork();storage.setItem(key,JSON.stringify(network));storage.setItem(networkStorageKey('other'),JSON.stringify(network));
+   const exported=parseCampaignBackup(await store.export(campaign),campaign);expect(exported.local[key]).toEqual(network);expect(exported.local[networkStorageKey('other')]).toBeUndefined();
+   const next={...network,revision:2};await store.restore(await store.preview(file({[key]:next}),campaign));expect(JSON.parse(storage.getItem(key)!)).toEqual(next);
+   const before=storage.writes;await expectAsync(store.preview(file({[key]:{...network,version:99}}),campaign)).toBeRejected();await expectAsync(store.preview(file({[networkStorageKey('other')]:network}),campaign)).toBeRejected();expect(storage.writes).toBe(before);
+ });
+ it('una copia antigua sin red conserva la red local actual',async()=>{const key=networkStorageKey(campaign);storage.setItem(key,JSON.stringify(syntheticNetwork()));const before=storage.getItem(key);await store.restore(await store.preview(file(),campaign));expect(storage.getItem(key)).toBe(before);});
+ it('no sustituye desde una copia una red local ilegible o de versión futura',async()=>{
+   const key=networkStorageKey(campaign);for(const raw of ['{',JSON.stringify({...syntheticNetwork(),version:99})]){
+     storage.setItem(key,raw);const before=storage.writes;await expectAsync(store.preview(file({[key]:syntheticNetwork()}),campaign)).toBeRejected();
+     expect(storage.getItem(key)).toBe(raw);expect(storage.writes).toBe(before);expect(put).not.toHaveBeenCalled();
+   }
+ });
  it('exporta fichas y estados locales de la campaña sin usuarios ni datos ajenos',async()=>{storage.setItem(boardKey,JSON.stringify(board()));storage.setItem('la-carta-sellada:vtt:otra:scene:a',JSON.stringify(board()));storage.setItem('token-privado','no exportar');const exported=await store.export(campaign);expect(exported).not.toContain('current-player');expect(exported).not.toContain('token-privado');expect(exported).not.toContain('vtt:otra');expect(Object.keys(parseCampaignBackup(exported,campaign).local)).toEqual([boardKey]);});
  it('restaura PJs, viajes y tableros y mantiene asociaciones actuales y otras campañas',async()=>{storage.setItem('la-carta-sellada:vtt:otra:scene:a','intacto');const preview=await store.preview(file(),campaign);expect(preview.boards).toBe(1);await store.restore(preview);expect(JSON.parse(storage.getItem(travelStorageKey(campaign))!).journeys.grupo.plan.foodKg).toBe(20);expect(storage.getItem(boardKey)).toBeTruthy();expect((current.created[0] as {id:string;playerIds:string[]}).playerIds).toEqual(['current-player']);expect(storage.getItem('la-carta-sellada:vtt:otra:scene:a')).toBe('intacto');expect(storage.getItem(recoveryKey(campaign))).toBeNull();});
  it('los archivos inválidos o de versión no admitida no cambian nada',async()=>{for(const raw of ['{','{}',file().replace('"version":1','"version":7'),file().replace(campaign,'otra')]){const before=[...storage.values];await expectAsync(store.preview(raw,campaign)).toBeRejected();expect([...storage.values]).toEqual(before);}expect(put).not.toHaveBeenCalled();});

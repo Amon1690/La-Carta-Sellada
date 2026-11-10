@@ -2,6 +2,7 @@ import { GENERIC_NPCS } from '../data/generic-npcs';
 import { AccessUser } from './access';
 import { SheetCollection } from './remote-sheets';
 import { BACKUP_FORMAT, CampaignBackup, GENERIC_SHEETS_KEY, localBackupKind, parseCampaignBackup, validateSheetCollection, withoutAssociations } from './campaign-backup-format';
+import { parseTravelNetwork } from './travel-network-format';
 
 export interface BackupSnapshot extends SheetCollection { baseIds: string[]; npcIds: string[]; }
 export interface BackupTransport {
@@ -69,7 +70,12 @@ export class CampaignBackups {
     const sheets=await this.transport.read(campaignId);this.access(campaignId,user.id);validateSheetCollection(sheets,'player',true);
     this.classification(file,sheets);
     const before:Record<string,string|null>={};
-    for(const key of Object.keys(file.local))if(key!==GENERIC_SHEETS_KEY||restoreGeneric)before[key]=this.storage.getItem(key);
+    for(const key of Object.keys(file.local))if(key!==GENERIC_SHEETS_KEY||restoreGeneric){
+      const previous=this.storage.getItem(key);
+      // Tampoco la restauración puede borrar un original ilegible o de una versión futura.
+      if(localBackupKind(key,campaignId)==='network'&&previous!==null)parseTravelNetwork(previous);
+      before[key]=previous;
+    }
     const preview:BackupPreview={campaignId,sheets:Object.keys(file.sheets.edited).length+file.sheets.created.length,localStates:Object.keys(before).length,boards:Object.keys(before).filter((k)=>localBackupKind(k,campaignId)==='board').length,includesGeneric:Object.hasOwn(before,GENERIC_SHEETS_KEY)};
     this.plans.set(preview,{file,before,sheets,userId:user.id});return preview;
   }
