@@ -21,7 +21,7 @@
         <p class="turn-status" [class.active]="detail.controls?.canMove">{{ detail.controls?.canMove ? 'Es tu turno' : detail.actionPending ? 'Acción pendiente' : 'Espera tu turno' }}</p>
         <button class="action-button" type="button" [disabled]="!detail.controls?.canMove || busy()" [attr.aria-pressed]="moving()" (click)="moving.set(!moving()); attacking.set(false)">{{ moving() ? 'Cancelar movimiento' : 'Mover tu token' }}</button>
         <button class="action-button" type="button" [disabled]="!detail.controls?.canAttack || busy()" [attr.aria-pressed]="attacking()" (click)="attacking.set(!attacking()); moving.set(false)">Atacar</button>
-        @if (moving()) { <small>Arrastra tu token, usa las flechas o elige una casilla iluminada. El director controla el recorrido y el gasto de movimiento.</small> }
+        @if (moving()) { <small>Arrastra tu token, usa las flechas o elige una casilla marcada. El director controla el recorrido y el gasto de movimiento.</small> }
         @if (attacking()) {
           @if (detail.controls; as controls) {
             @if (controls.attacks.length) {

@@ -2,8 +2,9 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, InjectionToken, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { BoardVisionState, VisionProfile } from '../models/vision';
-import { PreviewFog, PreviewToken, previewSight, previewTokenVisible } from './vision-preview';
+import { PreviewFog, PreviewToken, previewSight } from './vision-preview';
 import { isVisionDoor } from './vision-geometry';
+import { orientedTokenVisible } from './token-orientation';
 import { REMOTE_SHEETS, SheetCollection } from './remote-sheets';
 import { CommandReceipt, DirectorEncounter, LiveBoardState, PlayerControls } from '../models/encounter-live';
 
@@ -63,16 +64,19 @@ export async function renderPersonalView(snapshot: SharingSnapshot, observerId: 
     }
     ctx.fillStyle = '#090c10';
     for (const fog of snapshot.fog) ctx.fillRect(fog.x, fog.y, fog.width, fog.height);
-    for (const token of snapshot.tokens.filter((item) => previewTokenVisible(item, geometry.circles, snapshot.fog, grid))) {
-      const size = token.size * grid;
-      ctx.save(); ctx.beginPath(); ctx.arc(token.x + size / 2, token.y + size / 2, size / 2, 0, 2 * Math.PI); ctx.clip();
-      ctx.fillStyle = '#b68a3b'; ctx.fillRect(token.x, token.y, size, size);
-      try { ctx.drawImage(await load(token.image), token.x, token.y, size, size); } catch { /* Silueta sin recursos privados. */ }
-      ctx.restore(); ctx.font = '14px sans-serif';
-      const labelWidth = Math.min(ctx.measureText(token.name).width + 12, 220);
-      ctx.fillStyle = '#090c10'; ctx.fillRect(token.x, token.y + size, labelWidth, 21);
-      ctx.fillStyle = '#f4f0e7'; ctx.fillText(token.name, token.x + 6, token.y + size + 15, labelWidth - 12);
-    }
+  }
+  const recipient = snapshot.tokens.find((token) => token.instanceId === observerId);
+  const orientation = { state: vision, tokens: snapshot.tokens, profiles: snapshot.profiles,
+    observerIds: recipient?.hidden ? [] : observerIds, circles: geometry.circles, fog: snapshot.fog, grid };
+  for (const token of snapshot.tokens.filter((item) => orientedTokenVisible(item, orientation))) {
+    const size = token.size * grid;
+    ctx.save(); ctx.beginPath(); ctx.arc(token.x + size / 2, token.y + size / 2, size / 2, 0, 2 * Math.PI); ctx.clip();
+    ctx.fillStyle = '#b68a3b'; ctx.fillRect(token.x, token.y, size, size);
+    try { ctx.drawImage(await load(token.image), token.x, token.y, size, size); } catch { /* Silueta sin recursos privados. */ }
+    ctx.restore(); ctx.font = '14px sans-serif';
+    const labelWidth = Math.min(ctx.measureText(token.name).width + 12, 220);
+    ctx.fillStyle = '#090c10'; ctx.fillRect(token.x, token.y + size, labelWidth, 21);
+    ctx.fillStyle = '#f4f0e7'; ctx.fillText(token.name, token.x + 6, token.y + size + 15, labelWidth - 12);
   }
   return { image: canvas.toDataURL('image/png'), pending: geometry.pending };
 }

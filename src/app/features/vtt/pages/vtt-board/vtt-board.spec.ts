@@ -602,6 +602,27 @@ describe('Multiselección de fichas en VTT', () => {
     view.tokens.update((tokens: any[]) => tokens.map((t) => t.instanceId === 'B' ? { ...t, conditions: undefined } : t));
     view.rollVisualPerception('A', 'B', '5'); expect(view.perceptionMessage()).toContain('Faltan'); expect(random).not.toHaveBeenCalled();
   });
+  it('en oscuridad conserva el token propio y vecinos sin iluminar el mapa de previsualización', () => {
+    const view = confirmedPreview(); view.setPreviewEnvironment('illumination', 'darkness');
+    view.tokens.update((tokens: any[]) => tokens.map((t) => t.instanceId === 'B' ? { ...t, x: GRID * 3 } : t));
+    view.toggleVisionPreview(); fixture.detectChanges();
+    expect(view.previewGeometry().circles).toEqual([]);
+    expect(view.displayedTokens().map((t: Token) => t.instanceId)).toEqual(['A', 'B']);
+    expect(fixture.nativeElement.querySelector('.vision-layer')).not.toBeNull();
+    view.fogRects.set([{ id: 'keep', x: GRID * 3, y: GRID * 2, width: GRID, height: GRID }]); fixture.detectChanges();
+    expect(view.displayedTokens().map((t: Token) => t.instanceId)).toEqual(['A']);
+  });
+  it('el jugador puede dar un paso en oscuridad solo en su turno y con validación de la casilla', () => {
+    const view = confirmedPreview(); actorFor('A', 'player:hero'); view.setPreviewEnvironment('illumination', 'darkness');
+    view.tokens.update((tokens: any[]) => tokens.map((t) => t.instanceId === 'B' ? { ...t, x: GRID * 3 } : t));
+    board.activeTurnId.set('A'); view.combat.start('A');
+    const controls = view.playerControls(view.tokens()).A;
+    expect(controls.canMove).toBeTrue(); expect(controls.cells).toContain(63); expect(controls.cells).toContain(93);
+    expect(controls.cells).not.toContain(64); expect(controls.targets).toEqual([]);
+    view.applyPlayerCommand({ id: 'dark-step', observerId: 'A', userId: 'u', type: 'move', cell: 63, sheetRevision: 0, expiresAt: Date.now() + 15000 });
+    expect(board.tokens()[0].x).toBe(GRID * 3); expect(view.pendingAck.status).toBe('applied');
+    board.activeTurnId.set('B'); expect(view.playerControls(view.tokens()).A.canMove).toBeFalse();
+  });
   it('coloca un foco desde la barra con radio explícito y coordenadas libres al aplicar zoom', () => {
     const view = fixture.componentInstance as any, before = structuredClone(board.tokens());
     (fixture.nativeElement.querySelector('[aria-label="Colocar foco de luz"]') as HTMLButtonElement).click(); fixture.detectChanges();

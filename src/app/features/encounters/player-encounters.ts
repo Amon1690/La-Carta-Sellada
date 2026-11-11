@@ -119,7 +119,7 @@ export class PlayerEncounters {
     const bounds = board.getBoundingClientRect();
     const column = Math.floor((event.clientX - bounds.left) / bounds.width * 30), row = Math.floor((event.clientY - bounds.top) / bounds.height * 20);
     const cell = row * 30 + column;
-    if (column < 0 || column >= 30 || row < 0 || row >= 20 || !detail.controls.cells.includes(cell)) { this.actionMessage.set('Elige una casilla visible permitida para tu token.'); return; }
+    if (column < 0 || column >= 30 || row < 0 || row >= 20 || !detail.controls.cells.includes(cell)) { this.actionMessage.set('Elige una casilla permitida para tu token.'); return; }
     void this.sendAction(detail, { type: 'move', cell });
   }
   protected boardClick(event: MouseEvent, detail: EncounterView): void {

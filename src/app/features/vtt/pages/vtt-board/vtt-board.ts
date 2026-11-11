@@ -20,6 +20,7 @@ import { isVisionDoor } from '../../../../core/services/vision-geometry';
 import { advanceVisionEffects, endVisionConcentration, endVisionEffect } from '../../../../core/services/vision-effects';
 import { assertBoardVision, emptyBoardVision, withoutRemovedObservers } from '../../../../core/services/vision-state';
 import { previewSight, previewTokenVisible } from '../../../../core/services/vision-preview';
+import { canOrientStep, orientedTokenVisible } from '../../../../core/services/token-orientation';
 import { evaluateVision } from '../../../../core/services/vision-engine';
 import { ENCOUNTER_PUBLISHER, SharingSnapshot } from '../../../../core/services/encounter-sharing';
 import { CampaignDataService } from '../../../../core/services/campaign-data';
@@ -264,7 +265,8 @@ export class VttBoard {
   protected readonly previewGeometry = computed(() => previewSight(this.vision(), this.tokens(),
     this.tokenVisionProfiles(), this.gridSize, this.mapWidth, this.mapHeight));
   protected readonly displayedTokens = computed(() => this.visionPreview()
-    ? this.tokens().filter((token) => previewTokenVisible(token, this.previewGeometry().circles, this.fogRects(), this.gridSize))
+    ? this.tokens().filter((token) => orientedTokenVisible(token, { state: this.vision(), tokens: this.tokens(), profiles: this.tokenVisionProfiles(),
+      observerIds: this.visionObserverIds(), circles: this.previewGeometry().circles, fog: this.fogRects(), grid: this.gridSize }))
     : this.tokens());
 
   protected readonly filteredTokenChoices = computed(() => {
@@ -461,6 +463,7 @@ export class VttBoard {
     for (const token of tokens.filter((token) => token.actorId.startsWith('player:'))) {
       const state = { ...this.vision(), groups: [{ id: 'personal', name: 'Personal', observerIds: [token.instanceId] }], activeGroupId: 'personal' };
       const geometry = previewSight(state, tokens, profiles, this.gridSize, this.mapWidth, this.mapHeight);
+      const orientation = { state, tokens, profiles, observerIds: [token.instanceId], circles: geometry.circles, fog: this.fogRects(), grid: this.gridSize };
       const visible = token.hidden ? [] : tokens.filter((item) => previewTokenVisible(item, geometry.circles, this.fogRects(), this.gridSize));
       const canMove = !this.tokenDrag && !token.hidden && !geometry.pending && this.vision().enabled && this.combat.state().started &&
         this.combat.state().turnId === token.instanceId && this.activeTurnId() === token.instanceId && !this.combat.busy() && token.hp > 0 && !token.conditions?.includes('incapacitated');
@@ -470,7 +473,7 @@ export class VttBoard {
       if (canMove) for (let row = 0; row < 20; row++) for (let column = 0; column < 30; column++) {
         const x = column * this.gridSize, y = row * this.gridSize;
         if (x + token.size * this.gridSize > this.mapWidth + .001 || y + token.size * this.gridSize > this.mapHeight + .001) continue;
-        if (previewTokenVisible({ ...token, x, y }, geometry.circles, this.fogRects(), this.gridSize)) cells.push(row * 30 + column);
+        if (previewTokenVisible({ ...token, x, y }, geometry.circles, this.fogRects(), this.gridSize) || canOrientStep(token.instanceId, x, y, orientation)) cells.push(row * 30 + column);
       }
       const targets = visible.filter((item) => item.instanceId !== token.instanceId).map((item) => ({ id: item.instanceId, name: item.name, x: item.x, y: item.y, size: item.size }));
       const attacks = canAttack && owner ? owner.actions.filter((action) => !actionProblem(action) && this.combat.available(owner, action.cost) >= (action.cost?.amount ?? 0) &&

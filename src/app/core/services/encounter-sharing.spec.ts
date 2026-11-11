@@ -84,9 +84,15 @@ describe('Imagen personal de encuentros', () => {
     snapshot.tokens[0].conditions = []; snapshot.tokens[0].hidden = true; await renderPersonalView(snapshot, 'hero', load);
     expect(load).not.toHaveBeenCalled();
   });
-  it('oscuridad sin sentidos especiales ni fuentes de luz no entrega el mapa', async () => {
+  it('en oscuridad entrega el token propio y contiguos, sin entregar el mapa ni tokens lejanos u ocultos', async () => {
     snapshot.vision.environment.illumination = 'darkness';
-    await renderPersonalView(snapshot, 'hero', load); expect(load).not.toHaveBeenCalled();
+    snapshot.tokens[1].x = 151.2;
+    const ctx = await pixels();
+    expect(color(ctx, 125, 125)).toEqual([255, 0, 0, 255]); expect(color(ctx, 176, 125)).toEqual([255, 0, 0, 255]);
+    expect(color(ctx, 180, 80)).toEqual([9, 12, 16, 255]);
+    expect(load.calls.allArgs().flat()).toEqual(['propia', 'ajena']); expect(load.calls.allArgs().flat()).not.toContain('mapa-original');
+    snapshot.tokens[1].x = 1000; load.calls.reset(); await pixels(); expect(load.calls.allArgs().flat()).toEqual(['propia']);
+    snapshot.tokens[0].hidden = true; load.calls.reset(); await pixels(); expect(load).not.toHaveBeenCalled();
   });
   it('recorta una fuente de luz y sus exclusiones en el raster sin revelar el mapa original', async () => {
     const source = { kind: 'director' as const, reference: 'Luz de prueba' };
