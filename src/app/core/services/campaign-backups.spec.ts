@@ -78,7 +78,7 @@ describe('Copias de seguridad por campaña',()=>{
 
  it('restaura y vuelve a exportar visión y sentidos junto a la niebla manual sin cambiar de campaña', async () => {
    const t = { instanceId: 'observer', actorId: 'player:custom-backup', name: 'Prueba', image: '', x: 1, y: 1, size: 1, hp: 5, maxHp: 5, initiative: 0, hidden: false };
-   const vision = { ...emptyBoardVision(), groups: [{ id: 'group', name: 'Compartida', observerIds: ['observer'] }], activeGroupId: 'group' };
+   const vision = { ...emptyBoardVision(), groups: [{ id: 'group', name: 'Compartida', observerIds: ['observer'] }], activeGroupId: 'group', exploration: [{ tokenId: 'observer', cells: [0, 599] }] };
    const input = JSON.parse(file({ [boardKey]: { ...board(), tokens: [t], vision, fogRects: [{ id: 'fog', x: 1, y: 2, width: 3, height: 4 }] } }));
    input.sheets.created[0].vision = { version: 1, senses: [{ sense: 'darkvision', rangeFeet: 0, source: { kind: 'director', reference: 'Sin visión nocturna: dato de prueba' } }] };
    const preview = await store.preview(JSON.stringify(input), campaign); await store.restore(preview);
@@ -86,6 +86,9 @@ describe('Copias de seguridad por campaña',()=>{
    const result = parseCampaignBackup(await store.export(campaign), campaign);
    expect((result.sheets.created[0] as any).vision).toEqual(input.sheets.created[0].vision);
    expect((result.local[boardKey] as any).fogRects).toEqual(input.local[boardKey].fogRects);
+   expect((result.local[boardKey] as any).vision.exploration).toEqual(vision.exploration);
+   const before = storage.writes; input.local[boardKey].vision.exploration[0].cells = [600];
+   await expectAsync(store.preview(JSON.stringify(input), campaign)).toBeRejected(); expect(storage.writes).toBe(before);
  });
  it('mantiene la previsualización y la exploración al restaurar dos listas de observadores', async () => {
    const source = { kind: 'director' as const, reference: 'Fixture de copia de previsualización' };

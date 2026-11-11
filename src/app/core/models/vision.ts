@@ -62,4 +62,6 @@ export interface BoardVisionState {
   obstacles?: VisionObstacle[];
   /** Contacto confirmado por instancia y encuentro para sentidos de detección. */
   contacts?: VisionContact[];
+  /** Memoria personal del terreno: índices de las 30 × 20 casillas del tablero. */
+  exploration?: { tokenId: string; cells: number[] }[];
 }

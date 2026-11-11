@@ -20,6 +20,8 @@ import { isVisionDoor } from '../../../../core/services/vision-geometry';
 import { advanceVisionEffects, endVisionConcentration, endVisionEffect } from '../../../../core/services/vision-effects';
 import { assertBoardVision, emptyBoardVision, withoutRemovedObservers } from '../../../../core/services/vision-state';
 import { previewSight, previewTokenVisible } from '../../../../core/services/vision-preview';
+import { canOrientStep, orientedTokenVisible } from '../../../../core/services/token-orientation';
+import { explorationRects, rememberExploration } from '../../../../core/services/vision-exploration';
 import { evaluateVision } from '../../../../core/services/vision-engine';
 import { ENCOUNTER_PUBLISHER, SharingSnapshot } from '../../../../core/services/encounter-sharing';
 import { CampaignDataService } from '../../../../core/services/campaign-data';
@@ -44,8 +46,9 @@ import { TokenSheet, VttTokenSheet } from './token-sheet';
 import { WeatherOverlay } from '../../components/weather-overlay';
 
 type VttEntryKind = 'scene' | 'encounter' | 'location' | 'generic';
-type ToolMode = 'select' | 'pan' | 'fog' | 'reveal' | 'measure' | 'wall' | 'door' | 'window';
-type SidebarTab = 'tokens' | 'layers' | 'turns' | 'vision' | 'geometry';
+type ToolMode = 'select' | 'pan' | 'fog' | 'reveal' | 'measure' | 'wall' | 'door' | 'window' | 'light';
+type SidebarTab = 'tokens' | 'layers' | 'turns' | 'vision' | 'geometry' | 'lights';
+type SceneLight = VisionEffect & { kind: 'light'; scope: { kind: 'circle'; x: number; y: number; radiusFeet: number } };
 
 interface VttEntry {
   id: string;
@@ -158,6 +161,10 @@ export class VttBoard {
   protected readonly visionPreview = signal(false);
   protected readonly visionMessage = signal('');
   protected readonly doorHasWindow = signal(false);
+  protected readonly lightRadius = signal('');
+  protected readonly lightIllumination = signal<'bright' | 'dim'>('bright');
+  protected readonly sceneLights = computed(() => this.vision().effects.filter((effect): effect is SceneLight =>
+    effect.kind === 'light' && effect.scope.kind === 'circle' && !effect.anchorTokenId && effect.duration.kind === 'until-ended'));
   protected readonly draftObstacle = signal<MeasureLine | undefined>(undefined);
   protected readonly isVisionDoor = isVisionDoor;
   protected readonly drawingObstacle = computed(() => ['wall', 'door', 'window'].includes(this.mode()));
@@ -258,8 +265,11 @@ export class VttBoard {
 
   protected readonly previewGeometry = computed(() => previewSight(this.vision(), this.tokens(),
     this.tokenVisionProfiles(), this.gridSize, this.mapWidth, this.mapHeight));
+  protected readonly exploredRects = computed(() => explorationRects(this.vision(), this.visionObserverIds().filter((id) =>
+    this.tokens().some((token) => token.instanceId === id && !token.hidden)), this.gridSize));
   protected readonly displayedTokens = computed(() => this.visionPreview()
-    ? this.tokens().filter((token) => previewTokenVisible(token, this.previewGeometry().circles, this.fogRects(), this.gridSize))
+    ? this.tokens().filter((token) => orientedTokenVisible(token, { state: this.vision(), tokens: this.tokens(), profiles: this.tokenVisionProfiles(),
+      observerIds: this.visionObserverIds(), circles: this.previewGeometry().circles, fog: this.fogRects(), grid: this.gridSize }))
     : this.tokens());
 
   protected readonly filteredTokenChoices = computed(() => {
@@ -365,7 +375,7 @@ export class VttBoard {
     this.characterSheets.changes$.pipe(skip(1), takeUntilDestroyed()).subscribe(() => {
       if (this.currentCampaign) this.tokenChoices.set(this.buildTokenChoices(this.currentCampaign));
       this.sheetRevision.update((revision) => revision + 1);
-      this.scheduleSharing();
+      this.refreshProfileExploration();
     });
   }
 
@@ -438,13 +448,15 @@ export class VttBoard {
       this.vision.set(structuredClone(state.vision ?? emptyBoardVision()));
       this.layers.set(structuredClone(state.layers)); this.activeTurnId.set(state.activeTurnId);
       this.combat.restore(state.combat); this.selectedTokenIds.set([]);
-      localStorage.setItem(this.storageKey, JSON.stringify({ ...state, zoom: this.zoom() }));
+      this.recordExploration(this.tokens());
+      localStorage.setItem(this.storageKey, JSON.stringify({ ...state, vision: this.vision(), zoom: this.zoom() }));
       this.visionStorageBlocked = false; this.saveStatus.set('Sincronizado');
     } finally { this.applyingRemote = false; }
   }
 
   private captureBoardState(): StoredBoardState {
     const origins = new Map(this.tokenDrag?.origins.map((token) => [token.instanceId, token]));
+    this.recordExploration(this.tokens().map((token) => ({ ...token, ...(origins.get(token.instanceId) ?? {}) })));
     return structuredClone({ vision: this.vision(), combat: this.combat.serialized(),
       tokens: this.tokens().map((token) => ({ ...token, ...(origins.get(token.instanceId) ?? {}) })),
       fogRects: this.fogRects(), layers: this.layers(), zoom: this.zoom(), activeTurnId: this.activeTurnId() });
@@ -456,6 +468,7 @@ export class VttBoard {
     for (const token of tokens.filter((token) => token.actorId.startsWith('player:'))) {
       const state = { ...this.vision(), groups: [{ id: 'personal', name: 'Personal', observerIds: [token.instanceId] }], activeGroupId: 'personal' };
       const geometry = previewSight(state, tokens, profiles, this.gridSize, this.mapWidth, this.mapHeight);
+      const orientation = { state, tokens, profiles, observerIds: [token.instanceId], circles: geometry.circles, fog: this.fogRects(), grid: this.gridSize };
       const visible = token.hidden ? [] : tokens.filter((item) => previewTokenVisible(item, geometry.circles, this.fogRects(), this.gridSize));
       const canMove = !this.tokenDrag && !token.hidden && !geometry.pending && this.vision().enabled && this.combat.state().started &&
         this.combat.state().turnId === token.instanceId && this.activeTurnId() === token.instanceId && !this.combat.busy() && token.hp > 0 && !token.conditions?.includes('incapacitated');
@@ -465,7 +478,7 @@ export class VttBoard {
       if (canMove) for (let row = 0; row < 20; row++) for (let column = 0; column < 30; column++) {
         const x = column * this.gridSize, y = row * this.gridSize;
         if (x + token.size * this.gridSize > this.mapWidth + .001 || y + token.size * this.gridSize > this.mapHeight + .001) continue;
-        if (previewTokenVisible({ ...token, x, y }, geometry.circles, this.fogRects(), this.gridSize)) cells.push(row * 30 + column);
+        if (previewTokenVisible({ ...token, x, y }, geometry.circles, this.fogRects(), this.gridSize) || canOrientStep(token.instanceId, x, y, orientation)) cells.push(row * 30 + column);
       }
       const targets = visible.filter((item) => item.instanceId !== token.instanceId).map((item) => ({ id: item.instanceId, name: item.name, x: item.x, y: item.y, size: item.size }));
       const attacks = canAttack && owner ? owner.actions.filter((action) => !actionProblem(action) && this.combat.available(owner, action.cost) >= (action.cost?.amount ?? 0) &&
@@ -599,12 +612,13 @@ export class VttBoard {
 
   protected setMode(mode: ToolMode): void {
     if (this.visionPreview() && mode !== 'pan') return;
-    if (['wall', 'door', 'window'].includes(mode) && (this.visionStorageBlocked || this.combat.busy())) return;
+    if (['wall', 'door', 'window', 'light'].includes(mode) && (this.visionStorageBlocked || this.combat.busy())) return;
     this.cancelInteraction();
     this.lastTokenClickId = this.doubleClickTokenId = undefined;
     this.cancelAttack();
     this.mode.set(mode);
     if (this.drawingObstacle()) this.setSidebarTab('geometry');
+    if (mode === 'light') this.setSidebarTab('lights');
     this.draftFog.set(undefined);
     this.measureLine.set(undefined);
   }
@@ -626,6 +640,38 @@ export class VttBoard {
   }
 
   protected enableVision(enabled: boolean): void { this.setBoardVision({ ...this.vision(), enabled }); }
+  protected lightRadiusPixels(radiusFeet: number): number { return radiusFeet * 0.3048 / 1.5 * this.gridSize; }
+  private validLightRadius(value: string): number | undefined {
+    const radius = Number(value);
+    if (!value.trim() || !Number.isFinite(radius) || radius <= 0 || radius > 100000) {
+      this.visionMessage.set('Introduce un radio mayor que 0 y como máximo 100000 pies.'); return;
+    }
+    return radius;
+  }
+  private placeSceneLight(point: BoardPoint): void {
+    if (this.visionPreview() || this.combat.busy() || this.visionStorageBlocked) return;
+    const radiusFeet = this.validLightRadius(this.lightRadius());
+    if (radiusFeet === undefined) return;
+    const effect: SceneLight = { id: this.newId('scene-light'), name: `Foco ${this.sceneLights().length + 1}`, kind: 'light',
+      scope: { kind: 'circle', ...point, radiusFeet }, illumination: this.lightIllumination(), active: true,
+      duration: { kind: 'until-ended' }, source: { kind: 'director', reference: 'Foco colocado sobre el escenario; radio declarado por dirección' } };
+    try { this.setBoardVision({ ...this.vision(), effects: [...this.vision().effects, effect] }); this.visionMessage.set('Foco guardado. Puedes ajustar su radio en Luces.'); }
+    catch { this.visionMessage.set('No se pudo guardar el foco. Conserva el guardado original y revisa el límite de efectos.'); }
+  }
+  protected updateSceneLight(id: string, radius: string, illumination: string): void {
+    if (this.visionPreview() || this.combat.busy() || this.visionStorageBlocked || !this.sceneLights().some((light) => light.id === id)) return;
+    const radiusFeet = this.validLightRadius(radius);
+    if (radiusFeet === undefined || (illumination !== 'bright' && illumination !== 'dim')) return;
+    this.setBoardVision({ ...this.vision(), effects: this.vision().effects.map((effect) => effect.id === id && effect.scope.kind === 'circle'
+      ? { ...effect, scope: { ...effect.scope, radiusFeet }, illumination } : effect) });
+    this.visionMessage.set('Radio e iluminación del foco guardados.');
+  }
+  protected changeSceneLight(id: string, remove = false): void {
+    if (this.visionPreview() || this.combat.busy() || this.visionStorageBlocked || !this.sceneLights().some((light) => light.id === id)) return;
+    this.setBoardVision({ ...this.vision(), effects: this.vision().effects.filter((effect) => !remove || effect.id !== id)
+      .map((effect) => effect.id === id ? { ...effect, active: !effect.active } : effect) });
+    this.visionMessage.set(remove ? 'Foco eliminado.' : 'Estado del foco guardado.');
+  }
   protected confirmVisionGeometry(): void {
     if (this.combat.busy()) return;
     this.setBoardVision({ ...this.vision(), obstacles: this.vision().obstacles ?? [] });
@@ -776,7 +822,7 @@ export class VttBoard {
     try {
       await this.characterSheets.saveVisionProfile(this.currentCampaign, token.actorId, { version: 1, senses: [...senses,
         { sense: sense as VisionSense, rangeFeet: amount, source: { kind: 'director', reference: reference.trim() } }] });
-      this.sheetRevision.update((revision) => revision + 1); this.visionMessage.set('Sentido guardado en la ficha compartida.'); this.scheduleSharing();
+      this.sheetRevision.update((revision) => revision + 1); this.visionMessage.set('Sentido guardado en la ficha compartida.'); this.refreshProfileExploration();
     } catch { this.visionMessage.set('No se pudo guardar la visión. Revisa la ficha y su fuente.'); }
   }
 
@@ -1180,10 +1226,11 @@ export class VttBoard {
 
     const point = this.boardPoint(event);
     if (!point) return;
-    this.drawStart = this.drawingObstacle() ? point : this.snapPoint(point, this.mode() === 'measure');
+    this.drawStart = this.drawingObstacle() || this.mode() === 'light' ? point : this.snapPoint(point, this.mode() === 'measure');
     this.board?.nativeElement.focus({ preventScroll: true });
     this.capturePointer(event);
 
+    if (this.mode() === 'light') return;
     if (this.drawingObstacle()) {
       this.draftObstacle.set({ x1: point.x, y1: point.y, x2: point.x, y2: point.y });
     } else if (this.mode() === 'measure') {
@@ -1218,7 +1265,7 @@ export class VttBoard {
       return;
     }
 
-    if (!this.drawStart) return;
+    if (!this.drawStart || this.mode() === 'light') return;
     const point = this.boardPoint(event);
     if (!point) return;
     const snapped = this.drawingObstacle() ? point : this.snapPoint(point, this.mode() === 'measure');
@@ -1277,6 +1324,11 @@ export class VttBoard {
     }
 
     if (!this.drawStart) return;
+    if (this.mode() === 'light') {
+      const point = this.boardPoint(event);
+      if (point) this.placeSceneLight(point);
+      this.cancelInteraction(); return;
+    }
     if (this.drawingObstacle()) {
       const end = this.boardPoint(event);
       if (end) this.saveDrawnObstacle(end);
@@ -1725,6 +1777,7 @@ export class VttBoard {
       this.zoom.set(state.zoom ?? 0.65);
       this.activeTurnId.set(state.activeTurnId);
       this.combat.restore(state.combat);
+      if (!this.visionStorageBlocked) this.recordExploration(this.tokens());
       if (this.combat.state().started || this.combat.error()) this.sidebarTab.set('turns');
       return true;
     } catch {
@@ -1743,6 +1796,7 @@ export class VttBoard {
     // Otras acciones pueden guardar durante un gesto: las posiciones provisionales
     // solo se confirman al soltar el puntero, nunca al ocultar o cambiar de turno.
     const origins = new Map(this.tokenDrag?.origins.map((token) => [token.instanceId, token]));
+    this.recordExploration(this.tokens().map((token) => ({ ...token, ...(origins.get(token.instanceId) ?? {}) })));
     const state: StoredBoardState = {
       vision: this.vision(),
       combat: this.combat.serialized(),
@@ -1757,6 +1811,41 @@ export class VttBoard {
     };
     localStorage.setItem(this.storageKey, JSON.stringify(state));
     this.saveStatus.set('Guardado');
+    this.scheduleSharing();
+  }
+
+  private recordExploration(tokens: BoardToken[]): void {
+    if (this.visionStorageBlocked) return;
+    const value = rememberExploration(this.vision(), tokens, this.tokenVisionProfiles(), this.fogRects(), this.gridSize);
+    if (value !== this.vision()) this.vision.set(value);
+  }
+
+  private refreshProfileExploration(): void {
+    const before = this.vision();
+    const origins = new Map(this.tokenDrag?.origins.map((token) => [token.instanceId, token]));
+    this.recordExploration(this.tokens().map((token) => ({ ...token, ...(origins.get(token.instanceId) ?? {}) })));
+    // Un cambio de ficha no confirma otros cambios provisionales del combate.
+    // Solo se actualiza la memoria dentro del guardado que ya existía.
+    if (before !== this.vision() && this.storageKey) {
+      try {
+        const raw = localStorage.getItem(this.storageKey);
+        if (raw) {
+          const saved = JSON.parse(raw) as StoredBoardState;
+          const ids = new Set(saved.tokens.map((token) => token.instanceId));
+          assertBoardVision(saved.vision, ids);
+          const memories = new Map((saved.vision.exploration ?? []).map((m) => [m.tokenId, new Set(m.cells)]));
+          for (const memory of this.vision().exploration ?? []) {
+            if (!ids.has(memory.tokenId)) continue;
+            const cells = memories.get(memory.tokenId) ?? new Set<number>();
+            for (const cell of memory.cells) cells.add(cell);
+            memories.set(memory.tokenId, cells);
+          }
+          const vision = { ...saved.vision, exploration: [...memories].map(([tokenId, cells]) => ({ tokenId, cells: [...cells].sort((a, b) => a - b) })) };
+          assertBoardVision(vision, ids);
+          localStorage.setItem(this.storageKey, JSON.stringify({ ...saved, vision }));
+        }
+      } catch { this.saveStatus.set('La memoria sigue en el tablero, pero no se pudo guardar.'); }
+    }
     this.scheduleSharing();
   }
 
