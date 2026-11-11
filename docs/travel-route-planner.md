@@ -1,0 +1,57 @@
+# Itinerarios por caminos y vías acuáticas
+
+«Calcular por caminos» en el Plan de viaje busca la menor distancia sobre la red
+guardada de la campaña. El origen es la posición actual del grupo y el destino
+es el lugar seleccionado. Ambos deben coincidir exactamente con nodos declarados;
+si varias vías tienen un nodo en el mismo punto, hay que elegir su identificador.
+No se añaden rectas al nodo más cercano ni se deducen conexiones de una imagen.
+
+El medio inicial limita los tramos. «Permitir transbordos» habilita el cambio
+pie/barco solo en nodos de embarque declarados. «Permitir tramos fuera de camino»
+empieza desmarcado y admite únicamente enlaces existentes de ese tipo; no concede
+permiso para cruzar agua, zonas desconocidas o huecos de cobertura. Puentes y
+vados solo permiten el medio registrado en la red. Se respeta la dirección de
+cada tramo. Una red sintética lleva una advertencia visible.
+
+El motor puro aplica Dijkstra con estados nodo/medio, cola mínima y costes
+físicos no negativos. Ordena estados y aristas por identificadores estables y
+prefiere menos pasos en empates; el resultado no depende del orden importado.
+La longitud suma la polilínea completa usando las dos escalas del atlas. El
+tiempo es independiente: solo se estima si se declaran velocidades positivas y
+finitas para los medios y terrenos de todos los tramos elegidos, con su fuente.
+No se inventan velocidades de barco ni se multiplican kilómetros por terreno.
+Se optimiza distancia, no un tiempo cuyos parámetros pueden ser desconocidos.
+
+El resultado es una vista previa en azul claro sobre el mapa. Cambiar grupo,
+extremos, opciones, velocidades o red la invalida. Salir del panel también la
+retira. No sustituye rutas, jornadas, encuentros o provisiones. El consumo de
+horas por tramos y la instantánea persistente del viaje calculado pertenecen a
+la tarea siguiente `travel-route-progress`; no se entrega un itinerario acuático
+al avance global antiguo.
+
+Sin cobertura, nodos o conexión adecuada se explica que no hay itinerario
+verificado. «Añadir destino como ruta manual» conserva la acción anterior,
+identificada como manual. Las rutas y partidas existentes no cambian de clave,
+formato ni significado al abrir el planificador. No se requiere migración.
+
+## Verificación y fuentes
+
+Las pruebas cubren rodeos, enlaces fuera de camino, polilíneas inversas,
+puentes/vados, pie/barco, transbordos, dirección, datos y costes inválidos,
+cobertura, nodos coincidentes, empates, tiempo desconocido y consumidores reales.
+La comprobación visual del 11 de noviembre se realizó en el navegador integrado
+de ChatGPT con una campaña sintética aislada: caminos y senderos por defecto,
+alternativa fuera de camino, barco, falta de conexión, kilómetros y tiempo
+separados, cambio de grupo, conservación de la ruta manual y panel a 390 px.
+Se comprobó la línea azul sobre el mapa ampliado y que solo la acción manual
+explícita cambia la ruta existente. No se modificaron partidas reales.
+
+Fuentes primarias contrastadas el 11 de noviembre de 2026:
+
+- [Boost.Graph: Dijkstra](https://www.boost.org/doc/libs/latest/libs/graph/doc/html/graph/algorithms/shortest_paths/dijkstra_shortest_paths.html), pesos no negativos y grafos dirigidos/no dirigidos.
+- [Reglas gratuitas 2024: viajes y vehículos](https://www.dndbeyond.com/sources/dnd/br-2024/playing-the-game), el vehículo acuático usa su propia velocidad.
+- [Herramientas del director 2024: viaje y terreno](https://www.dndbeyond.com/sources/dnd/br-2024/dms-toolbox), distinción entre terreno, carreteras y ritmo.
+
+Estas fuentes no aportan una red cartográfica del atlas. Se conservan sus recursos
+y atribución; el cálculo necesita datos propios o importados con procedencia y
+uso declarados. Los ejemplos de pruebas no son caminos reales de Faerûn.

@@ -34,6 +34,9 @@ import { CharacterSheetsService } from '../../../../core/services/character-shee
 import { Campaign } from '../../../../core/models/campaign';
 import { CampaignDataService } from '../../../../core/services/campaign-data';
 import { RouteNetworkEditor } from '../../components/route-network-editor/route-network-editor';
+import { RoutePlanner } from '../../components/route-planner/route-planner';
+import { TravelNetwork } from '../../../../core/models/travel-network';
+import { TravelItinerary } from '../../../../core/services/travel-route-planner';
 
 type MapMode = 'select' | 'place' | 'route' | 'pan';
 type SideTab = 'groups' | 'plan' | 'days';
@@ -183,11 +186,12 @@ const DISTANCE_FORMAT = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 
 
 @Component({
   selector: 'app-travel-map',
-  imports: [CommonModule, FormsModule, RouteNetworkEditor],
+  imports: [CommonModule, FormsModule, RouteNetworkEditor, RoutePlanner],
   templateUrl: './travel-map.html',
   styleUrl: './travel-map.scss',
 })
 export class TravelMap implements AfterViewInit {
+  @ViewChild(RoutePlanner) private routePlanner?: RoutePlanner;
   @ViewChild('mapViewport') private mapViewport?: ElementRef<HTMLElement>;
   @ViewChild('mapStage') private mapStage?: ElementRef<HTMLElement>;
 
@@ -217,6 +221,12 @@ export class TravelMap implements AfterViewInit {
   protected readonly zoom = signal(MIN_ZOOM);
   protected readonly groups = signal<TravelGroup[]>([]);
   protected readonly route = signal<MapPoint[]>([]);
+  protected readonly routeNetwork = signal<TravelNetwork | null>(null);
+  protected readonly plannedItinerary = signal<TravelItinerary | undefined>(undefined);
+  protected readonly plannerOrigin = computed(() => this.selectedGroup());
+  protected readonly plannerDestination = computed(() => LOCATIONS.find(location => location.id === this.plan().destinationId));
+  protected readonly plannedPolyline = computed(() => this.plannedItinerary()?.geometry.map(point => `${point.x},${point.y}`).join(' ') ?? '');
+  protected networkChanged(network: TravelNetwork | null): void { this.routeNetwork.set(network); this.plannedItinerary.set(undefined); }
   protected readonly logs = signal<DayLog[]>([]);
   protected readonly pendingEncounter = signal<PendingTravelEncounter | undefined>(undefined);
   protected readonly selectedGroupId = signal<string | undefined>(undefined);
@@ -473,7 +483,7 @@ export class TravelMap implements AfterViewInit {
         }
         return [...route, point];
       });
-      this.status.set(`Ruta: ${this.formatDistance(this.routeDistance())} km`);
+      this.status.set(`Ruta manual: ${this.formatDistance(this.routeDistance())} km`);
       this.persistState();
     }
   }
@@ -607,6 +617,11 @@ export class TravelMap implements AfterViewInit {
   }
 
   protected routeToSelectedDestination(): void {
+    if (this.routePlanner) this.routePlanner.calculate();
+    else this.status.set('Abre el planificador del Plan de viaje para calcular sobre la red declarada. La ruta manual se conserva.');
+  }
+
+  protected addManualDestination(): void {
     const destination = LOCATIONS.find((location) => location.id === this.plan().destinationId);
     if (!destination) return;
     const start = this.route().length
@@ -619,7 +634,7 @@ export class TravelMap implements AfterViewInit {
       return;
     }
     this.route.set([...start, { x: destination.x, y: destination.y }]);
-    this.status.set(`Ruta trazada hasta ${destination.name}`);
+    this.status.set(`Ruta manual trazada hasta ${destination.name}; no certifica caminos ni pasos transitables`);
     this.persistState();
   }
 

@@ -1,0 +1,12 @@
+:host { display:block; min-width:0; }
+.planner { display:grid; gap:.65rem; }
+h3,p { margin:.2rem 0; }
+label { display:grid; gap:.25rem; font-size:.85rem; }
+input,select,button { box-sizing:border-box; width:100%; min-width:0; padding:.55rem; color:inherit; background:#17202a; border:1px solid #63707b; border-radius:.3rem; font:inherit; }
+button { cursor:pointer; white-space:normal; }
+.check { display:flex; align-items:flex-start; gap:.5rem; }
+.check input { width:auto; flex:none; }
+details { min-width:0; } summary { cursor:pointer; }
+.notice { border-left:3px solid #d7b35c; padding:.5rem; }
+ol { padding-left:1.25rem; } li { margin-bottom:.4rem; overflow-wrap:anywhere; }
+.manual { background:#303331; }

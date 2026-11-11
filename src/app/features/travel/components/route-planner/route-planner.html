@@ -1,0 +1,25 @@
+<section aria-label="Planificador de itinerarios" class="planner">
+  <h3>Itinerario por la red de caminos</h3>
+  <p>Calcula desde la posición actual del grupo hasta el destino seleccionado por enlaces declarados. La previsualización en azul claro no inicia un viaje ni modifica tu ruta manual, jornadas o provisiones.</p>
+  @if (network?.dataKind === 'synthetic') { <p class="notice">Red sintética de prueba: sus trazados no representan caminos reales.</p> }
+  <label>Medio inicial<select [ngModel]="startMode()" (ngModelChange)="startMode.set($event); changed()"><option value="foot">A pie</option><option value="boat">En barco</option></select></label>
+  <label class="check"><input type="checkbox" [ngModel]="allowTransfers()" (ngModelChange)="allowTransfers.set($event); changed()" /> Permitir transbordos a pie/barco en embarques declarados</label>
+  <label class="check"><input type="checkbox" [ngModel]="allowOffRoad()" (ngModelChange)="allowOffRoad.set($event); changed()" /> Permitir tramos fuera de camino</label>
+  @if (nodesAt(origin).length > 1) { <label>Nodo de origen<select [ngModel]="originNode()" (ngModelChange)="originNode.set($event); changed()"><option value="">Elegir vía de origen</option>@for (node of nodesAt(origin); track node.id) { <option [value]="node.id">{{node.name}} ({{node.id}})</option> }</select></label> }
+  @if (nodesAt(destination).length > 1) { <label>Nodo de destino<select [ngModel]="destinationNode()" (ngModelChange)="destinationNode.set($event); changed()"><option value="">Elegir vía de destino</option>@for (node of nodesAt(destination); track node.id) { <option [value]="node.id">{{node.name}} ({{node.id}})</option> }</select></label> }
+  <details><summary>Velocidades declaradas para estimar tiempo</summary>
+    <p>Opcional, en km/h. Deja sin rellenar lo desconocido. La distancia siempre son kilómetros físicos; el cálculo no aplica penalizaciones de terreno ni velocidades de barcos inventadas.</p>
+    @for (field of rateFields; track field.key) { <label>{{field.name}}<input type="text" inputmode="decimal" [ngModel]="rates()[field.key] ?? ''" (ngModelChange)="updateRate(field.key, $event)" /></label> }
+    <label>Fuente de las velocidades<input maxlength="2000" [ngModel]="source()" (ngModelChange)="source.set($event); changed()" /></label>
+  </details>
+  <button type="button" (click)="calculate()">Calcular por caminos</button>
+  @if (error()) { <p role="status" class="notice">{{error()}}</p> }
+  @if (itinerary(); as plan) {
+    <p role="status"><strong>{{format(plan.distanceKm)}} km</strong> · {{plan.durationHours === undefined ? 'Tiempo pendiente: faltan velocidades declaradas' : format(plan.durationHours) + ' h estimadas'}}</p>
+    <p>{{plan.network.name}} · revisión {{plan.network.revision}} · {{plan.transfers.length}} transbordos. Ruta de menor distancia, sin comparar tiempos desconocidos.</p>
+    <ol>@for (leg of plan.legs; track $index) { <li>{{nodeName(leg.from)}} → {{nodeName(leg.to)}} · {{kindName(leg.kind)}} · {{leg.mode === 'foot' ? 'A pie' : 'En barco'}} · {{format(leg.distanceKm)}} km @if (leg.crossing !== 'none') { · {{leg.crossing === 'bridge' ? 'Puente' : 'Vado'}} }</li> }</ol>
+    <p>La aplicación de jornadas por tramos se incorporará en la siguiente fase. Puedes revisar esta geometría sin sustituir tu partida.</p>
+  }
+  <button type="button" class="manual" (click)="manual()">Añadir destino como ruta manual</button>
+  <p>La ruta manual une los puntos que eliges; no certifica caminos, pasos acuáticos ni zonas transitables.</p>
+</section>

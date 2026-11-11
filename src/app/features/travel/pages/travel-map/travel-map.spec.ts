@@ -7,6 +7,8 @@ import { CampaignDataService } from '../../../../core/services/campaign-data';
 import { CharacterSheetsService } from '../../../../core/services/character-sheets';
 import { TravelMap } from './travel-map';
 import { FAERUN_LOCATIONS } from '../../../../core/data/faerun-locations';
+import { syntheticNetwork } from '../../../../core/services/travel-network.fixture';
+import { networkStorageKey } from '../../../../core/services/travel-network-store';
 
 const KEY = 'la-carta-sellada:travel-map:faerun-atlas-v3';
 const groups = () => ['a', 'b'].map((id, i) => ({ id, name: `Grupo ${id}`, color: '#c9964a', memberIds: ['player-option-scout'], x: 44.3 + i, y: 37.5 }));
@@ -46,6 +48,32 @@ describe('Viajes independientes por grupo', () => {
     expect(restored.selectedGroupId()).toBe('b'); expect(restored.plan().foodKg).toBe(73);
     expect(restored.logs()[0].weather).toBe('Lluvia B'); expect(restored.pendingEncounter().runId).toBe('run-b');
     restored.selectGroup('a'); expect(restored.pendingEncounter().runId).toBe('run-a');
+  });
+  it('calcular no modifica ruta manual, provisiones, jornadas ni encuentro pendiente', () => {
+    legacy(); const view = make(), original = values.get(KEY), snapshot = { route: structuredClone(view.route()), plan: structuredClone(view.plan()), logs: structuredClone(view.logs()), encounter: structuredClone(view.pendingEncounter()) };
+    view.routeToSelectedDestination();
+    expect(view.plannerOrigin()).toEqual(view.selectedGroup()); expect(view.plannerOrigin()).not.toEqual(snapshot.route.at(-1));
+    expect(view.route()).toEqual(snapshot.route); expect(view.plan()).toEqual(snapshot.plan); expect(view.logs()).toEqual(snapshot.logs); expect(view.pendingEncounter()).toEqual(snapshot.encounter); expect(values.get(KEY)).toBe(original);
+    view.addManualDestination(); expect(view.route().length).toBe(snapshot.route.length + 1); expect(view.status()).toContain('Ruta manual');
+  });
+  it('el botón del panel calcula sobre la red guardada y dibuja preview sin alterar la partida', async () => {
+    const destination = FAERUN_LOCATIONS[0], network = syntheticNetwork();
+    network.coverage[0].bounds = { minX: 0, minY: 0, maxX: 100, maxY: 100 };
+    network.nodes = [network.nodes[0], { ...network.nodes[1], x: destination.x, y: destination.y }];
+    network.edges = [{ ...network.edges[0], geometry: [{ x: 1, y: 1 }, { x: destination.x, y: destination.y }] }];
+    values.set(networkStorageKey('test'), JSON.stringify(network));
+    values.set(KEY + ':campaign:test', JSON.stringify({ groups: [{ ...groups()[0], x: 1, y: 1 }], selectedGroupId: 'a', route: [], logs: [], plan: { destinationId: destination.id }, zoom: .1 }));
+    TestBed.overrideProvider(ACCESS_CONTEXT, { useValue: { user: () => ({ id: 'qa', username: 'Prueba', role: 'director', campaigns: ['test'] }) } });
+    TestBed.configureTestingModule({ imports: [TravelMap], providers: [{ provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap({ campaignId: 'test' }) } } }] });
+    TestBed.overrideProvider(CampaignDataService, { useValue: { getCampaignById: () => of({ id: 'test', playerCharacters: [], playerOptions: [], npcs: [] }) } });
+    const fixture = TestBed.createComponent(TravelMap), view = fixture.componentInstance as any; fixture.detectChanges(); await fixture.whenStable();
+    view.setSideTab('plan'); fixture.detectChanges(); await fixture.whenStable();
+    const route = structuredClone(view.route()), plan = structuredClone(view.plan());
+    const button = Array.from(fixture.nativeElement.querySelectorAll('app-route-planner button') as NodeListOf<HTMLButtonElement>).find(b => b.textContent?.includes('Calcular por caminos'))!;
+    button.click(); fixture.detectChanges(); expect(view.plannedItinerary()?.legs[0].edgeId).toBe('road');
+    expect(fixture.nativeElement.querySelector('[aria-label="Vista previa de itinerario calculado"]')).not.toBeNull();
+    expect(view.route()).toEqual(route); expect(view.plan()).toEqual(plan); expect(view.logs()).toEqual([]);
+    view.setSideTab('groups'); fixture.detectChanges(); expect(view.plannedItinerary()).toBeUndefined();
   });
   it('resolver una jornada solo consume provisiones y mueve el grupo seleccionado', () => {
     legacy(); const view = make(); view.skipPendingEncounter(); view.resetJourney();
