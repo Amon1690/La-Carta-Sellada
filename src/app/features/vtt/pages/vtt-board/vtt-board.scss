@@ -19,7 +19,7 @@ button {
 
 .vtt-shell {
   display: grid;
-  grid-template-rows: 64px minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   height: 100dvh;
   background: #181a1d;
 }
@@ -28,10 +28,11 @@ button {
   position: relative;
   z-index: 100;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 18px;
+  gap: 8px;
   min-width: 0;
-  padding: 8px 14px;
+  padding: 8px;
   border-bottom: 1px solid #41444a;
   background: #24272b;
   box-shadow: 0 3px 14px rgb(0 0 0 / 32%);
@@ -477,7 +478,7 @@ button {
 
 .sidebar-tabs {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   border-bottom: 1px solid #45484d;
 }
 

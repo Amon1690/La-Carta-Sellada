@@ -1,5 +1,8 @@
-import type { VisionEffect } from '../models/vision';
+import type { VisionEffect, VisionObstacle } from '../models/vision';
 import type { PreviewToken, SightDisk } from './vision-preview';
+
+export const isVisionDoor = (obstacle: Pick<VisionObstacle, 'kind'>): boolean =>
+  obstacle.kind === 'door' || obstacle.kind === 'door-window';
 
 export const visionCenter = (token: PreviewToken, grid: number): { x: number; y: number } => ({ x: token.x + token.size * grid / 2, y: token.y + token.size * grid / 2 });
 export function effectDisks(effect: VisionEffect, tokens: readonly PreviewToken[], grid: number): SightDisk[] {

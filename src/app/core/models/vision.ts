@@ -21,10 +21,10 @@ export interface VisionEnvironment {
 export interface VisionPoint { x: number; y: number; }
 /** Segmentos del plano configurados por dirección; nunca deducidos de la imagen. */
 export interface VisionObstacle {
-  id: string; name: string; kind: 'wall' | 'door';
+  id: string; name: string; kind: 'wall' | 'door' | 'window' | 'door-window';
   start: VisionPoint; end: VisionPoint; source: VisionSource;
   blocksSight: boolean; blocksEffect: boolean;
-  /** Obligatorio para puertas; una puerta abierta no bloquea. */
+  /** Obligatorio para puertas, incluidas las acristaladas; abierta no bloquea. */
   open?: boolean;
 }
 export interface VisionContact {

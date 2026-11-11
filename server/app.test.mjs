@@ -238,6 +238,43 @@ test('encuentros: valida imágenes, personajes y revisión sin sobrescribir una 
   assert.equal((await response.json()).length, 1);
 });
 
+test('visión compartida: cambiar un contribuyente invalida la imagen de los miembros incluso al consultar sin cambios', async (t) => {
+  const f = await liveEncounterFixture(t);
+  const snapshot = structuredClone(f.liveSnapshot); snapshot.revision = 2;
+  snapshot.state.vision = { version: 1, enabled: true, groups: [{ id: 'shared', name: 'Grupo', observerIds: ['hero-instance', 'other-instance'] }], activeGroupId: 'shared', effects: [], environment: { illumination: 'unknown', weather: 'unknown', timeOfDay: 'unknown' } };
+  assert.equal((await f.request(f.url, { cookie: f.director, method: 'PUT', data: snapshot })).status, 200);
+  const changed = { ...f.foreign, vision: { version: 1, senses: [] } };
+  assert.equal((await f.request('/api/campaigns/one/sheets', { cookie: f.director, method: 'PUT', data: { edited: { hero: f.own }, created: [changed], revision: 1 } })).status, 200);
+  assert.equal((await f.request(`${f.url}?observer=hero-instance&after=3`, { cookie: f.cookie })).status, 409);
+  snapshot.sheetRevision = 2; snapshot.revision = 3;
+  assert.equal((await f.request(f.url, { cookie: f.director, method: 'PUT', data: snapshot })).status, 200);
+  assert.equal((await f.request(`${f.url}?observer=hero-instance`, { cookie: f.cookie })).status, 200);
+  assert.equal((await f.request(`${f.url}?observer=other-instance`, { cookie: f.cookie })).status, 404);
+});
+
+test('visión compartida: un personaje fuera de la lista conserva independencia de perfiles ajenos', async (t) => {
+  const f = await liveEncounterFixture(t);
+  const snapshot = structuredClone(f.liveSnapshot); snapshot.revision = 2;
+  snapshot.state.vision = { groups: [{ id: 'others', observerIds: ['other-instance'] }], activeGroupId: 'others' };
+  assert.equal((await f.request(f.url, { cookie: f.director, method: 'PUT', data: snapshot })).status, 200);
+  assert.equal((await f.request('/api/campaigns/one/sheets', { cookie: f.director, method: 'PUT', data: { edited: { hero: f.own }, created: [{ ...f.foreign, vision: { version: 1, senses: [] } }], revision: 1 } })).status, 200);
+  assert.equal((await f.request(`${f.url}?observer=hero-instance`, { cookie: f.cookie })).status, 200);
+});
+
+test('visión compartida: un PJ contribuyente sin dueño ni imagen propia también invalida una imagen antigua', async (t) => {
+  const f = await liveEncounterFixture(t), unassigned = { ...f.foreign, playerIds: [] };
+  assert.equal((await f.request('/api/campaigns/one/sheets', { cookie: f.director, method: 'PUT', data: { edited: { hero: f.own }, created: [unassigned], revision: 1 } })).status, 200);
+  const snapshot = structuredClone(f.liveSnapshot); snapshot.revision = 2; snapshot.sheetRevision = 2; snapshot.views = [snapshot.views[0]];
+  snapshot.state.vision = { groups: [{ id: 'shared', observerIds: ['hero-instance', 'other-instance'] }], activeGroupId: 'shared' };
+  assert.equal((await f.request(f.url, { cookie: f.director, method: 'PUT', data: snapshot })).status, 200);
+  assert.equal((await f.request(`${f.url}?observer=hero-instance`, { cookie: f.cookie })).status, 200);
+  assert.equal((await f.request('/api/campaigns/one/sheets', { cookie: f.director, method: 'PUT', data: { edited: { hero: f.own }, created: [{ ...unassigned, vision: { version: 1, senses: [] } }], revision: 2 } })).status, 200);
+  assert.equal((await f.request(`${f.url}?observer=hero-instance&after=3`, { cookie: f.cookie })).status, 409);
+  snapshot.revision = 3; snapshot.sheetRevision = 3;
+  assert.equal((await f.request(f.url, { cookie: f.director, method: 'PUT', data: snapshot })).status, 200);
+  assert.equal((await f.request(`${f.url}?observer=hero-instance`, { cookie: f.cookie })).status, 200);
+});
+
 test('crea los tres usuarios, usa hashes y no devuelve contraseñas', async (t) => {
   const f = await fixture(t);
   for (const [name, password, role] of [['admin', 'admin', 'administrador'], ['Director', '1234', 'director'], ['Jugador', '1234', 'jugador']]) {

@@ -28,6 +28,38 @@ describe('Imagen personal de encuentros', () => {
     const ctx = canvas.getContext('2d')!; ctx.drawImage(image, 0, 0); return ctx;
   }
   const color = (ctx: CanvasRenderingContext2D, x: number, y: number) => [...ctx.getImageData(x, y, 1, 1).data];
+  it('los miembros de la lista activa reciben la unión real y retirar un miembro restaura su vista individual', async () => {
+    snapshot.vision.groups[0].observerIds = ['hero', 'other'];
+    expect(color(await pixels('hero'), 1080, 80)).toEqual([255, 0, 0, 255]);
+    expect(color(await pixels('other'), 180, 80)).toEqual([255, 0, 0, 255]);
+    snapshot.vision.groups[0].observerIds = ['hero'];
+    expect(color(await pixels('hero'), 1080, 80)).toEqual([9, 12, 16, 255]);
+    expect(color(await pixels('other'), 180, 80)).toEqual([9, 12, 16, 255]);
+  });
+  it('no usa listas inactivas ni observadores ocultos y mantiene opaca la exploración de una vista compartida', async () => {
+    snapshot.vision.groups.push({ id: 'inactive', name: 'Otra lista', observerIds: ['hero', 'other'] });
+    expect(color(await pixels('hero'), 1080, 80)).toEqual([9, 12, 16, 255]);
+    snapshot.vision.groups[0].observerIds = ['hero', 'other', 'secret']; snapshot.tokens[1].hidden = true;
+    snapshot.profiles.set('secret', { version: 1, senses: [{ sense: 'normal', rangeFeet: null, source: { kind: 'director', reference: 'Oculto de prueba' } }] });
+    expect(color(await pixels('hero'), 1080, 80)).toEqual([9, 12, 16, 255]);
+    expect(load.calls.allArgs().flat()).not.toContain('secreta');
+    snapshot.tokens[1].hidden = false; snapshot.fog = [{ x: 1050, y: 50, width: 80, height: 80 }];
+    expect(color(await pixels('hero'), 1080, 80)).toEqual([9, 12, 16, 255]);
+    snapshot.tokens[0].hidden = true; load.calls.reset(); await pixels('hero'); expect(load).not.toHaveBeenCalled();
+  });
+  it('solo rasteriza líneas de puertas dentro de la visión y nunca líneas de paredes o ventanas', async () => {
+    const source = { kind: 'director' as const, reference: 'Trazados sintéticos' };
+    snapshot.vision.obstacles = (['wall', 'window', 'door', 'door-window'] as const).map((kind, i) => ({
+      id: kind, name: kind, kind, start: { x: 150 + i * 15, y: 65 }, end: { x: 150 + i * 15, y: 90 },
+      blocksSight: false, blocksEffect: false, source, ...(['door', 'door-window'].includes(kind) ? { open: false } : {}) }));
+    let ctx = await pixels();
+    expect(color(ctx, 150, 75)).toEqual([255, 0, 0, 255]); expect(color(ctx, 165, 75)).toEqual([255, 0, 0, 255]);
+    expect(color(ctx, 180, 75)).toEqual([233, 189, 102, 255]); expect(color(ctx, 195, 75)).toEqual([233, 189, 102, 255]);
+    snapshot.fog = [{ x: 175, y: 60, width: 30, height: 35 }];
+    ctx = await pixels(); expect(color(ctx, 180, 75)).toEqual([9, 12, 16, 255]);
+    snapshot.fog = []; snapshot.vision.obstacles[2].start.x = snapshot.vision.obstacles[2].end.x = 1000;
+    expect(color(await pixels(), 1000, 75)).toEqual([9, 12, 16, 255]);
+  });
   it('descarta el mapa fuera de la vista personal antes de enviarlo e ignora la lista de dirección', async () => {
     const ctx = await pixels();
     expect(color(ctx, 180, 100)).toEqual([255, 0, 0, 255]);

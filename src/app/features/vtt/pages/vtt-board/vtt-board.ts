@@ -15,7 +15,8 @@ import { map, shareReplay, skip, switchMap } from 'rxjs';
 import { HttpErrorResponse } from '@angular/common/http';
 
 import { Campaign } from '../../../../core/models/campaign';
-import { BoardVisionState, VisionEffect, VisionProfile, VisionSense } from '../../../../core/models/vision';
+import { BoardVisionState, VisionEffect, VisionObstacle, VisionProfile, VisionSense } from '../../../../core/models/vision';
+import { isVisionDoor } from '../../../../core/services/vision-geometry';
 import { advanceVisionEffects, endVisionConcentration, endVisionEffect } from '../../../../core/services/vision-effects';
 import { assertBoardVision, emptyBoardVision, withoutRemovedObservers } from '../../../../core/services/vision-state';
 import { previewSight, previewTokenVisible } from '../../../../core/services/vision-preview';
@@ -43,8 +44,8 @@ import { TokenSheet, VttTokenSheet } from './token-sheet';
 import { WeatherOverlay } from '../../components/weather-overlay';
 
 type VttEntryKind = 'scene' | 'encounter' | 'location' | 'generic';
-type ToolMode = 'select' | 'pan' | 'fog' | 'reveal' | 'measure';
-type SidebarTab = 'tokens' | 'layers' | 'turns' | 'vision';
+type ToolMode = 'select' | 'pan' | 'fog' | 'reveal' | 'measure' | 'wall' | 'door' | 'window';
+type SidebarTab = 'tokens' | 'layers' | 'turns' | 'vision' | 'geometry';
 
 interface VttEntry {
   id: string;
@@ -156,6 +157,11 @@ export class VttBoard {
   protected readonly vision = signal<BoardVisionState>(emptyBoardVision());
   protected readonly visionPreview = signal(false);
   protected readonly visionMessage = signal('');
+  protected readonly doorHasWindow = signal(false);
+  protected readonly draftObstacle = signal<MeasureLine | undefined>(undefined);
+  protected readonly isVisionDoor = isVisionDoor;
+  protected readonly drawingObstacle = computed(() => ['wall', 'door', 'window'].includes(this.mode()));
+  protected readonly displayedObstacles = computed(() => (this.vision().obstacles ?? []).filter((o) => !this.visionPreview() || isVisionDoor(o)));
   protected readonly perceptionMessage = signal('');
   protected readonly visionMaskId = this.newId('vision-mask');
   protected readonly visionObserverIds = computed(() =>
@@ -333,6 +339,7 @@ export class VttBoard {
       this.visionPreview.set(false);
       if (!vm) return;
       this.cancelInteraction();
+      this.mode.set('select'); this.doorHasWindow.set(false);
       this.selectedTokenIds.set([]);
       this.currentCampaign = vm.campaign;
       const runId = this.route.snapshot.queryParamMap.get('run');
@@ -592,10 +599,12 @@ export class VttBoard {
 
   protected setMode(mode: ToolMode): void {
     if (this.visionPreview() && mode !== 'pan') return;
+    if (['wall', 'door', 'window'].includes(mode) && (this.visionStorageBlocked || this.combat.busy())) return;
     this.cancelInteraction();
     this.lastTokenClickId = this.doubleClickTokenId = undefined;
     this.cancelAttack();
     this.mode.set(mode);
+    if (this.drawingObstacle()) this.setSidebarTab('geometry');
     this.draftFog.set(undefined);
     this.measureLine.set(undefined);
   }
@@ -610,6 +619,7 @@ export class VttBoard {
   protected toggleVisionPreview(): void {
     if (this.combat.busy() || (!this.visionPreview() && (!this.vision().enabled || this.visionStorageBlocked))) return;
     this.closeTokenSheet(); this.combatPanel?.close(); this.cancelAttack(); this.clearSelection();
+    this.cancelInteraction();
     this.diceOpen.set(false); this.diceResult.set(''); this.combatMessage.set('');
     this.visionPreview.update((value) => !value);
     this.mode.set(this.visionPreview() ? 'pan' : 'select');
@@ -620,24 +630,30 @@ export class VttBoard {
     if (this.combat.busy()) return;
     this.setBoardVision({ ...this.vision(), obstacles: this.vision().obstacles ?? [] });
   }
-  protected addVisionObstacle(form: HTMLFormElement): void {
-    if (this.combat.busy()) return;
-    const data = new FormData(form), value = (name: string) => String(data.get(name) ?? '').trim();
-    const kind = value('kind');
-    if (!['wall', 'door'].includes(kind) || !value('name') || !value('source') || ['x1', 'y1', 'x2', 'y2'].some((k) => !value(k))) {
-      this.visionMessage.set('Completa nombre, fuente y los dos puntos del obstáculo.'); return;
-    }
-    const obstacle = { id: this.newId('obstacle'), name: value('name'), kind: kind as 'wall' | 'door',
-      start: { x: Number(value('x1')), y: Number(value('y1')) }, end: { x: Number(value('x2')), y: Number(value('y2')) },
-      blocksSight: data.has('blocksSight'), blocksEffect: data.has('blocksEffect'),
-      source: { kind: 'director' as const, reference: value('source') }, ...(kind === 'door' ? { open: false } : {}) };
-    try { this.setBoardVision({ ...this.vision(), obstacles: [...(this.vision().obstacles ?? []), obstacle] }); this.visionMessage.set('Obstáculo guardado.'); }
-    catch { this.visionMessage.set('Revisa la fuente y los dos puntos distintos del obstáculo.'); }
+  protected obstacleLabel(obstacle: VisionObstacle): string {
+    if (isVisionDoor(obstacle)) return `${obstacle.kind === 'door-window' ? 'Puerta con ventana' : 'Puerta'} ${obstacle.open ? 'abierta' : 'cerrada'}`;
+    return obstacle.kind === 'window' ? 'Ventana' : 'Pared';
+  }
+  private saveDrawnObstacle(end: BoardPoint): void {
+    if (!this.drawStart || !this.drawingObstacle() || this.visionPreview() || this.combat.busy() || this.visionStorageBlocked) return;
+    if (Math.hypot(end.x - this.drawStart.x, end.y - this.drawStart.y) * this.zoom() < 4) return;
+    const mode = this.mode() as 'wall' | 'door' | 'window';
+    const kind = mode === 'door' && this.doorHasWindow() ? 'door-window' : mode;
+    const obstacle: VisionObstacle = { id: this.newId('obstacle'), name: `${kind === 'wall' ? 'Pared' : kind === 'window' ? 'Ventana' : kind === 'door-window' ? 'Puerta con ventana' : 'Puerta'} ${(this.vision().obstacles?.length ?? 0) + 1}`,
+      kind, start: { ...this.drawStart }, end, blocksSight: kind === 'wall' || kind === 'door', blocksEffect: true,
+      source: { kind: 'director', reference: 'Trazado sobre el mapa declarado por dirección' }, ...(mode === 'door' ? { open: false } : {}) };
+    try { this.setBoardVision({ ...this.vision(), obstacles: [...(this.vision().obstacles ?? []), obstacle] }); this.visionMessage.set(`${this.obstacleLabel(obstacle)} guardada.`); }
+    catch { this.visionMessage.set('No se pudo guardar el trazado. Conserva el guardado original y revisa el límite de obstáculos.'); }
+  }
+  protected setDoorWindow(id: string, hasWindow: boolean): void {
+    if (this.visionPreview() || this.combat.busy() || this.visionStorageBlocked) return;
+    this.setBoardVision({ ...this.vision(), obstacles: this.vision().obstacles?.map((o) => o.id === id && isVisionDoor(o)
+      ? { ...o, kind: hasWindow ? 'door-window' : 'door', blocksSight: !hasWindow } : o) });
   }
   protected changeVisionObstacle(id: string, remove = false): void {
-    if (this.combat.busy()) return;
+    if (this.visionPreview() || this.combat.busy() || this.visionStorageBlocked) return;
     this.setBoardVision({ ...this.vision(), obstacles: this.vision().obstacles?.filter((o) => !remove || o.id !== id)
-      .map((o) => o.id === id && o.kind === 'door' ? { ...o, open: !o.open } : o) });
+      .map((o) => o.id === id && isVisionDoor(o) ? { ...o, open: !o.open } : o) });
   }
   protected setVisionGameTime(day: string, minute: string, period: string): void {
     if (this.combat.busy() || !day.trim() || !minute.trim() || !['unknown', 'dawn', 'day', 'dusk', 'night'].includes(period)) return;
@@ -1164,10 +1180,13 @@ export class VttBoard {
 
     const point = this.boardPoint(event);
     if (!point) return;
-    this.drawStart = this.snapPoint(point, this.mode() === 'measure');
+    this.drawStart = this.drawingObstacle() ? point : this.snapPoint(point, this.mode() === 'measure');
+    this.board?.nativeElement.focus({ preventScroll: true });
     this.capturePointer(event);
 
-    if (this.mode() === 'measure') {
+    if (this.drawingObstacle()) {
+      this.draftObstacle.set({ x1: point.x, y1: point.y, x2: point.x, y2: point.y });
+    } else if (this.mode() === 'measure') {
       this.measureLine.set({
         x1: this.drawStart.x,
         y1: this.drawStart.y,
@@ -1202,9 +1221,11 @@ export class VttBoard {
     if (!this.drawStart) return;
     const point = this.boardPoint(event);
     if (!point) return;
-    const snapped = this.snapPoint(point, this.mode() === 'measure');
+    const snapped = this.drawingObstacle() ? point : this.snapPoint(point, this.mode() === 'measure');
 
-    if (this.mode() === 'measure') {
+    if (this.drawingObstacle()) {
+      this.draftObstacle.set({ x1: this.drawStart.x, y1: this.drawStart.y, x2: snapped.x, y2: snapped.y });
+    } else if (this.mode() === 'measure') {
       this.measureLine.set({
         x1: this.drawStart.x,
         y1: this.drawStart.y,
@@ -1256,6 +1277,11 @@ export class VttBoard {
     }
 
     if (!this.drawStart) return;
+    if (this.drawingObstacle()) {
+      const end = this.boardPoint(event);
+      if (end) this.saveDrawnObstacle(end);
+      this.cancelInteraction(); return;
+    }
     const draft = this.draftFog();
 
     if (draft && this.mode() === 'fog') {
@@ -1273,6 +1299,7 @@ export class VttBoard {
 
     this.drawStart = undefined;
     this.draftFog.set(undefined);
+    this.draftObstacle.set(undefined);
     this.releasePointer();
   }
 
@@ -1560,6 +1587,7 @@ export class VttBoard {
     this.panStart = undefined;
     this.drawStart = undefined;
     this.draftFog.set(undefined);
+    this.draftObstacle.set(undefined);
     this.releasePointer();
   }
 

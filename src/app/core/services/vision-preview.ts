@@ -1,5 +1,5 @@
 import type { BoardVisionState, VisionEffect, VisionProfile, VisionSense } from '../models/vision';
-import { effectDisks, visionCenter as center } from './vision-geometry';
+import { effectDisks, isVisionDoor, visionCenter as center } from './vision-geometry';
 import { activeVisionEffects, evaluateVision, segmentsIntersect } from './vision-engine';
 export { effectDisks } from './vision-geometry';
 
@@ -55,9 +55,9 @@ export function personalSight(state: BoardVisionState, tokens: readonly PreviewT
   const weather = state.environment.obscurement ?? (state.environment.weather === 'clear' ? 'none' : 'unknown');
   const extent = Math.hypot(width, height) * 4;
   const insideWall = (origin: { x: number; y: number }, channel: 'blocksSight' | 'blocksEffect'): boolean =>
-    (state.obstacles ?? []).some((o) => o[channel] && !(o.kind === 'door' && o.open) && segmentsIntersect(origin, origin, o.start, o.end));
+    (state.obstacles ?? []).some((o) => o[channel] && !(isVisionDoor(o) && o.open) && segmentsIntersect(origin, origin, o.start, o.end));
   const wallShadows = (origin: { x: number; y: number }, channel: 'blocksSight' | 'blocksEffect'): SightPolygon[] =>
-    (state.obstacles ?? []).filter((o) => o[channel] && !(o.kind === 'door' && o.open)).map((o) => {
+    (state.obstacles ?? []).filter((o) => o[channel] && !(isVisionDoor(o) && o.open)).map((o) => {
       const far = (p: { x: number; y: number }) => {
         const d = Math.hypot(p.x - origin.x, p.y - origin.y);
         return { x: p.x + (p.x - origin.x) / (d || 1) * extent, y: p.y + (p.y - origin.y) / (d || 1) * extent };

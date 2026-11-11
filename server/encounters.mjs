@@ -72,6 +72,20 @@ export function encounterSheets(collection) {
   return new Map([...collection.created, ...Object.values(collection.edited)].map((sheet) => [sheet.id, sheet]));
 }
 
+/** Una imagen compartida también depende de los perfiles de sus contribuyentes. */
+export function currentViewVision(board, view, sheets, sheetRevision) {
+  const vision = board.state?.vision;
+  const group = Array.isArray(vision?.groups) && vision.groups.find((item) => item && item.id === vision.activeGroupId && Array.isArray(item.observerIds) && item.observerIds.includes(view.instanceId));
+  // Un PJ sin dueño puede aportar visión, aunque no reciba una imagen propia.
+  // Sin su perfil publicado, cualquier edición de fichas exige regenerar el PNG.
+  if (group && board.state.tokens.some((token) => !token.hidden && group.observerIds.includes(token.instanceId) &&
+    token.actorId.startsWith('player:') && !board.views.some((item) => item.instanceId === token.instanceId)) &&
+    sheetRevision !== board.sheetRevision) return false;
+  const sources = board.views.filter((item) => item === view || (group && group.observerIds.includes(item.instanceId) &&
+    board.state.tokens.some((token) => token.instanceId === item.instanceId && !token.hidden)));
+  return sources.every((item) => sheets.has(item.actorId) && JSON.stringify(item.vision) === JSON.stringify(sheets.get(item.actorId)?.vision ?? null));
+}
+
 export function visibleEncounter(board, user, sheets) {
   const characters = board.views.flatMap((view) => {
     const sheet = sheets.get(view.actorId);

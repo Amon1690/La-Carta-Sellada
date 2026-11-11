@@ -602,18 +602,70 @@ describe('Multiselección de fichas en VTT', () => {
     view.tokens.update((tokens: any[]) => tokens.map((t) => t.instanceId === 'B' ? { ...t, conditions: undefined } : t));
     view.rollVisualPerception('A', 'B', '5'); expect(view.perceptionMessage()).toContain('Faltan'); expect(random).not.toHaveBeenCalled();
   });
-  it('guarda un obstáculo desde el formulario, abre puerta y persiste el tiempo y expiración', async () => {
-    const view = confirmedPreview(); view.setSidebarTab('vision'); fixture.detectChanges();
-    const form = fixture.nativeElement.querySelector('[data-vision-obstacle-form]') as HTMLFormElement;
-    for (const [name, value] of Object.entries({ name: 'Puerta de prueba', kind: 'door', x1: '100', y1: '0', x2: '100', y2: '300', source: 'Decisión sintética' })) {
-      (form.elements.namedItem(name) as HTMLInputElement).value = value;
-    }
-    view.addVisionObstacle(form); expect(view.vision().obstacles[0].open).toBeFalse();
+  it('dibuja una puerta desde la barra, la abre y persiste el tiempo y expiración', async () => {
+    const view = confirmedPreview();
+    (fixture.nativeElement.querySelector('[aria-label="Dibujar puerta"]') as HTMLButtonElement).click(); fixture.detectChanges();
+    rectangle(100, 0, 100, 300); expect(view.vision().obstacles[0].open).toBeFalse();
     view.changeVisionObstacle(view.vision().obstacles[0].id); expect(view.vision().obstacles[0].open).toBeTrue();
     view.setVisionGameTime('4', '1439', 'night'); view.advanceVisionTime('rounds', '10');
     expect(view.vision().environment.gameTime).toEqual({ day: 5, minuteOfDay: 0, second: 0 });
     const saved = localStorage.getItem(key()); routeParams.next(params()); fixture.detectChanges(); await fixture.whenStable();
-    expect(localStorage.getItem(key())).toBe(saved); expect(view.vision().obstacles[0].name).toBe('Puerta de prueba');
+    expect(localStorage.getItem(key())).toBe(saved); expect(view.vision().obstacles[0].name).toBe('Puerta 1');
+  });
+  it('dibuja paredes y ventanas sin coordenadas ni ajuste a casillas y conserva tokens y niebla', () => {
+    const view = fixture.componentInstance as any;
+    view.fogRects.set([{ id: 'keep', x: 3, y: 4, width: 15, height: 20 }]);
+    const before = structuredClone(board.tokens());
+    for (const mode of ['wall', 'window']) { view.setMode(mode); rectangle(301.5, 204.25, 455.5, 307.75); }
+    const [wall, window] = view.vision().obstacles;
+    expect(wall.start.x).toBeCloseTo(301.5); expect(wall.end.y).toBeCloseTo(307.75);
+    expect(wall.blocksSight).toBeTrue(); expect(window.blocksSight).toBeFalse(); expect(window.blocksEffect).toBeTrue();
+    expect(view.sidebarTab()).toBe('geometry'); expect(board.tokens()).toEqual(before); expect(view.fogRects()[0].id).toBe('keep');
+    expect(fixture.nativeElement.querySelector('[data-vision-obstacle-form]')).toBeNull();
+  });
+  it('cancelar, perder el puntero o cambiar de herramienta no guarda borradores ni líneas de un clic', () => {
+    const view = fixture.componentInstance as any;
+    for (const cancel of ['pointercancel', 'lostpointercapture', 'Escape', 'mode', 'preview']) {
+      const ready = cancel === 'preview' ? confirmedPreview() : view;
+      ready.setMode('wall'); pointer(map, 'pointerdown', 300, 200); pointer(map, 'pointermove', 500, 400);
+      expect(ready.draftObstacle()).toBeDefined();
+      if (cancel === 'Escape') map.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }));
+      else if (cancel === 'mode') ready.setMode('door');
+      else if (cancel === 'preview') ready.toggleVisionPreview();
+      else pointer(map, cancel, 500, 400);
+      expect(ready.draftObstacle()).toBeUndefined(); expect(ready.vision().obstacles ?? []).toEqual([]);
+      if (cancel === 'preview') ready.toggleVisionPreview();
+    }
+    view.setMode('wall'); rectangle(400, 400, 400, 400); expect(view.vision().obstacles ?? []).toEqual([]);
+  });
+  it('solo el puntero iniciador termina el segmento y usa el punto final aunque no haya pointermove', () => {
+    const view = fixture.componentInstance as any; view.setMode('window');
+    pointer(map, 'pointerdown', 400, 400); pointer(map, 'pointerup', 700, 500, { pointerId: 8 });
+    expect(view.vision().obstacles).toBeUndefined();
+    pointer(map, 'pointerup', 650, 450); expect(view.vision().obstacles[0].end).toEqual({ x: 650, y: 450 });
+  });
+  it('dirección ve todos los trazados; la previsualización solo contiene puertas recortadas y no permite editarlas', () => {
+    const view = confirmedPreview();
+    for (const mode of ['wall', 'window', 'door', 'door']) {
+      view.setMode(mode); view.doorHasWindow.set(view.vision().obstacles.length === 3); rectangle(300, 40, 300, 160);
+    }
+    fixture.detectChanges(); expect(fixture.nativeElement.querySelectorAll('[data-obstacle-id]').length).toBe(4);
+    const door = view.vision().obstacles[3]; expect(door.kind).toBe('door-window'); expect(door.blocksSight).toBeFalse();
+    view.changeVisionObstacle(door.id); expect(view.vision().obstacles[3].open).toBeTrue();
+    view.toggleVisionPreview(); fixture.detectChanges();
+    const lines = Array.from(fixture.nativeElement.querySelectorAll('[data-obstacle-kind]') as NodeListOf<SVGLineElement>);
+    expect(lines.map((line) => line.getAttribute('data-obstacle-kind'))).toEqual(['door', 'door-window']);
+    expect(lines[0].parentElement?.getAttribute('mask')).toContain('-doors)');
+    view.changeVisionObstacle(door.id, true); view.setDoorWindow(door.id, false);
+    expect(view.vision().obstacles[3].kind).toBe('door-window'); expect(view.vision().obstacles.length).toBe(4);
+  });
+  it('convierte una puerta existente en acristalada sin perder sus puntos, estado ni otros obstáculos', async () => {
+    const view = fixture.componentInstance as any; view.setMode('door'); rectangle(700, 200, 800, 220);
+    const original = structuredClone(view.vision().obstacles[0]); view.setDoorWindow(original.id, true);
+    expect(view.vision().obstacles[0]).toEqual({ ...original, kind: 'door-window', blocksSight: false });
+    routeParams.next(params()); fixture.detectChanges(); await fixture.whenStable();
+    expect(view.vision().obstacles[0].kind).toBe('door-window'); expect(view.vision().obstacles[0].open).toBeFalse();
+    view.setDoorWindow(original.id, false); expect(view.vision().obstacles[0]).toEqual(original);
   });
   it('migra un tablero antiguo sin alterar niebla manual ni escribir al leer', async () => {
     const view = fixture.componentInstance as any;

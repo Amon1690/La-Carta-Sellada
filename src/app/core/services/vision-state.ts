@@ -55,12 +55,12 @@ export function assertBoardVision(v: unknown, tokenIds: ReadonlySet<string>): as
     for (const item of list(b['obstacles'], 1000)) {
       const obstacle = record(item, ['id', 'name', 'kind', 'start', 'end', 'source', 'blocksSight', 'blocksEffect', 'open']);
       if (!text(obstacle['id']) || !text(obstacle['name']) || obstacleIds.has(obstacle['id']) ||
-          !choice(obstacle['kind'], ['wall', 'door']) || typeof obstacle['blocksSight'] !== 'boolean' || typeof obstacle['blocksEffect'] !== 'boolean') fail();
+          !choice(obstacle['kind'], ['wall', 'door', 'window', 'door-window']) || typeof obstacle['blocksSight'] !== 'boolean' || typeof obstacle['blocksEffect'] !== 'boolean') fail();
       obstacleIds.add(obstacle['id'] as string); source(obstacle['source']);
       const start = record(obstacle['start'], ['x', 'y']), end = record(obstacle['end'], ['x', 'y']);
       if (![start['x'], start['y'], end['x'], end['y']].every((n) => numeric(n)) ||
           (start['x'] === end['x'] && start['y'] === end['y'])) fail();
-      if (obstacle['kind'] === 'door' ? typeof obstacle['open'] !== 'boolean' : obstacle['open'] !== undefined) fail();
+      if (['door', 'door-window'].includes(obstacle['kind'] as string) ? typeof obstacle['open'] !== 'boolean' : obstacle['open'] !== undefined) fail();
     }
   }
   const groupIds = new Set<string>();
