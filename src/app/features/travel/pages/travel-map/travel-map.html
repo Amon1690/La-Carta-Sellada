@@ -9,7 +9,7 @@
       <p>Rutas, grupos y jornadas a través de Faerûn.</p>
     </div>
     <div class="journey-stats" aria-label="Estado del viaje">
-      <span><small>Ruta</small><b>{{ formatDistance(routeDistance()) }} km</b></span>
+      <span><small>Ruta manual</small><b>{{ formatDistance(routeDistance()) }} km</b></span>
       <span><small>Restante</small><b>{{ formatDistance(remainingDistance()) }} km</b></span>
       <span><small>Jornadas</small><b>{{ estimatedDays() || '—' }}</b></span>
       <span><small>Lugares</small><b>{{ locations.length }}</b></span>
@@ -26,8 +26,8 @@
           <button type="button" aria-label="Colocar grupo" [class.active]="mode() === 'place'" (click)="setMode('place')">
             <span aria-hidden="true">◎</span><b>Colocar</b>
           </button>
-          <button type="button" aria-label="Trazar ruta" [class.active]="mode() === 'route'" (click)="setMode('route')">
-            <span aria-hidden="true">⌁</span><b>Ruta</b>
+          <button type="button" aria-label="Trazar ruta manual" [class.active]="mode() === 'route'" (click)="setMode('route')">
+            <span aria-hidden="true">⌁</span><b>Ruta manual</b>
           </button>
           <button type="button" aria-label="Mover mapa" [class.active]="mode() === 'pan'" (click)="setMode('pan')">
             <span aria-hidden="true">✥</span><b>Mover</b>
@@ -64,10 +64,11 @@
         >
           <img class="faerun-map" src="assets/maps/faerun-atlas-aidedd.jpg" alt="Mapa completo de Faerûn con sus regiones y localizaciones" draggable="false" />
 
-          <svg class="route-layer" viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="Ruta trazada sobre el mapa">
+          <svg class="route-layer" viewBox="0 0 100 100" preserveAspectRatio="none" aria-label="Ruta manual y previsualización de itinerario">
             @if (route().length > 1) {
               <polyline class="route-line" fill="none" [attr.points]="polylinePoints()"></polyline>
             }
+            @if (plannedItinerary()) { <polyline fill="none" stroke="#91d9e6" stroke-width="3" stroke-dasharray="8 5" [attr.points]="plannedPolyline()" aria-label="Vista previa de itinerario calculado" /> }
           </svg>
 
           @for (location of locations; track location.id) {
@@ -135,7 +136,7 @@
         <span><i aria-hidden="true"></i>{{ status() }}</span>
         <span>{{ activePaceLabel() }} · {{ formatDistance(dailyDistance()) }} km/día · Atlas AideDD / Mike Schley</span>
       </footer>
-      @if(canManageNetwork()){<app-route-network-editor [campaignId]="campaignId" [point]="networkPoint()" />}
+      @if(canManageNetwork()){<app-route-network-editor [campaignId]="campaignId" [point]="networkPoint()" (networkChange)="networkChanged($event)" />}
     </div>
 
     <aside class="travel-sidebar">
@@ -228,7 +229,10 @@
                 </select>
               </label>
             </div>
-            <button type="button" class="route-destination" (click)="routeToSelectedDestination()">Añadir destino a la ruta</button>
+            @if(canManageNetwork()) {
+              <app-route-planner [network]="routeNetwork()" [origin]="plannerOrigin()" [destination]="plannerDestination()"
+                [contextKey]="campaignId + ':' + selectedGroupId()" (previewChange)="plannedItinerary.set($event)" (manualRequested)="addManualDestination()" />
+            } @else { <button type="button" class="route-destination" (click)="addManualDestination()">Añadir destino como ruta manual</button> }
 
             <fieldset class="pace-control">
               <legend>Ritmo</legend>
