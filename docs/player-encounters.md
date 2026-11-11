@@ -8,8 +8,11 @@ ataques preparados contra objetivos visibles permitidos.
 
 El director abre el VTT, entra en **Visión** y pulsa **Compartir encuentro con
 jugadores**. Se comparte también el nombre del tablero. Cada instancia de PJ
-asignado recibe su propia imagen: las listas de observadores de dirección no
-amplían su visión. **Dejar de compartir encuentro** retira la publicación.
+asignado recibe una imagen protegida. Los personajes incluidos en la lista activa
+comparten la unión de su visión; los que estén fuera conservan la vista individual.
+Cambiar de lista o sus integrantes actualiza esas imágenes. Los observadores
+ocultos no contribuyen y la exploración opaca sigue cubriendo el mapa.
+**Dejar de compartir encuentro** retira la publicación.
 Mientras el tablero está abierto, todos los navegadores consultan cambios cada
 segundo. Las imágenes solo se descargan al cambiar la revisión del encuentro.
 El director recibe movimientos, ataques, turnos, niebla y cambios del tablero;
@@ -25,8 +28,9 @@ de su alcance; visión en la oscuridad, visión ciega y visión verdadera usan
 sus rangos registrados. La ceguera, los sentidos concedidos y las zonas
 explícitas de oscuridad mágica u ocultación fuerte se aplican a sus ámbitos.
 Estas zonas opacas proyectan sombra detrás de ellas. El sentido sísmico no
-se convierte en visión. No se añade cálculo de muros: se delimitan mediante
-niebla manual. Un perfil o unas condiciones desconocidos siguen pendientes.
+se convierte en visión. Los muros, puertas y ventanas se trazan explícitamente
+en el tablero y recortan la vista según sus bloqueos; la niebla manual se conserva
+por separado. Un perfil o unas condiciones desconocidos siguen pendientes.
 
 En **Visión**, despliega un personaje para registrar sentidos especiales y
 la luz de un objeto: radio de luz intensa, radio total de penumbra y fuente
@@ -64,7 +68,12 @@ imagen, posición propia, objetivos visibles y acciones preparadas autorizadas.
 Comprueba sesión, campaña, PJ y audiencia de publicación en cada consulta.
 Un personaje recién reasignado no obtiene imágenes de una audiencia anterior
 hasta que el director vuelva a publicar. Cambiar su perfil de visión invalida
-la imagen anterior. Los conflictos de revisión conservan los cambios locales
+la imagen anterior, también si pertenece a otro PJ que aporta visión a su lista
+compartida. Si aporta visión un PJ sin dueño y sin imagen publicada propia,
+cualquier edición de fichas exige regenerar la imagen para evitar usar su perfil
+anterior. La lista no concede control sobre personajes ajenos: turnos, movimiento,
+ataques y tiradas siguen usando las capacidades personales y sus permisos actuales.
+Los conflictos de revisión conservan los cambios locales
 en `la-carta-sellada:encounter-conflict:<clave del tablero>` antes de adoptar
 la versión compartida; no descartan el historial de conflictos.
 

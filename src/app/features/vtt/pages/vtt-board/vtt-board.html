@@ -254,7 +254,7 @@
             <div class="sidebar-tabs"><strong>Visión compartida</strong></div>
             <section class="sidebar-content token-inspector">
               <h2>Previsualización local</h2>
-              <p>Visión compartida de las instancias elegidas. Esta vista no se transmite a jugadores.</p>
+              <p>Visión de las instancias de la lista activa. Al compartir el encuentro, sus miembros reciben esta visión conjunta y los demás conservan su vista individual.</p>
               <p>Alcances y luz registrados por personaje, con obstáculos e intensidad del clima confirmados por dirección. La exploración manual se conserva por separado.</p>
               <p>Negro: sin explorar. Oscuro: explorado sin visión. Iluminado: visión de los observadores.</p>
               @if (previewGeometry().pending) { <p role="status">Hay datos de visión pendientes. Las zonas sin confirmar permanecen oscuras.</p> }
@@ -298,7 +298,7 @@
               <section class="vision-panel token-inspector">
                 <h2>Visión compartida</h2>
                 <h3>Encuentros de los jugadores</h3>
-                <p>Comparte el nombre de este tablero y una vista personal por cada PJ asignado. Las listas de observadores de dirección no conceden visión a jugadores.</p>
+                <p>Comparte el nombre de este tablero y una vista por cada PJ asignado. Los personajes incluidos en la lista activa comparten su visión; los demás conservan su visión individual.</p>
                 <p>Revisa la exploración y los obstáculos antes de compartir. Los muros, alcances y fuentes de luz se registran explícitamente.</p>
                 <button type="button" class="open-token-sheet" [disabled]="!sharingReady() || (visionStorageBlocked && !encounterShared())" [attr.aria-pressed]="encounterShared()" (click)="toggleEncounterSharing()">{{ encounterShared() ? 'Dejar de compartir encuentro' : 'Compartir encuentro con jugadores' }}</button>
                 @if (sharingMessage()) { <p role="status">{{ sharingMessage() }}</p> }
@@ -398,7 +398,7 @@
                   }
                 </fieldset>
                 @if (visionMessage()) { <p role="status">{{ visionMessage() }}</p> }
-                <p>La previsualización es local y provisional; no abre el tablero a jugadores.</p>
+                <p>Esta previsualización es local. Para enviar la visión conjunta a los miembros de la lista, comparte el encuentro.</p>
               </section>
             }
             @if (sidebarTab() === 'tokens') {

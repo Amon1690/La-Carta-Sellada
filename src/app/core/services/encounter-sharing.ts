@@ -30,7 +30,9 @@ export async function renderPersonalView(snapshot: SharingSnapshot, observerId: 
   load: (url: string) => Promise<CanvasImageSource> = loadImage
 ): Promise<{ image: string; pending: boolean }> {
   const width = 1536, height = 1024, grid = 51.2;
-  const vision = { ...snapshot.vision, groups: [{ id: 'personal', name: 'Personal', observerIds: [observerId] }], activeGroupId: 'personal' };
+  const shared = snapshot.vision.groups.find((group) => group.id === snapshot.vision.activeGroupId && group.observerIds.includes(observerId));
+  const observerIds = (shared?.observerIds ?? [observerId]).filter((id) => snapshot.tokens.some((token) => token.instanceId === id && !token.hidden));
+  const vision = { ...snapshot.vision, groups: [{ id: 'published', name: 'Vista del personaje', observerIds }], activeGroupId: 'published' };
   const geometry = snapshot.tokens.find((token) => token.instanceId === observerId)?.hidden
     ? { circles: [], pending: true } : previewSight(vision, snapshot.tokens, snapshot.profiles, grid, width, height);
   const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;

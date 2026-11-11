@@ -28,6 +28,25 @@ describe('Imagen personal de encuentros', () => {
     const ctx = canvas.getContext('2d')!; ctx.drawImage(image, 0, 0); return ctx;
   }
   const color = (ctx: CanvasRenderingContext2D, x: number, y: number) => [...ctx.getImageData(x, y, 1, 1).data];
+  it('los miembros de la lista activa reciben la unión real y retirar un miembro restaura su vista individual', async () => {
+    snapshot.vision.groups[0].observerIds = ['hero', 'other'];
+    expect(color(await pixels('hero'), 1080, 80)).toEqual([255, 0, 0, 255]);
+    expect(color(await pixels('other'), 180, 80)).toEqual([255, 0, 0, 255]);
+    snapshot.vision.groups[0].observerIds = ['hero'];
+    expect(color(await pixels('hero'), 1080, 80)).toEqual([9, 12, 16, 255]);
+    expect(color(await pixels('other'), 180, 80)).toEqual([9, 12, 16, 255]);
+  });
+  it('no usa listas inactivas ni observadores ocultos y mantiene opaca la exploración de una vista compartida', async () => {
+    snapshot.vision.groups.push({ id: 'inactive', name: 'Otra lista', observerIds: ['hero', 'other'] });
+    expect(color(await pixels('hero'), 1080, 80)).toEqual([9, 12, 16, 255]);
+    snapshot.vision.groups[0].observerIds = ['hero', 'other', 'secret']; snapshot.tokens[1].hidden = true;
+    snapshot.profiles.set('secret', { version: 1, senses: [{ sense: 'normal', rangeFeet: null, source: { kind: 'director', reference: 'Oculto de prueba' } }] });
+    expect(color(await pixels('hero'), 1080, 80)).toEqual([9, 12, 16, 255]);
+    expect(load.calls.allArgs().flat()).not.toContain('secreta');
+    snapshot.tokens[1].hidden = false; snapshot.fog = [{ x: 1050, y: 50, width: 80, height: 80 }];
+    expect(color(await pixels('hero'), 1080, 80)).toEqual([9, 12, 16, 255]);
+    snapshot.tokens[0].hidden = true; load.calls.reset(); await pixels('hero'); expect(load).not.toHaveBeenCalled();
+  });
   it('solo rasteriza líneas de puertas dentro de la visión y nunca líneas de paredes o ventanas', async () => {
     const source = { kind: 'director' as const, reference: 'Trazados sintéticos' };
     snapshot.vision.obstacles = (['wall', 'window', 'door', 'door-window'] as const).map((kind, i) => ({

@@ -1,5 +1,5 @@
 import { NPC_PORTRAITS, GENERIC_MAP_PATHS } from '../shared/assets.mjs';
-import { authorizeCommand, encounterSheets, playerCombatLog, playerControls, validateEncounter, visibleEncounter } from './encounters.mjs';
+import { authorizeCommand, currentViewVision, encounterSheets, playerCombatLog, playerControls, validateEncounter, visibleEncounter } from './encounters.mjs';
 import { createServer } from 'node:http';
 import { randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
@@ -242,7 +242,7 @@ export async function createCartaServer({ root = process.cwd(), stateDir = resol
           const observerId = url.searchParams.get('observer');
           if (!summary || !summary.characters.some((item) => item.instanceId === observerId)) fail(404, 'Este encuentro o personaje ya no está disponible.');
           const view = board.views.find((item) => item.instanceId === observerId);
-          if (JSON.stringify(view.vision) !== JSON.stringify(sheets.get(view.actorId)?.vision ?? null)) fail(409, 'La visión ha cambiado. El director debe actualizar el encuentro.');
+          if (!currentViewVision(board, view, sheets, sheetsFor(id).revision)) fail(409, 'La visión ha cambiado. El director debe actualizar el encuentro.');
           const controls = playerControls(board, view, encounterOnline(id, boardId) && board.sheetRevision === sheetsFor(id).revision);
           const last = board.receipts?.filter((receipt) => receipt.userId === user.id && (!url.searchParams.has('receipt') || receipt.id === url.searchParams.get('receipt'))).at(-1);
           const metadata = { ...summary, observerId, pending: view.pending, revision: board.revision ?? 0, controls,
