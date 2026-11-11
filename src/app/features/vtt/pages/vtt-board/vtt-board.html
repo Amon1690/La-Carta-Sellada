@@ -52,6 +52,9 @@
               [disabled]="visionStorageBlocked || combat.busy()" [class.active]="mode() === tool.mode" [attr.aria-pressed]="mode() === tool.mode"
               (click)="setMode($any(tool.mode))"><span aria-hidden="true">{{ tool.icon }}</span><b>{{ tool.label }}</b></button>
           }
+          <button type="button" title="Colocar foco de luz" aria-label="Colocar foco de luz"
+            [disabled]="visionStorageBlocked || combat.busy()" [class.active]="mode() === 'light'" [attr.aria-pressed]="mode() === 'light'"
+            (click)="setMode('light')"><span aria-hidden="true">☀</span><b>Luz</b></button>
         </div>
         }
 
@@ -106,9 +109,9 @@
               class="map-board"
               tabindex="0"
               role="group"
-              [attr.aria-label]="visionPreview() ? 'Previsualización local del mapa. Arrastra para desplazar.' : drawingObstacle() ? 'Mapa de juego. Arrastra para dibujar el trazado seleccionado.' : 'Mapa de juego. Arrastra para seleccionar fichas.'"
+              [attr.aria-label]="visionPreview() ? 'Previsualización local del mapa. Arrastra para desplazar.' : mode() === 'light' ? 'Mapa de juego. Pulsa para colocar un foco de luz.' : drawingObstacle() ? 'Mapa de juego. Arrastra para dibujar el trazado seleccionado.' : 'Mapa de juego. Arrastra para seleccionar fichas.'"
               [class.targeting]="targeting()"
-              [class.drawing]="drawingObstacle() || mode() === 'fog' || mode() === 'reveal' || mode() === 'measure'"
+              [class.drawing]="drawingObstacle() || mode() === 'light' || mode() === 'fog' || mode() === 'reveal' || mode() === 'measure'"
               [style.width.px]="mapWidth"
               [style.height.px]="mapHeight"
               [style.transform]="'scale(' + zoom() + ')'"
@@ -187,6 +190,18 @@
                 </g>
                 @if (!visionPreview() && draftObstacle(); as draft) { <line style="stroke: white; stroke-width: 5; stroke-dasharray: 8 5" [attr.x1]="draft.x1" [attr.y1]="draft.y1" [attr.x2]="draft.x2" [attr.y2]="draft.y2" /> }
               </svg>
+
+              @if (!visionPreview()) {
+                <svg class="map-image scene-light-layer" style="z-index: 24" [attr.viewBox]="'0 0 ' + mapWidth + ' ' + mapHeight" aria-hidden="true">
+                  @for (light of sceneLights(); track light.id) {
+                    <g [attr.data-light-id]="light.id" [attr.opacity]="light.active ? 1 : 0.35">
+                      <circle [attr.cx]="light.scope.x" [attr.cy]="light.scope.y" [attr.r]="lightRadiusPixels(light.scope.radiusFeet)" fill="#ffd96b" fill-opacity="0.07" stroke="#ffd96b" stroke-width="2" stroke-dasharray="8 5" />
+                      <circle [attr.cx]="light.scope.x" [attr.cy]="light.scope.y" r="9" fill="#ffd96b" stroke="#241d0a" stroke-width="2" />
+                      <title>{{ light.name }} · {{ light.scope.radiusFeet }} pies · {{ light.active ? 'Encendido' : 'Apagado' }}</title>
+                    </g>
+                  }
+                </svg>
+              }
 
               @if (draftFog(); as draft) {
                 <div
@@ -268,9 +283,34 @@
             <button type="button" [class.active]="sidebarTab() === 'turns'" (click)="setSidebarTab('turns')">Turnos</button>
             <button type="button" [class.active]="sidebarTab() === 'vision'" (click)="setSidebarTab('vision')">Visión</button>
             <button type="button" [class.active]="sidebarTab() === 'geometry'" (click)="setSidebarTab('geometry')">Trazados</button>
+            <button type="button" [class.active]="sidebarTab() === 'lights'" (click)="setSidebarTab('lights')">Luces</button>
           </nav>
 
           <div #sideContent class="sidebar-content">
+            @if (sidebarTab() === 'lights') {
+              <section class="vision-panel token-inspector" aria-label="Focos de luz del escenario">
+                <h2>Focos de luz</h2>
+                <p>Introduce un radio y pulsa sobre el mapa con la herramienta Luz. Cada círculo indica el alcance del foco; las paredes siguen bloqueando la luz. Esc cancela la colocación.</p>
+                <p>La iluminación se combina con los sentidos del personaje y la niebla de guerra. No descubre zonas sin explorar.</p>
+                <fieldset [disabled]="visionStorageBlocked || combat.busy()">
+                  <legend>Nuevo foco</legend>
+                  <label>Radio del nuevo foco (pies)<input type="number" min="0.1" max="100000" step="any" [value]="lightRadius()" (input)="lightRadius.set($any($event.target).value)" /></label>
+                  <label>Iluminación del nuevo foco<select [value]="lightIllumination()" (change)="lightIllumination.set($any($event.target).value)"><option value="bright">Luz brillante</option><option value="dim">Luz tenue</option></select></label>
+                  <button type="button" class="open-token-sheet" (click)="setMode('light')">Colocar en el mapa</button>
+                  @for (light of sceneLights(); track light.id) {
+                    <article [attr.data-light-editor]="light.id">
+                      <h3>{{ light.name }} · {{ light.active ? 'Encendido' : 'Apagado' }}</h3>
+                      <label>Radio de {{ light.name }} (pies)<input #radius type="number" min="0.1" max="100000" step="any" [value]="light.scope.radiusFeet" /></label>
+                      <label>Iluminación de {{ light.name }}<select #illumination [value]="light.illumination"><option value="bright">Luz brillante</option><option value="dim">Luz tenue</option></select></label>
+                      <button type="button" class="open-token-sheet" (click)="updateSceneLight(light.id, radius.value, illumination.value)">Guardar {{ light.name }}</button>
+                      <button type="button" class="open-token-sheet" (click)="changeSceneLight(light.id)">{{ light.active ? 'Apagar' : 'Encender' }} {{ light.name }}</button>
+                      <button type="button" class="open-token-sheet" (click)="changeSceneLight(light.id, true)">Eliminar {{ light.name }}</button>
+                    </article>
+                  } @empty { <p>No hay focos fijos en este escenario.</p> }
+                </fieldset>
+                @if (visionMessage()) { <p role="status">{{ visionMessage() }}</p> }
+              </section>
+            }
             @if (sidebarTab() === 'geometry') {
               <section class="vision-panel token-inspector obstacle-panel" aria-label="Paredes, puertas y ventanas">
                 <h2>Paredes, puertas y ventanas</h2>

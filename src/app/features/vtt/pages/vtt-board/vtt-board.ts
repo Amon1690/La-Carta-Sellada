@@ -44,8 +44,9 @@ import { TokenSheet, VttTokenSheet } from './token-sheet';
 import { WeatherOverlay } from '../../components/weather-overlay';
 
 type VttEntryKind = 'scene' | 'encounter' | 'location' | 'generic';
-type ToolMode = 'select' | 'pan' | 'fog' | 'reveal' | 'measure' | 'wall' | 'door' | 'window';
-type SidebarTab = 'tokens' | 'layers' | 'turns' | 'vision' | 'geometry';
+type ToolMode = 'select' | 'pan' | 'fog' | 'reveal' | 'measure' | 'wall' | 'door' | 'window' | 'light';
+type SidebarTab = 'tokens' | 'layers' | 'turns' | 'vision' | 'geometry' | 'lights';
+type SceneLight = VisionEffect & { kind: 'light'; scope: { kind: 'circle'; x: number; y: number; radiusFeet: number } };
 
 interface VttEntry {
   id: string;
@@ -158,6 +159,10 @@ export class VttBoard {
   protected readonly visionPreview = signal(false);
   protected readonly visionMessage = signal('');
   protected readonly doorHasWindow = signal(false);
+  protected readonly lightRadius = signal('');
+  protected readonly lightIllumination = signal<'bright' | 'dim'>('bright');
+  protected readonly sceneLights = computed(() => this.vision().effects.filter((effect): effect is SceneLight =>
+    effect.kind === 'light' && effect.scope.kind === 'circle' && !effect.anchorTokenId && effect.duration.kind === 'until-ended'));
   protected readonly draftObstacle = signal<MeasureLine | undefined>(undefined);
   protected readonly isVisionDoor = isVisionDoor;
   protected readonly drawingObstacle = computed(() => ['wall', 'door', 'window'].includes(this.mode()));
@@ -599,12 +604,13 @@ export class VttBoard {
 
   protected setMode(mode: ToolMode): void {
     if (this.visionPreview() && mode !== 'pan') return;
-    if (['wall', 'door', 'window'].includes(mode) && (this.visionStorageBlocked || this.combat.busy())) return;
+    if (['wall', 'door', 'window', 'light'].includes(mode) && (this.visionStorageBlocked || this.combat.busy())) return;
     this.cancelInteraction();
     this.lastTokenClickId = this.doubleClickTokenId = undefined;
     this.cancelAttack();
     this.mode.set(mode);
     if (this.drawingObstacle()) this.setSidebarTab('geometry');
+    if (mode === 'light') this.setSidebarTab('lights');
     this.draftFog.set(undefined);
     this.measureLine.set(undefined);
   }
@@ -626,6 +632,38 @@ export class VttBoard {
   }
 
   protected enableVision(enabled: boolean): void { this.setBoardVision({ ...this.vision(), enabled }); }
+  protected lightRadiusPixels(radiusFeet: number): number { return radiusFeet * 0.3048 / 1.5 * this.gridSize; }
+  private validLightRadius(value: string): number | undefined {
+    const radius = Number(value);
+    if (!value.trim() || !Number.isFinite(radius) || radius <= 0 || radius > 100000) {
+      this.visionMessage.set('Introduce un radio mayor que 0 y como máximo 100000 pies.'); return;
+    }
+    return radius;
+  }
+  private placeSceneLight(point: BoardPoint): void {
+    if (this.visionPreview() || this.combat.busy() || this.visionStorageBlocked) return;
+    const radiusFeet = this.validLightRadius(this.lightRadius());
+    if (radiusFeet === undefined) return;
+    const effect: SceneLight = { id: this.newId('scene-light'), name: `Foco ${this.sceneLights().length + 1}`, kind: 'light',
+      scope: { kind: 'circle', ...point, radiusFeet }, illumination: this.lightIllumination(), active: true,
+      duration: { kind: 'until-ended' }, source: { kind: 'director', reference: 'Foco colocado sobre el escenario; radio declarado por dirección' } };
+    try { this.setBoardVision({ ...this.vision(), effects: [...this.vision().effects, effect] }); this.visionMessage.set('Foco guardado. Puedes ajustar su radio en Luces.'); }
+    catch { this.visionMessage.set('No se pudo guardar el foco. Conserva el guardado original y revisa el límite de efectos.'); }
+  }
+  protected updateSceneLight(id: string, radius: string, illumination: string): void {
+    if (this.visionPreview() || this.combat.busy() || this.visionStorageBlocked || !this.sceneLights().some((light) => light.id === id)) return;
+    const radiusFeet = this.validLightRadius(radius);
+    if (radiusFeet === undefined || (illumination !== 'bright' && illumination !== 'dim')) return;
+    this.setBoardVision({ ...this.vision(), effects: this.vision().effects.map((effect) => effect.id === id && effect.scope.kind === 'circle'
+      ? { ...effect, scope: { ...effect.scope, radiusFeet }, illumination } : effect) });
+    this.visionMessage.set('Radio e iluminación del foco guardados.');
+  }
+  protected changeSceneLight(id: string, remove = false): void {
+    if (this.visionPreview() || this.combat.busy() || this.visionStorageBlocked || !this.sceneLights().some((light) => light.id === id)) return;
+    this.setBoardVision({ ...this.vision(), effects: this.vision().effects.filter((effect) => !remove || effect.id !== id)
+      .map((effect) => effect.id === id ? { ...effect, active: !effect.active } : effect) });
+    this.visionMessage.set(remove ? 'Foco eliminado.' : 'Estado del foco guardado.');
+  }
   protected confirmVisionGeometry(): void {
     if (this.combat.busy()) return;
     this.setBoardVision({ ...this.vision(), obstacles: this.vision().obstacles ?? [] });
@@ -1180,10 +1218,11 @@ export class VttBoard {
 
     const point = this.boardPoint(event);
     if (!point) return;
-    this.drawStart = this.drawingObstacle() ? point : this.snapPoint(point, this.mode() === 'measure');
+    this.drawStart = this.drawingObstacle() || this.mode() === 'light' ? point : this.snapPoint(point, this.mode() === 'measure');
     this.board?.nativeElement.focus({ preventScroll: true });
     this.capturePointer(event);
 
+    if (this.mode() === 'light') return;
     if (this.drawingObstacle()) {
       this.draftObstacle.set({ x1: point.x, y1: point.y, x2: point.x, y2: point.y });
     } else if (this.mode() === 'measure') {
@@ -1218,7 +1257,7 @@ export class VttBoard {
       return;
     }
 
-    if (!this.drawStart) return;
+    if (!this.drawStart || this.mode() === 'light') return;
     const point = this.boardPoint(event);
     if (!point) return;
     const snapped = this.drawingObstacle() ? point : this.snapPoint(point, this.mode() === 'measure');
@@ -1277,6 +1316,11 @@ export class VttBoard {
     }
 
     if (!this.drawStart) return;
+    if (this.mode() === 'light') {
+      const point = this.boardPoint(event);
+      if (point) this.placeSceneLight(point);
+      this.cancelInteraction(); return;
+    }
     if (this.drawingObstacle()) {
       const end = this.boardPoint(event);
       if (end) this.saveDrawnObstacle(end);

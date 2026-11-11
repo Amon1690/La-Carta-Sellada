@@ -602,6 +602,73 @@ describe('Multiselección de fichas en VTT', () => {
     view.tokens.update((tokens: any[]) => tokens.map((t) => t.instanceId === 'B' ? { ...t, conditions: undefined } : t));
     view.rollVisualPerception('A', 'B', '5'); expect(view.perceptionMessage()).toContain('Faltan'); expect(random).not.toHaveBeenCalled();
   });
+  it('coloca un foco desde la barra con radio explícito y coordenadas libres al aplicar zoom', () => {
+    const view = fixture.componentInstance as any, before = structuredClone(board.tokens());
+    (fixture.nativeElement.querySelector('[aria-label="Colocar foco de luz"]') as HTMLButtonElement).click(); fixture.detectChanges();
+    expect(view.sidebarTab()).toBe('lights'); expect(view.lightRadius()).toBe('');
+    const input = fixture.nativeElement.querySelector('[aria-label="Focos de luz del escenario"] input') as HTMLInputElement;
+    input.value = '15.5'; input.dispatchEvent(new Event('input')); fixture.detectChanges();
+    rectangle(301.5, 204.25, 301.5, 204.25);
+    const light = view.sceneLights()[0];
+    expect(light.scope.x).toBeCloseTo(301.5); expect(light.scope.y).toBeCloseTo(204.25); expect(light.scope.radiusFeet).toBe(15.5);
+    expect(light.illumination).toBe('bright'); expect(light.anchorTokenId).toBeUndefined();
+    expect(board.tokens()).toEqual(before); expect(view.fogRects()).toEqual([]); expect(view.draftFog()).toBeUndefined();
+    expect(fixture.nativeElement.querySelector('[data-light-id]')).not.toBeNull();
+  });
+  it('no crea luces con radio vacío, no finito, nulo, negativo o superior al límite', () => {
+    const view = fixture.componentInstance as any; view.setMode('light');
+    for (const radius of ['', 'Infinity', 'NaN', '0', '-1', '100001']) {
+      view.lightRadius.set(radius); rectangle(400, 300, 400, 300);
+      expect(view.vision().effects).toEqual([]); expect(view.visionMessage()).toContain('radio');
+    }
+  });
+  it('cancelar un foco o cambiar de herramienta no guarda una colocación pendiente', () => {
+    const view = confirmedPreview(); view.lightRadius.set('10');
+    for (const cancel of ['pointercancel', 'lostpointercapture', 'Escape', 'mode', 'preview']) {
+      view.setMode('light'); pointer(map, 'pointerdown', 400, 300);
+      if (cancel === 'Escape') map.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }));
+      else if (cancel === 'mode') view.setMode('wall');
+      else if (cancel === 'preview') view.toggleVisionPreview();
+      else pointer(map, cancel, 400, 300);
+      pointer(map, 'pointerup', 400, 300); expect(view.vision().effects).toEqual([]);
+      if (cancel === 'preview') view.toggleVisionPreview();
+    }
+  });
+  it('edita, apaga y elimina solo el foco indicado sin modificar luces de fichas o efectos temporales', () => {
+    const view = confirmedPreview(); view.saveTokenLight('A', '0', '5', 'Fuente de prueba');
+    const anchored = structuredClone(view.vision().effects[0]);
+    const temporary = { ...anchored, id: 'temporary', anchorTokenId: undefined, duration: { kind: 'rounds', remaining: 2 } };
+    view.setBoardVision({ ...view.vision(), effects: [...view.vision().effects, temporary] });
+    view.setMode('light'); view.lightRadius.set('10'); rectangle(350, 300, 350, 300); rectangle(450, 300, 450, 300);
+    const [first, second] = view.sceneLights();
+    view.updateSceneLight(first.id, '0', 'dim'); expect(view.sceneLights()[0].scope.radiusFeet).toBe(10);
+    view.updateSceneLight(first.id, '20', 'dim'); expect(view.sceneLights()[0].scope.radiusFeet).toBe(20);
+    expect(view.sceneLights()[0].illumination).toBe('dim'); expect(view.sceneLights()[1]).toEqual(second);
+    view.changeSceneLight(first.id); expect(view.sceneLights()[0].active).toBeFalse();
+    view.changeSceneLight(first.id); expect(view.sceneLights()[0].active).toBeTrue();
+    view.changeSceneLight(first.id, true); expect(view.sceneLights()).toEqual([second]);
+    expect(view.vision().effects.slice(0, 2)).toEqual([anchored, temporary]);
+  });
+  it('los focos iluminan en oscuridad pero sus controles y círculos no aparecen en previsualización', () => {
+    const view = confirmedPreview(); view.setPreviewEnvironment('illumination', 'darkness');
+    expect(view.previewGeometry().circles).toEqual([]);
+    view.setMode('light'); view.lightRadius.set('5'); rectangle(128, 128, 128, 128);
+    const id = view.sceneLights()[0].id; expect(view.previewGeometry().circles.length).toBeGreaterThan(0);
+    view.changeSceneLight(id); expect(view.previewGeometry().circles).toEqual([]); view.changeSceneLight(id);
+    view.toggleVisionPreview(); fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.scene-light-layer')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[aria-label="Colocar foco de luz"]')).toBeNull();
+    view.updateSceneLight(id, '90', 'dim'); view.changeSceneLight(id, true); view.setMode('light');
+    expect(view.sceneLights()[0].scope.radiusFeet).toBe(5); expect(view.mode()).toBe('pan');
+  });
+  it('los focos se conservan al recargar y avanzar tiempo, con independencia de la campaña', async () => {
+    const view = confirmedPreview(); view.setMode('light'); view.lightRadius.set('12'); rectangle(600, 450, 600, 450);
+    view.advanceVisionTime('rounds', '10'); const light = structuredClone(view.sceneLights()[0]);
+    routeParams.next(params('other-selection-test')); fixture.detectChanges(); await fixture.whenStable();
+    expect(view.sceneLights()).toEqual([]);
+    routeParams.next(params()); fixture.detectChanges(); await fixture.whenStable();
+    expect(view.sceneLights()).toEqual([light]); expect(light.active).toBeTrue();
+  });
   it('dibuja una puerta desde la barra, la abre y persiste el tiempo y expiración', async () => {
     const view = confirmedPreview();
     (fixture.nativeElement.querySelector('[aria-label="Dibujar puerta"]') as HTMLButtonElement).click(); fixture.detectChanges();
