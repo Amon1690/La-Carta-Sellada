@@ -1,6 +1,6 @@
 import type { BoardVisionState, SourcedSense, VisionEffect, VisionPoint, VisionProfile } from '../models/vision';
 import type { PreviewToken, SightDisk } from './vision-preview';
-import { effectDisks } from './vision-geometry';
+import { effectDisks, isVisionDoor } from './vision-geometry';
 
 export interface VisionSubject extends PreviewToken {
   /** Mismo identificador solo si dirección confirma contacto con la misma superficie. */
@@ -31,7 +31,7 @@ function crossesDisk(a: VisionPoint, b: VisionPoint, disk: SightDisk): boolean {
   return Math.hypot(a.x + t * dx - disk.x, a.y + t * dy - disk.y) <= disk.radius;
 }
 function blocked(state: BoardVisionState, a: VisionPoint, b: VisionPoint, channel: 'blocksSight' | 'blocksEffect'): boolean {
-  return (state.obstacles ?? []).some((o) => !(o.kind === 'door' && o.open) && o[channel] && segmentsIntersect(a, b, o.start, o.end));
+  return (state.obstacles ?? []).some((o) => !(isVisionDoor(o) && o.open) && o[channel] && segmentsIntersect(a, b, o.start, o.end));
 }
 export function activeVisionEffects(state: BoardVisionState): VisionEffect[] {
   return state.effects.filter((effect) => effect.active && (!('remaining' in effect.duration) || effect.duration.remaining > 0));

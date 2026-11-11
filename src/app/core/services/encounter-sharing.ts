@@ -3,6 +3,7 @@ import { Injectable, InjectionToken, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { BoardVisionState, VisionProfile } from '../models/vision';
 import { PreviewFog, PreviewToken, previewSight, previewTokenVisible } from './vision-preview';
+import { isVisionDoor } from './vision-geometry';
 import { REMOTE_SHEETS, SheetCollection } from './remote-sheets';
 import { CommandReceipt, DirectorEncounter, LiveBoardState, PlayerControls } from '../models/encounter-live';
 
@@ -49,6 +50,13 @@ export async function renderPersonalView(snapshot: SharingSnapshot, observerId: 
         ctx.closePath(); ctx.clip('evenodd');
       }
       ctx.drawImage(map, 0, 0, width, height);
+      // Solo puertas y solo dentro del mismo recorte personal del mapa. Nunca
+      // enviar coordenadas ni dibujar paredes/ventanas en la imagen del jugador.
+      ctx.strokeStyle = '#e9bd66'; ctx.lineWidth = 6;
+      for (const door of (snapshot.vision.obstacles ?? []).filter(isVisionDoor)) {
+        ctx.setLineDash(door.open ? [12, 8] : []);
+        ctx.beginPath(); ctx.moveTo(door.start.x, door.start.y); ctx.lineTo(door.end.x, door.end.y); ctx.stroke();
+      }
       ctx.restore();
     }
     ctx.fillStyle = '#090c10';

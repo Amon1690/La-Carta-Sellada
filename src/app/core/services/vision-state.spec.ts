@@ -17,6 +17,15 @@ const state = (): BoardVisionState => ({ ...emptyBoardVision(), groups: [
 const ids = new Set(['a', 'b', 'c']);
 
 describe('Contrato de visión versionado', () => {
+  it('conserva las cuatro clases de trazado y exige apertura solo en las dos clases de puerta', () => {
+    const s = state();
+    s.obstacles = (['wall', 'door', 'window', 'door-window'] as const).map((kind) => ({ id: kind, name: kind, kind,
+      start: { x: 20, y: 10 }, end: { x: 30, y: 40 }, source, blocksSight: kind === 'wall' || kind === 'door', blocksEffect: true,
+      ...(['door', 'door-window'].includes(kind) ? { open: false } : {}) }));
+    const restored = JSON.parse(JSON.stringify(s)); expect(() => assertBoardVision(restored, ids)).not.toThrow(); expect(restored).toEqual(s);
+    delete restored.obstacles[3].open; expect(() => assertBoardVision(restored, ids)).toThrow();
+    restored.obstacles[3].open = false; restored.obstacles[2].open = false; expect(() => assertBoardVision(restored, ids)).toThrow();
+  });
   it('valida contactos por instancia, retira solo el borrado y conserva los datos sin confirmar', () => {
     const s = state(); s.contacts = [{ tokenId: 'a', surfaceId: 'suelo', airborne: false, subjectKind: 'creature', source }, { tokenId: 'b', source }];
     expect(() => assertBoardVision(s, ids)).not.toThrow();

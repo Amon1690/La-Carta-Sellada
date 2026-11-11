@@ -45,6 +45,16 @@ describe('Motor personal de visión con datos confirmados', () => {
     s.obstacles = [wall({ blocksEffect: false })];
     expect(assess(s, tokens(), profile(['normal', 0], ['blindsight', 60])).visible).toBeTrue();
   });
+  it('ventanas y puertas acristaladas dejan ver, pero solo abrir la puerta despeja la línea de efecto', () => {
+    const s = state();
+    for (const kind of ['window', 'door-window'] as const) {
+      s.obstacles = [wall({ kind, blocksSight: false, ...(kind === 'door-window' ? { open: false } : {}) })];
+      assertBoardVision(s, new Set(['a', 'b']));
+      expect(assess(s)).toEqual(jasmine.objectContaining({ visible: true, lineOfEffect: false }));
+    }
+    s.obstacles![0].open = true;
+    expect(assess(s)).toEqual(jasmine.objectContaining({ visible: true, lineOfEffect: true }));
+  });
   it('prueba el trayecto luz→objetivo, aunque observador→objetivo esté despejado', () => {
     const s = state(); s.environment.illumination = 'darkness';
     s.effects = [effect({ kind: 'light', illumination: 'bright', scope: { kind: 'circle', x: 250, y: 225, radiusFeet: 30 } })];

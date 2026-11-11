@@ -47,6 +47,11 @@
             [attr.aria-pressed]="mode() === 'measure'"
             (click)="setMode('measure')"
           ><span aria-hidden="true">⌁</span><b>Medir</b></button>
+          @for (tool of [{mode: 'wall', label: 'Pared', icon: '━'}, {mode: 'door', label: 'Puerta', icon: '▯'}, {mode: 'window', label: 'Ventana', icon: '⊞'}]; track tool.mode) {
+            <button type="button" [title]="'Dibujar ' + tool.label.toLowerCase()" [attr.aria-label]="'Dibujar ' + tool.label.toLowerCase()"
+              [disabled]="visionStorageBlocked || combat.busy()" [class.active]="mode() === tool.mode" [attr.aria-pressed]="mode() === tool.mode"
+              (click)="setMode($any(tool.mode))"><span aria-hidden="true">{{ tool.icon }}</span><b>{{ tool.label }}</b></button>
+          }
         </div>
         }
 
@@ -101,9 +106,9 @@
               class="map-board"
               tabindex="0"
               role="group"
-              [attr.aria-label]="visionPreview() ? 'Previsualización local del mapa. Arrastra para desplazar.' : 'Mapa de juego. Arrastra para seleccionar fichas.'"
+              [attr.aria-label]="visionPreview() ? 'Previsualización local del mapa. Arrastra para desplazar.' : drawingObstacle() ? 'Mapa de juego. Arrastra para dibujar el trazado seleccionado.' : 'Mapa de juego. Arrastra para seleccionar fichas.'"
               [class.targeting]="targeting()"
-              [class.drawing]="mode() === 'fog' || mode() === 'reveal' || mode() === 'measure'"
+              [class.drawing]="drawingObstacle() || mode() === 'fog' || mode() === 'reveal' || mode() === 'measure'"
               [style.width.px]="mapWidth"
               [style.height.px]="mapHeight"
               [style.transform]="'scale(' + zoom() + ')'"
@@ -154,10 +159,34 @@
                         <rect x="0" y="0" [attr.width]="mapWidth" [attr.height]="mapHeight" fill="black" [attr.mask]="'url(#' + visionMaskId + '-area-' + i + ')'" />
                       </g>
                     }
+                  </mask>
+                  <mask [attr.id]="visionMaskId + '-doors'" maskUnits="userSpaceOnUse" x="0" y="0" [attr.width]="mapWidth" [attr.height]="mapHeight">
+                    <rect x="0" y="0" [attr.width]="mapWidth" [attr.height]="mapHeight" fill="black" />
+                    @for (circle of previewGeometry().circles; track circle.id; let i = $index) {
+                      <g [attr.clip-path]="circle.clip ? 'url(#' + visionMaskId + '-clip-' + i + ')' : null">
+                        <rect x="0" y="0" [attr.width]="mapWidth" [attr.height]="mapHeight" fill="white" [attr.mask]="'url(#' + visionMaskId + '-area-' + i + ')'" />
+                      </g>
+                    }
+                    @for (fog of fogRects(); track fog.id) { <rect [attr.x]="fog.x" [attr.y]="fog.y" [attr.width]="fog.width" [attr.height]="fog.height" fill="black" /> }
                   </mask></defs>
                   <rect x="0" y="0" [attr.width]="mapWidth" [attr.height]="mapHeight" fill="#000" opacity="0.82" [attr.mask]="'url(#' + visionMaskId + ')'" />
                 </svg>
               }
+
+              <svg class="map-image obstacle-layer" style="z-index: 24" [attr.viewBox]="'0 0 ' + mapWidth + ' ' + mapHeight" aria-hidden="true">
+                <g [attr.mask]="visionPreview() ? 'url(#' + visionMaskId + '-doors)' : null">
+                  @for (obstacle of displayedObstacles(); track obstacle.id) {
+                    <line [attr.data-obstacle-id]="obstacle.id" [attr.data-obstacle-kind]="obstacle.kind"
+                      [attr.x1]="obstacle.start.x" [attr.y1]="obstacle.start.y" [attr.x2]="obstacle.end.x" [attr.y2]="obstacle.end.y"
+                      [style.stroke]="isVisionDoor(obstacle) ? '#e9bd66' : obstacle.kind === 'window' ? '#78d6eb' : '#ef9e9e'"
+                      [style.stroke-width]="isVisionDoor(obstacle) ? 8 : 6"
+                      [style.stroke-dasharray]="obstacle.open ? '12 8' : obstacle.kind === 'window' ? '8 5' : obstacle.kind === 'door-window' ? '4 3' : 'none'">
+                      <title>{{ obstacleLabel(obstacle) }}</title>
+                    </line>
+                  }
+                </g>
+                @if (!visionPreview() && draftObstacle(); as draft) { <line style="stroke: white; stroke-width: 5; stroke-dasharray: 8 5" [attr.x1]="draft.x1" [attr.y1]="draft.y1" [attr.x2]="draft.x2" [attr.y2]="draft.y2" /> }
+              </svg>
 
               @if (draftFog(); as draft) {
                 <div
@@ -238,9 +267,33 @@
             <button type="button" [class.active]="sidebarTab() === 'layers'" (click)="setSidebarTab('layers')">Capas</button>
             <button type="button" [class.active]="sidebarTab() === 'turns'" (click)="setSidebarTab('turns')">Turnos</button>
             <button type="button" [class.active]="sidebarTab() === 'vision'" (click)="setSidebarTab('vision')">Visión</button>
+            <button type="button" [class.active]="sidebarTab() === 'geometry'" (click)="setSidebarTab('geometry')">Trazados</button>
           </nav>
 
           <div #sideContent class="sidebar-content">
+            @if (sidebarTab() === 'geometry') {
+              <section class="vision-panel token-inspector obstacle-panel" aria-label="Paredes, puertas y ventanas">
+                <h2>Paredes, puertas y ventanas</h2>
+                <p>Elige una herramienta de arriba y arrastra sobre el mapa para dibujar una línea. Pulsa Esc para cancelar.</p>
+                <p>Paredes en rosa, puertas en dorado y ventanas en azul. Dirección ve todos los trazados; los jugadores solo las puertas dentro de su visión.</p>
+                <fieldset [disabled]="visionStorageBlocked || combat.busy()">
+                  @if (mode() === 'door') { <label class="check-field"><input type="checkbox" [checked]="doorHasWindow()" (change)="doorHasWindow.set($any($event.target).checked)" /> Dibujar puerta con ventana</label> }
+                  <p>Las ventanas y las puertas con ventana dejan pasar la vista y la luz; cerradas bloquean la línea de efecto. Abrir una puerta elimina ambos bloqueos.</p>
+                  @if (vision().obstacles === undefined) { <p>El plano todavía no está confirmado. Dibuja sus obstáculos o confirma que está vacío.</p><button type="button" class="open-token-sheet" (click)="confirmVisionGeometry()">Confirmar plano sin obstáculos</button> }
+                  @for (obstacle of vision().obstacles ?? []; track obstacle.id) {
+                    <article>
+                      <h3>{{ obstacle.name }}</h3><p>{{ obstacleLabel(obstacle) }}</p>
+                      @if (isVisionDoor(obstacle)) {
+                        <label class="check-field"><input type="checkbox" [checked]="obstacle.kind === 'door-window'" (change)="setDoorWindow(obstacle.id, $any($event.target).checked)" /> Ventana en esta puerta</label>
+                        <button type="button" class="open-token-sheet" (click)="changeVisionObstacle(obstacle.id)">{{ obstacle.open ? 'Cerrar' : 'Abrir' }} {{ obstacle.name }}</button>
+                      }
+                      <button type="button" class="open-token-sheet" (click)="changeVisionObstacle(obstacle.id, true)">Eliminar {{ obstacle.name }}</button>
+                    </article>
+                  }
+                </fieldset>
+                @if (visionMessage()) { <p role="status">{{ visionMessage() }}</p> }
+              </section>
+            }
             @if (sidebarTab() === 'vision') {
               <section class="vision-panel token-inspector">
                 <h2>Visión compartida</h2>
@@ -286,22 +339,6 @@
                     <button type="button" class="open-token-sheet" (click)="advanceVisionTime('rounds', elapsedVision.value)">Avanzar asaltos</button>
                     <button type="button" class="open-token-sheet" (click)="advanceVisionTime('minutes', elapsedVision.value)">Avanzar minutos</button>
                     <p>Avanza una sola vez por asalto completo. Cambiar el turno no descuenta tiempo por cada personaje. La luz se confirma por separado.</p>
-                  </details>
-                  <details><summary>Paredes y puertas</summary>
-                    @if (vision().obstacles === undefined) { <p>Geometría sin confirmar: la previsualización permanece cerrada.</p><button type="button" class="open-token-sheet" (click)="confirmVisionGeometry()">Confirmar plano sin obstáculos</button> }
-                    @for (obstacle of vision().obstacles ?? []; track obstacle.id) {
-                      <p>{{ obstacle.name }} · {{ obstacle.kind === 'door' ? (obstacle.open ? 'Puerta abierta' : 'Puerta cerrada') : 'Pared' }}</p>
-                      @if (obstacle.kind === 'door') { <button type="button" class="open-token-sheet" (click)="changeVisionObstacle(obstacle.id)">{{ obstacle.open ? 'Cerrar' : 'Abrir' }} puerta</button> }
-                      <button type="button" class="open-token-sheet" (click)="changeVisionObstacle(obstacle.id, true)">Eliminar {{ obstacle.name }}</button>
-                    }
-                    <form #obstacleForm data-vision-obstacle-form (submit)="$event.preventDefault(); addVisionObstacle(obstacleForm)">
-                      <p>Indica dos puntos del plano del tablero (1536 × 1024). No se extraen paredes de la imagen.</p>
-                      <label>Nombre<input name="name" required maxlength="500" /></label><label>Tipo<select name="kind"><option value="wall">Pared</option><option value="door">Puerta</option></select></label>
-                      <label>Inicio X<input name="x1" type="number" min="0" max="1536" required /></label><label>Inicio Y<input name="y1" type="number" min="0" max="1024" required /></label>
-                      <label>Final X<input name="x2" type="number" min="0" max="1536" required /></label><label>Final Y<input name="y2" type="number" min="0" max="1024" required /></label>
-                      <label class="check-field"><input name="blocksSight" type="checkbox" checked /> Bloquea vista y luz</label><label class="check-field"><input name="blocksEffect" type="checkbox" checked /> Bloquea línea de efecto</label>
-                      <label>Fuente o decisión de dirección<input name="source" required maxlength="2000" /></label><button class="open-token-sheet" type="submit">Añadir obstáculo</button>
-                    </form>
                   </details>
                   <details><summary>Efectos de visión</summary>
                     @for (effect of vision().effects; track effect.id) {

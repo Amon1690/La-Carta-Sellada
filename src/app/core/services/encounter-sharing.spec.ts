@@ -28,6 +28,19 @@ describe('Imagen personal de encuentros', () => {
     const ctx = canvas.getContext('2d')!; ctx.drawImage(image, 0, 0); return ctx;
   }
   const color = (ctx: CanvasRenderingContext2D, x: number, y: number) => [...ctx.getImageData(x, y, 1, 1).data];
+  it('solo rasteriza líneas de puertas dentro de la visión y nunca líneas de paredes o ventanas', async () => {
+    const source = { kind: 'director' as const, reference: 'Trazados sintéticos' };
+    snapshot.vision.obstacles = (['wall', 'window', 'door', 'door-window'] as const).map((kind, i) => ({
+      id: kind, name: kind, kind, start: { x: 150 + i * 15, y: 65 }, end: { x: 150 + i * 15, y: 90 },
+      blocksSight: false, blocksEffect: false, source, ...(['door', 'door-window'].includes(kind) ? { open: false } : {}) }));
+    let ctx = await pixels();
+    expect(color(ctx, 150, 75)).toEqual([255, 0, 0, 255]); expect(color(ctx, 165, 75)).toEqual([255, 0, 0, 255]);
+    expect(color(ctx, 180, 75)).toEqual([233, 189, 102, 255]); expect(color(ctx, 195, 75)).toEqual([233, 189, 102, 255]);
+    snapshot.fog = [{ x: 175, y: 60, width: 30, height: 35 }];
+    ctx = await pixels(); expect(color(ctx, 180, 75)).toEqual([9, 12, 16, 255]);
+    snapshot.fog = []; snapshot.vision.obstacles[2].start.x = snapshot.vision.obstacles[2].end.x = 1000;
+    expect(color(await pixels(), 1000, 75)).toEqual([9, 12, 16, 255]);
+  });
   it('descarta el mapa fuera de la vista personal antes de enviarlo e ignora la lista de dirección', async () => {
     const ctx = await pixels();
     expect(color(ctx, 180, 100)).toEqual([255, 0, 0, 255]);
