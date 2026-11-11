@@ -21,6 +21,7 @@ import { advanceVisionEffects, endVisionConcentration, endVisionEffect } from '.
 import { assertBoardVision, emptyBoardVision, withoutRemovedObservers } from '../../../../core/services/vision-state';
 import { previewSight, previewTokenVisible } from '../../../../core/services/vision-preview';
 import { canOrientStep, orientedTokenVisible } from '../../../../core/services/token-orientation';
+import { explorationRects, rememberExploration } from '../../../../core/services/vision-exploration';
 import { evaluateVision } from '../../../../core/services/vision-engine';
 import { ENCOUNTER_PUBLISHER, SharingSnapshot } from '../../../../core/services/encounter-sharing';
 import { CampaignDataService } from '../../../../core/services/campaign-data';
@@ -264,6 +265,8 @@ export class VttBoard {
 
   protected readonly previewGeometry = computed(() => previewSight(this.vision(), this.tokens(),
     this.tokenVisionProfiles(), this.gridSize, this.mapWidth, this.mapHeight));
+  protected readonly exploredRects = computed(() => explorationRects(this.vision(), this.visionObserverIds().filter((id) =>
+    this.tokens().some((token) => token.instanceId === id && !token.hidden)), this.gridSize));
   protected readonly displayedTokens = computed(() => this.visionPreview()
     ? this.tokens().filter((token) => orientedTokenVisible(token, { state: this.vision(), tokens: this.tokens(), profiles: this.tokenVisionProfiles(),
       observerIds: this.visionObserverIds(), circles: this.previewGeometry().circles, fog: this.fogRects(), grid: this.gridSize }))
@@ -372,7 +375,7 @@ export class VttBoard {
     this.characterSheets.changes$.pipe(skip(1), takeUntilDestroyed()).subscribe(() => {
       if (this.currentCampaign) this.tokenChoices.set(this.buildTokenChoices(this.currentCampaign));
       this.sheetRevision.update((revision) => revision + 1);
-      this.scheduleSharing();
+      this.refreshProfileExploration();
     });
   }
 
@@ -445,13 +448,15 @@ export class VttBoard {
       this.vision.set(structuredClone(state.vision ?? emptyBoardVision()));
       this.layers.set(structuredClone(state.layers)); this.activeTurnId.set(state.activeTurnId);
       this.combat.restore(state.combat); this.selectedTokenIds.set([]);
-      localStorage.setItem(this.storageKey, JSON.stringify({ ...state, zoom: this.zoom() }));
+      this.recordExploration(this.tokens());
+      localStorage.setItem(this.storageKey, JSON.stringify({ ...state, vision: this.vision(), zoom: this.zoom() }));
       this.visionStorageBlocked = false; this.saveStatus.set('Sincronizado');
     } finally { this.applyingRemote = false; }
   }
 
   private captureBoardState(): StoredBoardState {
     const origins = new Map(this.tokenDrag?.origins.map((token) => [token.instanceId, token]));
+    this.recordExploration(this.tokens().map((token) => ({ ...token, ...(origins.get(token.instanceId) ?? {}) })));
     return structuredClone({ vision: this.vision(), combat: this.combat.serialized(),
       tokens: this.tokens().map((token) => ({ ...token, ...(origins.get(token.instanceId) ?? {}) })),
       fogRects: this.fogRects(), layers: this.layers(), zoom: this.zoom(), activeTurnId: this.activeTurnId() });
@@ -817,7 +822,7 @@ export class VttBoard {
     try {
       await this.characterSheets.saveVisionProfile(this.currentCampaign, token.actorId, { version: 1, senses: [...senses,
         { sense: sense as VisionSense, rangeFeet: amount, source: { kind: 'director', reference: reference.trim() } }] });
-      this.sheetRevision.update((revision) => revision + 1); this.visionMessage.set('Sentido guardado en la ficha compartida.'); this.scheduleSharing();
+      this.sheetRevision.update((revision) => revision + 1); this.visionMessage.set('Sentido guardado en la ficha compartida.'); this.refreshProfileExploration();
     } catch { this.visionMessage.set('No se pudo guardar la visión. Revisa la ficha y su fuente.'); }
   }
 
@@ -1772,6 +1777,7 @@ export class VttBoard {
       this.zoom.set(state.zoom ?? 0.65);
       this.activeTurnId.set(state.activeTurnId);
       this.combat.restore(state.combat);
+      if (!this.visionStorageBlocked) this.recordExploration(this.tokens());
       if (this.combat.state().started || this.combat.error()) this.sidebarTab.set('turns');
       return true;
     } catch {
@@ -1790,6 +1796,7 @@ export class VttBoard {
     // Otras acciones pueden guardar durante un gesto: las posiciones provisionales
     // solo se confirman al soltar el puntero, nunca al ocultar o cambiar de turno.
     const origins = new Map(this.tokenDrag?.origins.map((token) => [token.instanceId, token]));
+    this.recordExploration(this.tokens().map((token) => ({ ...token, ...(origins.get(token.instanceId) ?? {}) })));
     const state: StoredBoardState = {
       vision: this.vision(),
       combat: this.combat.serialized(),
@@ -1804,6 +1811,41 @@ export class VttBoard {
     };
     localStorage.setItem(this.storageKey, JSON.stringify(state));
     this.saveStatus.set('Guardado');
+    this.scheduleSharing();
+  }
+
+  private recordExploration(tokens: BoardToken[]): void {
+    if (this.visionStorageBlocked) return;
+    const value = rememberExploration(this.vision(), tokens, this.tokenVisionProfiles(), this.fogRects(), this.gridSize);
+    if (value !== this.vision()) this.vision.set(value);
+  }
+
+  private refreshProfileExploration(): void {
+    const before = this.vision();
+    const origins = new Map(this.tokenDrag?.origins.map((token) => [token.instanceId, token]));
+    this.recordExploration(this.tokens().map((token) => ({ ...token, ...(origins.get(token.instanceId) ?? {}) })));
+    // Un cambio de ficha no confirma otros cambios provisionales del combate.
+    // Solo se actualiza la memoria dentro del guardado que ya existía.
+    if (before !== this.vision() && this.storageKey) {
+      try {
+        const raw = localStorage.getItem(this.storageKey);
+        if (raw) {
+          const saved = JSON.parse(raw) as StoredBoardState;
+          const ids = new Set(saved.tokens.map((token) => token.instanceId));
+          assertBoardVision(saved.vision, ids);
+          const memories = new Map((saved.vision.exploration ?? []).map((m) => [m.tokenId, new Set(m.cells)]));
+          for (const memory of this.vision().exploration ?? []) {
+            if (!ids.has(memory.tokenId)) continue;
+            const cells = memories.get(memory.tokenId) ?? new Set<number>();
+            for (const cell of memory.cells) cells.add(cell);
+            memories.set(memory.tokenId, cells);
+          }
+          const vision = { ...saved.vision, exploration: [...memories].map(([tokenId, cells]) => ({ tokenId, cells: [...cells].sort((a, b) => a - b) })) };
+          assertBoardVision(vision, ids);
+          localStorage.setItem(this.storageKey, JSON.stringify({ ...saved, vision }));
+        }
+      } catch { this.saveStatus.set('La memoria sigue en el tablero, pero no se pudo guardar.'); }
+    }
     this.scheduleSharing();
   }
 

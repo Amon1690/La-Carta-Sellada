@@ -623,6 +623,40 @@ describe('Multiselección de fichas en VTT', () => {
     expect(board.tokens()[0].x).toBe(GRID * 3); expect(view.pendingAck.status).toBe('applied');
     board.activeTurnId.set('B'); expect(view.playerControls(view.tokens()).A.canMove).toBeFalse();
   });
+  it('la exploración se conserva al mover y recargar, sin compartirla con otra campaña', async () => {
+    const view = confirmedPreview(); actorFor('A', 'player:hero'); view.setPreviewEnvironment('illumination', 'darkness');
+    expect(view.vision().exploration.find((m: any) => m.tokenId === 'A').cells).toContain(62);
+    board.tokens.update((tokens) => tokens.map((t) => t.instanceId === 'A' ? { ...t, x: GRID * 6 } : t)); view.persist();
+    const cells = view.vision().exploration.find((m: any) => m.tokenId === 'A').cells;
+    expect(cells).toContain(62); expect(cells).toContain(66);
+    routeParams.next(params('other-selection-test')); fixture.detectChanges(); await fixture.whenStable();
+    expect(view.vision().exploration ?? []).toEqual([]);
+    routeParams.next(params()); fixture.detectChanges(); await fixture.whenStable();
+    expect(view.vision().exploration.find((m: any) => m.tokenId === 'A').cells).toEqual(cells);
+  });
+  it('un arrastre provisional y cancelado no explora su destino aunque se guarde otra acción', () => {
+    const view = confirmedPreview(); actorFor('A', 'player:hero'); view.setPreviewEnvironment('illumination', 'darkness');
+    pointer(button('A'), 'pointerdown', GRID * 2 + 10, GRID * 2 + 10);
+    pointer(map, 'pointermove', 600, 600); view.persist();
+    expect(view.vision().exploration.find((m: any) => m.tokenId === 'A').cells).toEqual([62]);
+    pointer(map, 'pointercancel', 600, 600);
+    expect(board.tokens()[0].x).toBe(GRID * 2);
+  });
+  it('recuerda la ampliación de sentidos aun sin compartir el encuentro y al reducirlos conserva el terreno', async () => {
+    const view = confirmedPreview(); actorFor('A', 'player:hero'); view.persist();
+    spyOn(sheets, 'saveVisionProfile').and.callFake(async (_campaign, _actor, profile) => {
+      (sheets.visionProfile as jasmine.Spy).and.returnValue(profile);
+    });
+    expect(view.vision().exploration.find((m: any) => m.tokenId === 'A').cells).not.toContain(70);
+    const saved = JSON.parse(localStorage.getItem(key())!); saved.vision.environment.illumination = 'dim';
+    localStorage.setItem(key(), JSON.stringify(saved));
+    await view.saveSense('A', 'normal', '60', false, 'Ampliación sintética confirmada');
+    expect(view.vision().exploration.find((m: any) => m.tokenId === 'A').cells).toContain(70);
+    expect(JSON.parse(localStorage.getItem(key())!).vision.environment.illumination).toBe('dim');
+    await view.saveSense('A', 'normal', '10', false, 'Fin de ampliación sintética');
+    expect(view.vision().exploration.find((m: any) => m.tokenId === 'A').cells).toContain(70);
+    expect(view.encounterShared()).toBeFalse();
+  });
   it('coloca un foco desde la barra con radio explícito y coordenadas libres al aplicar zoom', () => {
     const view = fixture.componentInstance as any, before = structuredClone(board.tokens());
     (fixture.nativeElement.querySelector('[aria-label="Colocar foco de luz"]') as HTMLButtonElement).click(); fixture.detectChanges();

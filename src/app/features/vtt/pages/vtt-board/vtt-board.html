@@ -171,8 +171,18 @@
                       </g>
                     }
                     @for (fog of fogRects(); track fog.id) { <rect [attr.x]="fog.x" [attr.y]="fog.y" [attr.width]="fog.width" [attr.height]="fog.height" fill="black" /> }
+                  </mask>
+                  <mask [attr.id]="visionMaskId + '-unknown'" maskUnits="userSpaceOnUse" x="0" y="0" [attr.width]="mapWidth" [attr.height]="mapHeight">
+                    <rect x="0" y="0" [attr.width]="mapWidth" [attr.height]="mapHeight" fill="white" />
+                    @for (rect of exploredRects(); track $index) { <rect [attr.x]="rect.x" [attr.y]="rect.y" [attr.width]="rect.width" [attr.height]="rect.height" fill="black" /> }
+                    @for (circle of previewGeometry().circles; track circle.id; let i = $index) {
+                      <g [attr.clip-path]="circle.clip ? 'url(#' + visionMaskId + '-clip-' + i + ')' : null">
+                        <rect x="0" y="0" [attr.width]="mapWidth" [attr.height]="mapHeight" fill="black" [attr.mask]="'url(#' + visionMaskId + '-area-' + i + ')'" />
+                      </g>
+                    }
                   </mask></defs>
-                  <rect x="0" y="0" [attr.width]="mapWidth" [attr.height]="mapHeight" fill="#000" opacity="0.82" [attr.mask]="'url(#' + visionMaskId + ')'" />
+                  <rect x="0" y="0" [attr.width]="mapWidth" [attr.height]="mapHeight" fill="#000" opacity="0.72" [attr.mask]="'url(#' + visionMaskId + ')'" />
+                  <rect x="0" y="0" [attr.width]="mapWidth" [attr.height]="mapHeight" fill="#090c10" [attr.mask]="'url(#' + visionMaskId + '-unknown)'" />
                 </svg>
               }
 

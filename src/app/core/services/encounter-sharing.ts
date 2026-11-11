@@ -5,6 +5,7 @@ import { BoardVisionState, VisionProfile } from '../models/vision';
 import { PreviewFog, PreviewToken, previewSight } from './vision-preview';
 import { isVisionDoor } from './vision-geometry';
 import { orientedTokenVisible } from './token-orientation';
+import { explorationRects, rememberExploration } from './vision-exploration';
 import { REMOTE_SHEETS, SheetCollection } from './remote-sheets';
 import { CommandReceipt, DirectorEncounter, LiveBoardState, PlayerControls } from '../models/encounter-live';
 
@@ -36,11 +37,20 @@ export async function renderPersonalView(snapshot: SharingSnapshot, observerId: 
   const vision = { ...snapshot.vision, groups: [{ id: 'published', name: 'Vista del personaje', observerIds }], activeGroupId: 'published' };
   const geometry = snapshot.tokens.find((token) => token.instanceId === observerId)?.hidden
     ? { circles: [], pending: true } : previewSight(vision, snapshot.tokens, snapshot.profiles, grid, width, height);
+  const recipient = snapshot.tokens.find((token) => token.instanceId === observerId);
+  const memory = rememberExploration(vision, snapshot.tokens, snapshot.profiles, snapshot.fog, grid);
+  const explored = explorationRects(memory, recipient?.hidden ? [] : observerIds, grid);
   const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
   const ctx = canvas.getContext('2d'); if (!ctx) throw new Error('No se puede componer la vista del personaje.');
   ctx.fillStyle = '#090c10'; ctx.fillRect(0, 0, width, height);
-  if (geometry.circles.length) {
+  if (geometry.circles.length || explored.length) {
     const map = await load(snapshot.mapUrl);
+    if (explored.length) {
+      ctx.save(); ctx.beginPath();
+      for (const rect of explored) ctx.rect(rect.x, rect.y, rect.width, rect.height);
+      ctx.clip(); ctx.drawImage(map, 0, 0, width, height);
+      ctx.fillStyle = 'rgba(0,0,0,0.72)'; ctx.fillRect(0, 0, width, height); ctx.restore();
+    }
     for (const circle of geometry.circles) {
       ctx.save(); ctx.beginPath(); ctx.arc(circle.x, circle.y, circle.radius, 0, 2 * Math.PI); ctx.clip();
       if (circle.clip) { ctx.beginPath(); ctx.arc(circle.clip.x, circle.clip.y, circle.clip.radius, 0, 2 * Math.PI); ctx.clip(); }
@@ -65,7 +75,6 @@ export async function renderPersonalView(snapshot: SharingSnapshot, observerId: 
     ctx.fillStyle = '#090c10';
     for (const fog of snapshot.fog) ctx.fillRect(fog.x, fog.y, fog.width, fog.height);
   }
-  const recipient = snapshot.tokens.find((token) => token.instanceId === observerId);
   const orientation = { state: vision, tokens: snapshot.tokens, profiles: snapshot.profiles,
     observerIds: recipient?.hidden ? [] : observerIds, circles: geometry.circles, fog: snapshot.fog, grid };
   for (const token of snapshot.tokens.filter((item) => orientedTokenVisible(item, orientation))) {

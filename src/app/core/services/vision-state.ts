@@ -33,8 +33,18 @@ function references(v: unknown, tokenIds: ReadonlySet<string>, max = 1000): stri
   return ids as string[];
 }
 export function assertBoardVision(v: unknown, tokenIds: ReadonlySet<string>): asserts v is BoardVisionState {
-  const b = record(v, ['version', 'enabled', 'environment', 'groups', 'activeGroupId', 'effects', 'obstacles', 'contacts']);
+  const b = record(v, ['version', 'enabled', 'environment', 'groups', 'activeGroupId', 'effects', 'obstacles', 'contacts', 'exploration']);
   if (b['version'] !== 1 || typeof b['enabled'] !== 'boolean') fail();
+  if (b['exploration'] !== undefined) {
+    const observers = new Set<string>();
+    for (const item of list(b['exploration'], 1000)) {
+      const memory = record(item, ['tokenId', 'cells']);
+      if (!text(memory['tokenId']) || !tokenIds.has(memory['tokenId']) || observers.has(memory['tokenId'])) fail();
+      observers.add(memory['tokenId'] as string);
+      const cells = list(memory['cells'], 600);
+      if (cells.some((cell) => !numeric(cell, 599) || !Number.isInteger(cell)) || new Set(cells).size !== cells.length) fail();
+    }
+  }
   const env = record(b['environment'], ['illumination', 'timeOfDay', 'weather', 'gameTime', 'source', 'obscurement']);
   if (!choice(env['illumination'], ['unknown', 'bright', 'dim', 'darkness']) ||
       !choice(env['timeOfDay'], ['unknown', 'dawn', 'day', 'dusk', 'night']) ||
@@ -110,6 +120,7 @@ export function emptyBoardVision(): BoardVisionState {
 /** Limpieza solo tras borrar tokens conocidos; no normaliza una importación inválida. */
 export function withoutRemovedObservers(state: BoardVisionState, ids: ReadonlySet<string>): BoardVisionState {
   return { ...state,
+    ...(state.exploration === undefined ? {} : { exploration: state.exploration.filter((memory) => ids.has(memory.tokenId)) }),
     ...(state.contacts === undefined ? {} : { contacts: state.contacts.filter((c) => ids.has(c.tokenId)) }),
     groups: state.groups.map((g) => ({ ...g, observerIds: g.observerIds.filter((id) => ids.has(id)) })),
     effects: state.effects.filter((e) => (!e.concentrationTokenId || ids.has(e.concentrationTokenId)) && (!e.anchorTokenId || ids.has(e.anchorTokenId))).flatMap((e) => {

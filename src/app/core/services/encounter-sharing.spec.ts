@@ -90,8 +90,19 @@ describe('Imagen personal de encuentros', () => {
     const ctx = await pixels();
     expect(color(ctx, 125, 125)).toEqual([255, 0, 0, 255]); expect(color(ctx, 176, 125)).toEqual([255, 0, 0, 255]);
     expect(color(ctx, 180, 80)).toEqual([9, 12, 16, 255]);
-    expect(load.calls.allArgs().flat()).toEqual(['propia', 'ajena']); expect(load.calls.allArgs().flat()).not.toContain('mapa-original');
-    snapshot.tokens[1].x = 1000; load.calls.reset(); await pixels(); expect(load.calls.allArgs().flat()).toEqual(['propia']);
+    expect(load.calls.allArgs().flat()).toEqual(['mapa-original', 'propia', 'ajena']);
+    snapshot.tokens[1].x = 1000; load.calls.reset(); await pixels(); expect(load.calls.allArgs().flat()).toEqual(['mapa-original', 'propia']);
+    snapshot.tokens[0].hidden = true; load.calls.reset(); await pixels(); expect(load).not.toHaveBeenCalled();
+  });
+  it('conserva mapa oscuro en memoria y negro en terreno desconocido, sin revelar tokens de la memoria', async () => {
+    snapshot.vision.environment.illumination = 'darkness';
+    snapshot.vision.exploration = [{ tokenId: 'hero', cells: [4 * 30 + 5] }, { tokenId: 'other', cells: [10 * 30 + 15] }];
+    let ctx = await pixels();
+    const dim = color(ctx, 280, 220); expect(dim[0]).toBeGreaterThan(9); expect(dim[0]).toBeLessThan(90);
+    expect(color(ctx, 800, 540)).toEqual([9, 12, 16, 255]); expect(load.calls.allArgs().flat()).not.toContain('ajena');
+    snapshot.vision.groups[0].observerIds = ['hero', 'other'];
+    ctx = await pixels(); expect(color(ctx, 800, 540)[0]).toBeGreaterThan(9);
+    snapshot.fog = [{ x: 250, y: 200, width: 60, height: 60 }]; expect(color(await pixels(), 280, 220)).toEqual([9, 12, 16, 255]);
     snapshot.tokens[0].hidden = true; load.calls.reset(); await pixels(); expect(load).not.toHaveBeenCalled();
   });
   it('recorta una fuente de luz y sus exclusiones en el raster sin revelar el mapa original', async () => {
