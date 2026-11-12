@@ -19,7 +19,8 @@ export class VttCombat {
     private readonly saveProfile: (id: string, profile: CombatProfile) => void | Promise<void>,
     private readonly die: (sides: number) => number = (sides) => Math.floor(Math.random() * sides) + 1,
     readonly sight?: (observerId: string, targetId: string) => SightAssessment | undefined,
-    private readonly narrate?: (result: CombatResolution) => CombatNarrativeMessage[]) {}
+    private readonly narrate?: (result: CombatResolution) => CombatNarrativeMessage[],
+    readonly situationRevision?: () => unknown) {}
 
   find(id: string | undefined): Combatant | undefined { return this.combatants().find((a) => a.id === id); }
   busy(): boolean { return this.saving() || !!this.state().pending || this.invalid !== undefined; }
@@ -115,7 +116,7 @@ export class VttCombat {
       finish(); this.saving.set(false);
     } catch (error) { this.saving.set(false); throw error; }
   }
-  begin(source: string, targetIds: string[], context: AttackContext): void {
+  begin(source: string, targetIds: string[], context: AttackContext, contexts?: ReadonlyMap<string, AttackContext>): void {
     const actor = this.find(this.activeId());
     if (!actor || !this.canAttack(actor.id)) throw new Error('Solo puede atacar el token del turno activo después de iniciar el combate');
     const action = actor.actions.find((a) => a.source === source);
@@ -126,12 +127,14 @@ export class VttCombat {
     if (!targetIds.length || targetIds.length > action.targets || (!action.repeatTargets && new Set(targetIds).size !== targetIds.length)) throw new Error('Número de objetivos o impactos inválido');
     const legal = new Set(this.targets(actor, action).map((t) => t.id));
     if (targetIds.some((id) => !legal.has(id))) throw new Error('Algún objetivo no tiene ficha válida o está fuera del alcance');
+    if (targetIds.some((id) => this.sight?.(actor.id, id)?.lineOfEffect === false)) throw new Error('Un obstáculo confirmado bloquea la línea de efecto; no se han gastado recursos.');
     if (this.available(actor, action.cost) < (action.cost?.amount ?? 0)) throw new Error('Recursos insuficientes');
     const resourceProblem = this.costProblem(actor, action.cost, action.spellLevel, true); if (resourceProblem) throw new Error(resourceProblem);
+    if (contexts && targetIds.some(id => !validTargetContext(contexts.get(id)))) throw new Error('Falta un contexto revisado por objetivo');
     this.context = { ...context };
     this.spend(actor, action.cost);
     this.state.update((s) => ({ ...s, usedAttacks: s.usedAttacks + (action.kind === 'spell' ? 0 : 1), spellUsed: s.spellUsed || action.kind === 'spell',
-      context: { ...context }, queue: targetIds.map((targetId, index) => ({ attackerId: actor.id, action: structuredClone(action), targetId, castApproved: index > 0 })) }));
+      context: { ...context }, queue: targetIds.map((targetId, index) => ({ attackerId: actor.id, action: structuredClone(action), targetId, castApproved: index > 0, ...(contexts ? { context: { ...contexts.get(targetId)! } } : {}) })) }));
     this.next();
   }
   private next(hp?: { id: string; hp: number }): void {
@@ -139,7 +142,7 @@ export class VttCombat {
     if (!job) { this.state.update((s) => ({ ...s, pending: undefined, queue: [] })); this.commit(hp); return; }
     const actor = this.find(job.attackerId), target = this.find(job.targetId);
     if (!actor || !target || target.armorClass === undefined) throw new Error('Falta la ficha de una acción pendiente');
-    let context: Omit<AttackContext, 'confirmed'> = job.reactionAttack ? { advantage: false, disadvantage: false, armorAdjustment: 0, damageFactor: 1 } : this.context;
+    let context: Omit<AttackContext, 'confirmed'> = job.reactionAttack ? { advantage: false, disadvantage: false, armorAdjustment: 0, damageFactor: 1 } : job.context ?? this.context;
     if (!context.rangeResolved && job.action.resolution === 'attack' && this.sight) context = { ...context,
       disadvantage: context.disadvantage || this.sight(actor.id, target.id)?.visible === false,
       advantage: context.advantage || this.sight(target.id, actor.id)?.visible === false };
@@ -350,7 +353,7 @@ export function validState(value: unknown): value is CombatState {
   if (s.context && (typeof s.context.advantage !== 'boolean' || typeof s.context.disadvantage !== 'boolean' || !Number.isFinite(s.context.armorAdjustment) || ![0, .5, 1, 2].includes(s.context.damageFactor))) return false;
   if (s.version !== 1 || typeof s.started !== 'boolean' || !Number.isInteger(s.round) || s.round < 1 || !Number.isInteger(s.usedAttacks) || s.usedAttacks < 0 || typeof s.spellUsed !== 'boolean' || !Array.isArray(s.log) || s.log.some((v) => typeof v !== 'string') || !Array.isArray(s.reactionUsed) || s.reactionUsed.some((v) => typeof v !== 'string') || !Array.isArray(s.queue) || !s.armorEffects || !s.resources) return false;
   if (Object.values(s.armorEffects).some((v) => !Number.isFinite(v) || v < 0) || Object.values(s.resources).some((pool) => !pool || Object.values(pool).some((v) => !Number.isInteger(v) || v < 0 || v > 999))) return false;
-  if (s.queue.some((q) => !q || typeof q.attackerId !== 'string' || typeof q.targetId !== 'string' || !q.action || actionProblem(q.action))) return false;
+  if (s.queue.some((q) => !q || typeof q.attackerId !== 'string' || typeof q.targetId !== 'string' || !q.action || actionProblem(q.action) || q.context !== undefined && !validTargetContext(q.context))) return false;
   if (s.queue.length > 400 || s.log.length > 200) return false;
   const p = s.pending;
   if (p && (typeof p.attackerId !== 'string' || typeof p.targetId !== 'string' || !p.action || actionProblem(p.action) || !Number.isFinite(p.baseAc) || !Number.isFinite(p.extraAc) || !Number.isFinite(p.factor) || !Number.isFinite(p.reduction) || !Array.isArray(p.reactions) || !Array.isArray(p.damage) || p.damage.some((d) => !Number.isFinite(d.rolled) || !Number.isFinite(d.bonus) || !Array.isArray(d.dice)) || (p.roll && (!Number.isFinite(p.roll.total) || !Number.isInteger(p.roll.natural) || p.roll.natural < 1 || p.roll.natural > 20 || !Array.isArray(p.roll.dice))) || (p.save && !Number.isFinite(p.save.total)))) return false;
@@ -360,4 +363,12 @@ export function validState(value: unknown): value is CombatState {
   if (p?.context?.rangeResolved !== undefined && typeof p.context.rangeResolved !== 'boolean') return false;
   if (p?.context && (typeof p.context.advantage !== 'boolean' || typeof p.context.disadvantage !== 'boolean' || !Number.isFinite(p.context.armorAdjustment) || ![0, .5, 1, 2].includes(p.context.damageFactor))) return false;
   return true;
+}
+
+function validTargetContext(value: unknown): value is AttackContext {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const v=value as Record<string,unknown>;
+  return v['confirmed'] === true && typeof v['advantage'] === 'boolean' && typeof v['disadvantage'] === 'boolean' &&
+    typeof v['armorAdjustment'] === 'number' && Number.isFinite(v['armorAdjustment']) && [0,.5,1,2].includes(v['damageFactor'] as number) &&
+    (v['rangeResolved'] === undefined || typeof v['rangeResolved'] === 'boolean');
 }

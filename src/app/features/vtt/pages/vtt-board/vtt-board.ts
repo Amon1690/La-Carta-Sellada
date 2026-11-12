@@ -244,6 +244,9 @@ export class VttBoard {
       instanceId: token.instanceId, audience: sheets.find((sheet) => sheet.id === token.actorId.slice(7))?.playerIds ?? [],
     }));
     return combatNarrative(result, this.tokens(), observers, this.vision(), this.tokenVisionProfiles(), this.fogRects(), this.gridSize, this.mapWidth, this.mapHeight);
+  }, () => {
+    const { exploration: _memory, ...vision } = this.vision();
+    return [this.storageKey, vision, [...this.tokenVisionProfiles()]];
   });
   private readonly openedSheetTokenId = signal<string | undefined>(undefined);
   private readonly sheetRevision = signal(0);

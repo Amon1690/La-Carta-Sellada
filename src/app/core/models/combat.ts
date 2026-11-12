@@ -56,5 +56,5 @@ export interface CombatState {
   log: string[]; narrative?: CombatNarrativeEvent[]; pending?: CombatPending;
   context?: { advantage: boolean; disadvantage: boolean; armorAdjustment: number; damageFactor: number; rangeResolved?: boolean; confirmed: boolean };
   slotsSpent: string[];
-  queue: { attackerId: string; action: CombatAction; targetId: string; reactionAttack?: boolean; castApproved?: boolean }[];
+  queue: { attackerId: string; action: CombatAction; targetId: string; reactionAttack?: boolean; castApproved?: boolean; context?: NonNullable<CombatState['context']> }[];
 }

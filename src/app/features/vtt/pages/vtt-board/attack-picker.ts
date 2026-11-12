@@ -22,6 +22,7 @@ export class VttAttackPicker implements OnChanges {
   readonly customizing = signal(false);
   facts: AttackFacts = normalAttackFacts();
   count = 1;
+  private selectedSignature?: string;
   private readonly remembered = new Map<string, AttackFacts>();
   readonly actor = computed(() => this.combat().find(this.actorId()));
   readonly target = computed(() => this.combat().find(this.targetId()));
@@ -53,11 +54,12 @@ export class VttAttackPicker implements OnChanges {
     return sight ? this.combat().combatants().map((actor) => [actor.id, sight(actor.id, this.actorId() ?? ''), sight(this.actorId() ?? '', actor.id), sight(actor.id, this.targetId() ?? '')]) : undefined;
   }
   private signature(): string {
-    return JSON.stringify([this.actorId(), this.targetId(), this.selected(), this.sightSignature(), this.combat().combatants().map((a) => [a.id, a.x, a.y, a.size, a.hp > 0, a.hp * 2 <= a.maxHp, a.armorClass, a.side, a.conditions, a.notes, a.actions, a.reactions])]);
+    return JSON.stringify([this.actorId(), this.targetId(), this.selected(), this.combat().situationRevision?.(), this.sightSignature(), this.combat().combatants().map((a) => [a.id, a.x, a.y, a.size, a.hp > 0, a.hp * 2 <= a.maxHp, a.armorClass, a.side, a.conditions, a.notes, a.actions, a.reactions])]);
   }
   choose(action: CombatAction): void {
     if (this.submitting()) return;
     this.error.set(''); this.source.set(action.source); this.count = 1; this.customizing.set(false);
+    this.selectedSignature = this.signature();
     this.facts = { ...((!this.forceReview ? this.remembered.get(this.signature()) : undefined) ?? normalAttackFacts()) };
     if (this.facts.reviewed && action.targets === 1) this.attack();
   }
@@ -69,11 +71,16 @@ export class VttAttackPicker implements OnChanges {
     try {
       const actor = this.actor(), target = this.target(), action = this.selected(), situation = this.situation();
       if (!actor || !target || !action || !situation) throw new Error('Elige objetivo y arma');
+      const currentSignature = this.signature();
+      if (this.selectedSignature !== currentSignature) {
+        this.selectedSignature = currentSignature; this.facts = normalAttackFacts();
+        throw new Error('La luz, el plano, las fichas o los observadores han cambiado. Revisa de nuevo la situación.');
+      }
       const problem = this.problem(action); if (problem) throw new Error(problem);
-      if (!this.facts.reviewed || (situation.threatUnknown && this.facts.nearbyThreat === undefined) || situation.spellTypeUnknown) throw new Error('Resuelve las dudas indicadas antes de lanzar');
+      if (situation.doubts.length || !this.facts.reviewed || (situation.threatUnknown && this.facts.nearbyThreat === undefined) || situation.spellTypeUnknown) throw new Error('Resuelve las dudas indicadas antes de lanzar');
       if (situation.blocked) throw new Error(situation.blocked);
       if (!Number.isInteger(this.count) || this.count < 1 || this.count > action.targets || (this.count > 1 && !action.repeatTargets)) throw new Error('Este ataque no permite ese número de impactos en el mismo objetivo');
-      const world = () => JSON.stringify([this.sightSignature(), this.combat().combatants().map((a) => [a.id, a.x, a.y, a.hp, a.maxHp, a.armorClass, a.conditions, a.side])]);
+      const world = () => JSON.stringify([this.combat().situationRevision?.(), this.sightSignature(), this.combat().combatants().map((a) => [a.id, a.x, a.y, a.hp, a.maxHp, a.armorClass, a.conditions, a.side])]);
       const initialWorld = world(), initialFacts = JSON.stringify(this.facts), count = this.count;
       if (!actor.actions.find((a) => a.source === action.source)?.reviewed) {
         const saved = this.combat().configure(actor.id, action); if (saved) await saved;
@@ -82,7 +89,7 @@ export class VttAttackPicker implements OnChanges {
       // Configurar puede actualizar las fichas compartidas: recordar la firma definitiva.
       const signature = this.signature();
       this.combat().begin(action.source, Array.from({ length: this.count }, () => target.id), situation.context);
-      if (!this.facts.finalRoll && !this.facts.manualEffects && !this.facts.extraAdvantage && !this.facts.extraDisadvantage && this.facts.attackerSeesTarget && this.facts.targetSeesAttacker && this.facts.canTarget && this.facts.armorAdjustment === 0 && this.facts.damageFactor === 1 && this.facts.nearbyThreat === undefined) this.remembered.set(signature, { ...this.facts });
+      if (!this.facts.attackerSightConfirmed && !this.facts.targetSightConfirmed && !this.facts.lineOfEffectConfirmed && !this.facts.finalRoll && !this.facts.manualEffects && !this.facts.extraAdvantage && !this.facts.extraDisadvantage && this.facts.attackerSeesTarget && this.facts.targetSeesAttacker && this.facts.canTarget && this.facts.armorAdjustment === 0 && this.facts.damageFactor === 1 && this.facts.nearbyThreat === undefined) this.remembered.set(signature, { ...this.facts });
       else this.remembered.delete(signature);
       if (this.remembered.size > 64) this.remembered.delete(this.remembered.keys().next().value!);
       if (this.facts.manualEffects) this.combat().requestManualResolution(true);

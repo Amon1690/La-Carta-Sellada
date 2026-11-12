@@ -71,6 +71,11 @@
           @for (reason of info.reasons; track $index) { <p>{{ reason }}</p> }
           <label class="check"><input type="checkbox" [(ngModel)]="responseFacts.attackerSeesTarget" /> Quien responde ve a su objetivo</label>
           <label class="check"><input type="checkbox" [(ngModel)]="responseFacts.targetSeesAttacker" /> Su objetivo puede verlo</label>
+
+              @if (info.attackerSightUnknown) { <label>Respuesta: ¿El atacante ve personalmente al objetivo?<select [ngModel]="responseFacts.attackerSightConfirmed ? responseFacts.attackerSeesTarget : undefined" (ngModelChange)="responseFacts.attackerSightConfirmed = $event !== undefined; responseFacts.attackerSeesTarget = $event ?? true"><option [ngValue]="undefined">Sin confirmar</option><option [ngValue]="true">Sí</option><option [ngValue]="false">No</option></select></label> }
+              @if (info.targetSightUnknown) { <label>Respuesta: ¿El objetivo ve personalmente al atacante?<select [ngModel]="responseFacts.targetSightConfirmed ? responseFacts.targetSeesAttacker : undefined" (ngModelChange)="responseFacts.targetSightConfirmed = $event !== undefined; responseFacts.targetSeesAttacker = $event ?? true"><option [ngValue]="undefined">Sin confirmar</option><option [ngValue]="true">Sí</option><option [ngValue]="false">No</option></select></label> }
+              @if (info.lineOfEffectUnknown) { <label>Respuesta: ¿Hay línea de efecto hasta el objetivo?<select [ngModel]="responseFacts.lineOfEffectConfirmed ? responseFacts.canTarget : undefined" (ngModelChange)="responseFacts.lineOfEffectConfirmed = $event !== undefined; responseFacts.canTarget = $event ?? true"><option [ngValue]="undefined">Sin confirmar</option><option [ngValue]="true">Sí</option><option [ngValue]="false">No</option></select></label> }
+          @if (info.blocked) { <p role="alert">{{ info.blocked }}</p> }
           @if (info.threatUnknown) { <label>¿Hay enemigo cercano que pueda verlo y actuar?<select [(ngModel)]="responseFacts.nearbyThreat"><option [ngValue]="undefined">Seleccionar</option><option [ngValue]="true">Sí</option><option [ngValue]="false">No</option></select></label> }
           @if (info.spellTypeUnknown) { <label>Tipo de ataque del conjuro<select [(ngModel)]="responseFacts.spellAttackType"><option [ngValue]="undefined">Seleccionar</option><option value="melee">Cuerpo a cuerpo</option><option value="ranged">A distancia</option></select></label> }
           <label class="check"><input type="checkbox" [(ngModel)]="responseFacts.extraAdvantage" /> Otra fuente de ventaja</label>
@@ -112,15 +117,26 @@
         <h4>{{ action.name }} · {{ action.range }} m{{ action.longRange ? ' / ' + action.longRange + ' m' : '' }}</h4>
         <p class="source">{{ action.notes }}</p>
         @for (slot of targetIds; track $index; let i = $index) {
-          <label>Objetivo / impacto {{ i + 1 }}<select [(ngModel)]="targetIds[i]"><option value="">Sin asignar</option>@for (target of combat().targets(actor, action); track target.id) { <option [value]="target.id">{{ target.name }} · {{ distance(actor, target).toFixed(1) }} m · CA {{ target.armorClass }}{{ distance(actor, target) > action.range! + 0.001 ? ' · alcance largo: desventaja' : '' }}</option> }</select></label>
+          <label>Objetivo / impacto {{ i + 1 }}<select [(ngModel)]="targetIds[i]" (ngModelChange)="targetsChanged()"><option value="">Sin asignar</option>@for (target of combat().targets(actor, action); track target.id) { <option [value]="target.id">{{ target.name }} · {{ distance(actor, target).toFixed(1) }} m · CA {{ target.armorClass }}{{ distance(actor, target) > action.range! + 0.001 ? ' · alcance largo: desventaja' : '' }}</option> }</select></label>
         }
         @if (!combat().targets(actor, action).length) { <p class="error">No hay objetivos válidos dentro del alcance. Colócalos en el mapa antes de tirar.</p> }
+
+        @for (review of targetReviews(); track review.id) {
+          <section aria-label="Revisar visión por objetivo"><b>{{review.name}}</b>
+          @if(review.info.blocked){<p role="alert">{{review.info.blocked}}</p>}
+          @if(review.info.attackerSightUnknown){<label>¿El atacante ve personalmente a este objetivo?<select [ngModel]="review.facts.attackerSightConfirmed ? review.facts.attackerSeesTarget : undefined" (ngModelChange)="review.facts.attackerSightConfirmed = $event !== undefined; review.facts.attackerSeesTarget = $event ?? true"><option [ngValue]="undefined">Sin confirmar</option><option [ngValue]="true">Sí</option><option [ngValue]="false">No</option></select></label>}
+          @if(review.info.targetSightUnknown){<label>¿Este objetivo ve personalmente al atacante?<select [ngModel]="review.facts.targetSightConfirmed ? review.facts.targetSeesAttacker : undefined" (ngModelChange)="review.facts.targetSightConfirmed = $event !== undefined; review.facts.targetSeesAttacker = $event ?? true"><option [ngValue]="undefined">Sin confirmar</option><option [ngValue]="true">Sí</option><option [ngValue]="false">No</option></select></label>}
+          @if(review.info.lineOfEffectUnknown){<label>¿Hay línea de efecto hasta este objetivo?<select [ngModel]="review.facts.lineOfEffectConfirmed ? review.facts.canTarget : undefined" (ngModelChange)="review.facts.lineOfEffectConfirmed = $event !== undefined; review.facts.canTarget = $event ?? true"><option [ngValue]="undefined">Sin confirmar</option><option [ngValue]="true">Sí</option><option [ngValue]="false">No</option></select></label>}
+          @if(review.info.threatUnknown){<label>¿Hay enemigo cercano que pueda verte y actuar?<select [(ngModel)]="review.facts.nearbyThreat"><option [ngValue]="undefined">Sin confirmar</option><option [ngValue]="true">Sí</option><option [ngValue]="false">No</option></select></label>}
+          @if(review.info.spellTypeUnknown){<label>Tipo de ataque del conjuro<select [(ngModel)]="review.facts.spellAttackType"><option [ngValue]="undefined">Sin confirmar</option><option value="melee">Cuerpo a cuerpo</option><option value="ranged">A distancia</option></select></label>}
+          </section>
+        }
         <div class="fields"><label class="check"><input type="checkbox" [(ngModel)]="advantage" /> Ventaja</label><label class="check"><input type="checkbox" [(ngModel)]="disadvantage" /> Desventaja (incluye enemigo adyacente si procede)</label>
           <label>Ajuste contextual de CA (cobertura/rasgos)<input type="number" [(ngModel)]="armorAdjustment" /></label>
           <label>Defensa al daño<select [(ngModel)]="damageFactor"><option [ngValue]="1">Normal</option><option [ngValue]="0.5">Resistencia</option><option [ngValue]="0">Inmunidad</option><option [ngValue]="2">Vulnerabilidad</option></select></label>
         </div>
         <p>{{ combat().resourceStatus(actor, action.cost) }}. Tirada separada para cada impacto. En daño mixto o defensas diferentes usa la resolución explícita final.</p>
-        <label class="check"><input type="checkbox" [(ngModel)]="contextConfirmed" /> Objetivos, línea de visión, área, cobertura y condiciones revisados. El mapa no determina obstáculos ni bandos automáticamente.</label>
+        <label class="check"><input type="checkbox" [(ngModel)]="contextConfirmed" /> Objetivos, área, cobertura parcial y efectos adicionales revisados. Las dudas personales de visión se confirman por separado.</label>
         <div class="actions"><button type="button" (click)="roll()">Lanzar dados</button><button type="button" (click)="actionSource.set('')">Volver</button></div>
       } @else {
         @if (actor.armorClass === undefined || actor.maxHp <= 0) { <p class="error">Completa las estadísticas y los PG de la ficha antes del combate.</p> }
