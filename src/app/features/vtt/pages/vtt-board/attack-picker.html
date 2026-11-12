@@ -20,8 +20,13 @@
               <b>{{ info.context.advantage === info.context.disadvantage ? 'Tirada normal' : info.context.advantage ? 'Ventaja' : 'Desventaja' }}</b>
               @for (reason of info.reasons; track $index) { <p>{{ reason }}</p> }
               @if (info.context.advantage && info.context.disadvantage) { <p>Ventaja y desventaja se anulan.</p> }
-              @if (!facts.reviewed) { <p>¿Se ven, no hay cobertura ni otros efectos que cambien el resultado?</p> }
+              @if (!facts.reviewed) { <p>¿Hay cobertura parcial u otros efectos adicionales que cambien el resultado?</p> }
               @for (doubt of info.doubts; track $index) { <small>{{ doubt }}</small> }
+
+              @if (info.attackerSightUnknown) { <label>¿El atacante ve personalmente al objetivo?<select [ngModel]="facts.attackerSightConfirmed ? facts.attackerSeesTarget : undefined" (ngModelChange)="facts.attackerSightConfirmed = $event !== undefined; facts.attackerSeesTarget = $event ?? true"><option [ngValue]="undefined">Sin confirmar</option><option [ngValue]="true">Sí</option><option [ngValue]="false">No</option></select></label> }
+              @if (info.targetSightUnknown) { <label>¿El objetivo ve personalmente al atacante?<select [ngModel]="facts.targetSightConfirmed ? facts.targetSeesAttacker : undefined" (ngModelChange)="facts.targetSightConfirmed = $event !== undefined; facts.targetSeesAttacker = $event ?? true"><option [ngValue]="undefined">Sin confirmar</option><option [ngValue]="true">Sí</option><option [ngValue]="false">No</option></select></label> }
+              @if (info.lineOfEffectUnknown) { <label>¿Hay línea de efecto hasta el objetivo?<select [ngModel]="facts.lineOfEffectConfirmed ? facts.canTarget : undefined" (ngModelChange)="facts.lineOfEffectConfirmed = $event !== undefined; facts.canTarget = $event ?? true"><option [ngValue]="undefined">Sin confirmar</option><option [ngValue]="true">Sí</option><option [ngValue]="false">No</option></select></label> }
+              @if (info.blocked) { <p role="alert">{{ info.blocked }}</p> }
               @if (info.threatUnknown) { <label>¿Hay un enemigo cercano que pueda verte y actuar?<select [(ngModel)]="facts.nearbyThreat"><option [ngValue]="undefined">Seleccionar</option><option [ngValue]="true">Sí</option><option [ngValue]="false">No</option></select></label> }
               @if (info.spellTypeUnknown) { <label>Tipo de ataque del conjuro<select [(ngModel)]="facts.spellAttackType"><option [ngValue]="undefined">Seleccionar</option><option value="melee">Cuerpo a cuerpo</option><option value="ranged">A distancia</option></select></label> }
               @if (action.targets > 1) { <button type="button" class="secondary" (click)="multiple.emit({owner: attacker, action: action})">Distribuir entre varios objetivos</button> }
@@ -40,8 +45,8 @@
                 <label>Defensa al daño<select [(ngModel)]="facts.damageFactor"><option [ngValue]="1">Normal</option><option [ngValue]="0.5">Resistencia</option><option [ngValue]="0">Inmunidad</option><option [ngValue]="2">Vulnerabilidad</option></select></label>
                 <details><summary>Texto de las fichas</summary>@for (who of [attacker, victim]; track who.id) { <b>{{ who.name }}</b>@for (note of who.notes; track $index) { <p>{{ note }}</p> } }<p>{{ action.notes }}</p></details>
               }
-              <p>Solo se recuerda la situación normal mientras no cambien posiciones, fichas o condiciones. Los efectos temporales se revisan de nuevo.</p>
-              <button type="button" (click)="confirm()">{{ customizing() ? 'Aplicar estas condiciones y atacar' : 'Confirmar situación y atacar' }}</button>
+              <p>Solo se recuerda la situación normal mientras no cambien posiciones, fichas, observadores, luz, obstáculos o efectos. Los efectos temporales se revisan de nuevo.</p>
+              <button type="button" [disabled]="!!info.blocked" (click)="confirm()">{{ customizing() ? 'Aplicar estas condiciones y atacar' : 'Confirmar situación y atacar' }}</button>
             </div>
           }
         }

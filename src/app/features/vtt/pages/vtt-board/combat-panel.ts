@@ -2,8 +2,8 @@ import { AfterViewInit, Component, ElementRef, ViewChild, input, output, signal 
 import { FormsModule } from '@angular/forms';
 import { CombatAction, Combatant, CombatReaction, CombatResource } from '../../../../core/models/combat';
 import { actionProblem, combatDistance, reactionProblem, SAVE_LABELS } from '../../../../core/services/combat-rules';
-import { attackSituation, normalAttackFacts } from '../../../../core/services/attack-situation';
-import { VttCombat } from '../../../../core/services/vtt-combat';
+import { AttackFacts, attackSituation, normalAttackFacts } from '../../../../core/services/attack-situation';
+import { AttackContext, VttCombat } from '../../../../core/services/vtt-combat';
 
 @Component({ selector: 'app-vtt-combat', imports: [FormsModule], templateUrl: './combat-panel.html', styleUrl: './combat-panel.scss' })
 export class VttCombatPanel implements AfterViewInit {
@@ -11,6 +11,9 @@ export class VttCombatPanel implements AfterViewInit {
   readonly resolved = output<void>();
   @ViewChild('dialog') private dialog?: ElementRef<HTMLDialogElement>;
   responseFacts = normalAttackFacts();
+  private responseKey?: string;
+  private contextKey?: string;
+  private readonly perTarget = new Map<string, AttackFacts>();
   quick = false;
   private closeAfterSave = false;
   readonly ownerId = signal('');
@@ -36,14 +39,14 @@ export class VttCombatPanel implements AfterViewInit {
   editingOwner(): Combatant | undefined { return this.combat().find(this.editingOwnerId()); }
   selectedAction(): CombatAction | undefined { return this.owner()?.actions.find((a) => a.source === this.actionSource()); }
   ngAfterViewInit(): void { if (this.combat().state().pending) this.dialog?.nativeElement.showModal(); }
-  open(ownerId: string): void { this.quick = false; this.closeAfterSave = false; this.ownerId.set(ownerId); this.actionSource.set(''); this.actionDraft = this.reactionDraft = undefined; this.error.set(''); this.show(); }
+  open(ownerId: string): void { this.resetContext(); this.quick = false; this.closeAfterSave = false; this.ownerId.set(ownerId); this.actionSource.set(''); this.actionDraft = this.reactionDraft = undefined; this.error.set(''); this.show(); }
   resume(quick = false): void { this.quick = quick; this.closeAfterSave = false; this.actionDraft = this.reactionDraft = undefined; this.error.set(''); this.show(); }
   prepareEntry(owner: Combatant, action: CombatAction): void { this.open(owner.id); this.edit(owner, action); this.closeAfterSave = true; }
   private settleQuick(): void { if (this.quick && !this.manualResolution) { this.combat().settleAutomatic(); if (!this.combat().state().pending) { this.close(); this.resolved.emit(); } } }
   close(): void { if (!this.saving()) this.dialog?.nativeElement.close(); }
   cancelDialog(event: Event): void { if (this.saving()) event.preventDefault(); }
   private show(): void { if (!this.isOpen) this.dialog?.nativeElement.showModal(); }
-  choose(action: CombatAction): void { this.actionSource.set(action.source); this.targetIds = Array.from({ length: action.targets }, () => ''); this.contextConfirmed = false; }
+  choose(action: CombatAction): void { this.resetContext(); this.contextKey=this.worldKey(); this.actionSource.set(action.source); this.targetIds = Array.from({ length: action.targets }, () => ''); this.contextConfirmed = false; }
   edit(owner: Combatant, entry: CombatAction | CombatReaction): void {
     this.editingOwnerId.set(owner.id); this.error.set(''); this.actionSource.set('');
     this.actionDraft = 'resolution' in entry ? structuredClone(entry) : undefined;
@@ -85,20 +88,43 @@ export class VttCombatPanel implements AfterViewInit {
       if (this.closeAfterSave) { this.closeAfterSave = false; this.saving.set(false); this.close(); }
     } catch (error) { this.error.set(error instanceof Error ? error.message : 'No se pudo guardar la preparación'); } finally { this.saving.set(false); }
   }
+  private worldKey(): string { return JSON.stringify([this.combat().situationRevision?.(), this.combat().combatants().map(a=>[a.id,a.x,a.y,a.size,a.hp,a.maxHp,a.armorClass,a.conditions,a.side,a.notes,a.actions])]); }
+  private resetContext(): void { this.advantage=false;this.disadvantage=false;this.armorAdjustment=0;this.damageFactor=1;this.contextConfirmed=false;this.perTarget.clear(); }
+  targetsChanged(): void { this.resetContext(); this.contextKey=this.worldKey(); }
+  targetReviews() {
+    const actor=this.owner(),action=this.selectedAction();
+    if(!actor||!action)return [];
+    return [...new Set(this.targetIds.filter(Boolean))].flatMap(id=>{
+      const target=this.combat().find(id);if(!target)return [];
+      if(!this.perTarget.has(id))this.perTarget.set(id,normalAttackFacts());
+      const facts=this.perTarget.get(id)!;
+      const info=attackSituation(actor,target,action,this.combat().combatants(),{...facts,reviewed:this.contextConfirmed,
+        extraAdvantage:this.advantage,extraDisadvantage:this.disadvantage,armorAdjustment:Number(this.armorAdjustment),damageFactor:Number(this.damageFactor)},this.combat().sight);
+      return [{id,name:target.name,facts,info}];
+    });
+  }
   roll(): void { this.attempt(() => {
+    if(this.contextKey!==this.worldKey()){this.resetContext();this.contextKey=this.worldKey();throw new Error('La situación ha cambiado. Revisa los objetivos y sus condiciones de nuevo.');}
+    const contexts=new Map<string,AttackContext>();
+    for(const review of this.targetReviews()) {
+      if(review.info.blocked||review.info.doubts.length)throw new Error(review.info.blocked??`${review.name}: ${review.info.doubts.join(' ')}`);
+      contexts.set(review.id,review.info.context);
+    }
     this.combat().begin(this.actionSource(), this.targetIds.filter(Boolean), { advantage: this.advantage, disadvantage: this.disadvantage,
-      armorAdjustment: Number(this.armorAdjustment), damageFactor: Number(this.damageFactor), confirmed: this.contextConfirmed });
+      armorAdjustment: Number(this.armorAdjustment), damageFactor: Number(this.damageFactor), confirmed: this.contextConfirmed },contexts);
     this.effectsConfirmed = false; this.manualResolution = false; this.manualDamage = undefined; this.manualNote = '';
   }); }
   responseSituation() {
     const p = this.combat().state().pending, actor = this.combat().find(p?.attackerId), target = this.combat().find(p?.targetId);
+    const key=JSON.stringify([p?.attackerId,p?.targetId,p?.action,this.worldKey()]);
+    if(key!==this.responseKey){this.responseKey=key;this.responseFacts=normalAttackFacts();}
     return p && actor && target ? attackSituation(actor, target, p.action, this.combat().combatants(), this.responseFacts, this.combat().sight) : undefined;
   }
-  cancelResponse(): void { this.attempt(() => { this.combat().cancelResponse(); this.settleQuick(); }); }
+  cancelResponse(): void { this.attempt(() => { this.combat().cancelResponse(); this.responseFacts=normalAttackFacts(); this.responseKey=undefined; this.settleQuick(); }); }
   resolveResponse(): void { this.attempt(() => {
     const info = this.responseSituation();
-    if (!info || info.blocked || !this.responseFacts.reviewed || (info.threatUnknown && this.responseFacts.nearbyThreat === undefined) || info.spellTypeUnknown) throw new Error(info?.blocked ?? 'Resuelve las dudas del ataque de respuesta');
-    this.combat().resolveResponse(info.context); if (this.responseFacts.manualEffects) this.combat().requestManualResolution(true); this.responseFacts = normalAttackFacts(); this.settleQuick();
+    if (!info || info.blocked || info.doubts.length || !this.responseFacts.reviewed || (info.threatUnknown && this.responseFacts.nearbyThreat === undefined) || info.spellTypeUnknown) throw new Error(info?.blocked ?? 'Resuelve las dudas del ataque de respuesta');
+    this.combat().resolveResponse(info.context); if (this.responseFacts.manualEffects) this.combat().requestManualResolution(true); this.responseFacts = normalAttackFacts(); this.responseKey=undefined; this.settleQuick();
   }); }
   requestManual(requested: boolean): void { this.manualResolution = requested; this.combat().requestManualResolution(requested); }
   react(ownerId: string, source: string): void { this.attempt(() => { this.combat().useReaction(ownerId, source, this.redirectId); this.settleQuick(); }); }

@@ -895,4 +895,15 @@ describe('Multiselección de fichas en VTT', () => {
     expect(reset.vision).toEqual(emptyBoardVision()); expect(reset.tokens).toEqual([]); expect(reset.fogRects).toEqual([]);
   });
 
+  it('la firma real del combate incluye entorno y observadores, pero no la memoria de exploración', () => {
+    const view=fixture.componentInstance as any;
+    view.vision.set(boardVision()); const signature=()=>JSON.stringify(view.combat.situationRevision());
+    const initial=signature(); view.vision.update((v:BoardVisionState)=>({...v,exploration:[{tokenId:'A',cells:[1]}]}));
+    expect(signature()).toBe(initial);
+    view.vision.update((v:BoardVisionState)=>({...v,environment:{...v.environment,illumination:'darkness'}}));
+    expect(signature()).not.toBe(initial); const dark=signature();
+    view.vision.update((v:BoardVisionState)=>({...v,groups:[{id:'other',name:'Otra lista',observerIds:['C']}],activeGroupId:'other'}));
+    expect(signature()).not.toBe(dark);
+  });
+
 });

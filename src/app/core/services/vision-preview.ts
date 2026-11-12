@@ -15,6 +15,8 @@ export interface SightCircle extends SightDisk {
   sense?: VisionSense;
 }
 export interface SightAssessment {
+  /** Independiente de la vista: un cristal puede dejar ver y bloquear el efecto. */
+  lineOfEffect?: boolean;
   visible: boolean | undefined;
   perception: 'normal' | 'disadvantage' | 'automatic-failure' | 'unknown';
   reasons: string[];
