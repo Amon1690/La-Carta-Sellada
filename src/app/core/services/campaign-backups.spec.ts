@@ -7,6 +7,8 @@ import { rules, warrior } from './character-builder.fixture';
 import { emptyBoardVision } from './vision-state';
 import { previewSight, previewTokenVisible } from './vision-preview';
 import { syntheticNetwork } from './travel-network.fixture';
+import { planTravelRoute } from './travel-route-planner';
+import { startRouteTravel, advanceRouteTravel } from './travel-route-progress';
 import { networkStorageKey } from './travel-network-store';
 
 class MemoryStorage implements Storage {
@@ -29,6 +31,17 @@ describe('Copias de seguridad por campaña',()=>{
  beforeEach(()=>{storage=new MemoryStorage();current=collection();current.created[0]={...current.created[0],playerIds:['current-player']} as {id:string};user={id:'director',username:'Prueba',role:'director',campaigns:[campaign]};
  put=jasmine.createSpy('put').and.callFake(async(_id:string,sheets:SheetCollection,revision:number)=>{if(revision!==current.revision)throw Object.assign(new Error('Conflict'),{status:409});current=structuredClone({...sheets,revision:revision+1,baseIds:current.baseIds,npcIds:current.npcIds});return structuredClone(current);});
  transport={read:async()=>structuredClone(current),write:put};store=new CampaignBackups(storage,transport,()=>user);});
+ it('exporta y restaura el itinerario iniciado aunque cambie la red, y rechaza cursores corruptos sin escribir',async()=>{
+   const network=syntheticNetwork(), result=planTravelRoute(network,{x:1,y:1},{x:3,y:3},{startMode:'foot',allowTransfers:true,allowOffRoad:false,speedsKmh:{'foot:plain':2,'boat:water':4},speedSource:'Fixture'});
+   if(result.status!=='ok')throw Error(result.message);
+   const progress=advanceRouteTravel(startRouteTravel(network,result.itinerary),62.1).progress;
+   const trip={...journey(),route:result.itinerary.geometry,routeProgress:progress}; const state={...travel(),journeys:{grupo:trip},...trip};
+   storage.setItem(travelStorageKey(campaign),JSON.stringify(state));storage.setItem(networkStorageKey(campaign),JSON.stringify({...network,revision:9}));
+   const raw=await store.export(campaign);const exported=parseCampaignBackup(raw,campaign);expect((exported.local[travelStorageKey(campaign)] as any).journeys.grupo.routeProgress).toEqual(progress);
+   await store.restore(await store.preview(raw,campaign));expect(JSON.parse(storage.getItem(travelStorageKey(campaign))!).routeProgress).toEqual(progress);
+   const corrupt=JSON.parse(raw);corrupt.local[travelStorageKey(campaign)].journeys.grupo.routeProgress.travelledKm+=1;
+   const before=storage.writes;put.calls.reset();await expectAsync(store.preview(JSON.stringify(corrupt),campaign)).toBeRejected();expect(storage.writes).toBe(before);expect(put).not.toHaveBeenCalled();
+ });
  it('exporta y restaura la red propia y rechaza redes inválidas o de otra campaña antes de escribir',async()=>{
    const key=networkStorageKey(campaign),network=syntheticNetwork();storage.setItem(key,JSON.stringify(network));storage.setItem(networkStorageKey('other'),JSON.stringify(network));
    const exported=parseCampaignBackup(await store.export(campaign),campaign);expect(exported.local[key]).toEqual(network);expect(exported.local[networkStorageKey('other')]).toBeUndefined();

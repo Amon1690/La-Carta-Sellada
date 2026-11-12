@@ -9,7 +9,7 @@
       <p>Rutas, grupos y jornadas a través de Faerûn.</p>
     </div>
     <div class="journey-stats" aria-label="Estado del viaje">
-      <span><small>Ruta manual</small><b>{{ formatDistance(routeDistance()) }} km</b></span>
+      <span><small>{{ routeProgress() ? 'Itinerario guardado' : 'Ruta manual' }}</small><b>{{ formatDistance(routeDistance()) }} km</b></span>
       <span><small>Restante</small><b>{{ formatDistance(remainingDistance()) }} km</b></span>
       <span><small>Jornadas</small><b>{{ estimatedDays() || '—' }}</b></span>
       <span><small>Lugares</small><b>{{ locations.length }}</b></span>
@@ -234,6 +234,21 @@
                 [contextKey]="campaignId + ':' + selectedGroupId()" (previewChange)="plannedItinerary.set($event)" (manualRequested)="addManualDestination()" />
             } @else { <button type="button" class="route-destination" (click)="addManualDestination()">Añadir destino como ruta manual</button> }
 
+            @if (plannedItinerary()) {
+              <button type="button" class="primary-button" [disabled]="!!pendingEncounter() || (!!routeProgress() && remainingDistance() > 0)" (click)="startPlannedJourney()">Iniciar este itinerario</button>
+              <p>Conserva las provisiones y jornadas anteriores. Sustituye la ruta dibujada desde la posición actual.</p>
+            }
+            @if (routeProgress(); as progress) {
+              <article class="saved-itinerary" aria-label="Itinerario guardado">
+                <h3>Itinerario guardado</h3>
+                <p>{{ progress.itinerary.network.name }} · revisión {{ progress.itinerary.network.revision }}</p>
+                <p>{{ formatDistance(progress.travelledKm) }} / {{ formatDistance(progress.itinerary.distanceKm) }} km físicos</p>
+                <p>Duración prevista: {{ progress.itinerary.durationHours === undefined ? 'sin velocidad completa' : formatDistance(progress.itinerary.durationHours!) + ' h' }}.</p>
+                <p>El avance usa las velocidades declaradas para cada medio y terreno. La red actual no modifica este viaje. Los eventos mantienen sus modificadores globales de recorrido; el registro separa horas consumidas y kilómetros físicos.</p>
+                <button type="button" [disabled]="!!pendingEncounter()" (click)="clearRoute()">Retirar itinerario conservando jornadas</button>
+              </article>
+            }
+            @if (!routeProgress()) {
             <fieldset class="pace-control">
               <legend>Ritmo</legend>
               <div>
@@ -243,19 +258,24 @@
               </div>
             </fieldset>
 
+            }
             <div class="field-pair compact-fields">
               <label>Horas por jornada
                 <input type="number" min="1" max="16" [ngModel]="plan().hours" (ngModelChange)="planFieldChanged('hours', +$event)" />
               </label>
+              @if (!routeProgress()) {
               <label>Horas al doble (montura)
                 <input type="number" min="0" max="4" [ngModel]="plan().mountBoostHours" (ngModelChange)="planFieldChanged('mountBoostHours', +$event)" />
               </label>
+              }
             </div>
 
+            @if (!routeProgress()) {
             <label class="switch-field">
               <span><b>Terreno difícil</b><small>Reduce la distancia a la mitad</small></span>
               <input type="checkbox" [ngModel]="plan().difficultTerrain" (ngModelChange)="planFieldChanged('difficultTerrain', $event)" />
             </label>
+            }
 
             <div class="field-pair">
               <label>Estación
@@ -397,6 +417,7 @@
                 <li [class.pending]="log.pendingDecision">
                   <header><b>Jornada {{ log.day }}</b><span>{{ formatDistance(log.distance) }} km</span></header>
                   <dl>
+                    @if (log.hoursUsed !== undefined) { <div><dt>Tiempo de viaje</dt><dd>{{ formatDistance(log.hoursUsed!) }} h · {{ formatDistance(log.hoursRemaining ?? 0) }} h disponibles sin consumir</dd></div> }
                     <div><dt>Clima</dt><dd>{{ log.weather }}</dd></div>
                     <div><dt>Encuentros</dt><dd>{{ log.encounter }}</dd></div>
                     <div><dt>Consumo</dt><dd>{{ log.resources }}</dd></div>

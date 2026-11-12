@@ -6,6 +6,8 @@ import { of } from 'rxjs';
 import { CampaignDataService } from '../../../../core/services/campaign-data';
 import { CharacterSheetsService } from '../../../../core/services/character-sheets';
 import { TravelMap } from './travel-map';
+import { startRouteTravel, advanceRouteTravel } from '../../../../core/services/travel-route-progress';
+import { planTravelRoute } from '../../../../core/services/travel-route-planner';
 import { FAERUN_LOCATIONS } from '../../../../core/data/faerun-locations';
 import { syntheticNetwork } from '../../../../core/services/travel-network.fixture';
 import { networkStorageKey } from '../../../../core/services/travel-network-store';
@@ -283,6 +285,65 @@ describe('Viajes independientes por grupo', () => {
     expect(view.logs().length).toBe(2); expect(view.plan()).toEqual(provisions);
     const tiny = preciseJourney([{ x: 20, y: 20 }, { x: 20.00000001, y: 20 }]);
     expect(tiny.remainingDistance()).toBeGreaterThan(0); // No se confunde precisión de presentación con cero real.
+  });
+
+  function calculated(view: any, speedsKmh = { 'foot:plain': 2, 'boat:water': 4 }): void {
+    const network = syntheticNetwork();
+    const result = planTravelRoute(network, { x: 1, y: 1 }, { x: 3, y: 3 }, { startMode: 'foot', allowTransfers: true, allowOffRoad: false, speedsKmh, speedSource: 'Prueba sintética' });
+    if (result.status !== 'ok') throw Error(result.message);
+    view.groups.update((list: any[]) => list.map(g => g.id === view.selectedGroupId() ? { ...g, x: 1, y: 1 } : g));
+    spyOn(view, 'canManageNetwork').and.returnValue(true);
+    view.routeNetwork.set(network); view.plannedItinerary.set(result.itinerary); view.startPlannedJourney();
+  }
+  it('inicia explícitamente, conserva el diario anterior y avanza pie/barco por horas reales', () => {
+    legacy(); const view = make(); view.skipPendingEncounter(); const old = structuredClone(view.logs()), supplies = structuredClone(view.plan());
+    calculated(view); expect(view.logs()).toEqual(old); expect(view.plan()).toEqual(supplies); expect(view.travelledDistance()).toBe(0);
+    spyOn(view, 'resolveRoleEvents').and.returnValue([]); view.planFieldChanged('hours', 62.1); view.resolveDay();
+    expect(view.travelledDistance()).toBeCloseTo(126.2); expect(view.logs()[1].hoursUsed).toBeCloseTo(62.1);
+    expect(view.plan().foodKg).toBe(9.6); expect(view.groups()[0].y).toBeCloseTo(1 + 4 / 43.1);
+    expect(view.logs()[0]).toEqual(old[0]); view.planFieldChanged('hours', 100); view.resolveDay();
+    expect(view.remainingDistance()).toBe(0); expect(view.groups()[0].x).toBe(3); expect(view.groups()[0].y).toBe(3);
+    expect(view.logs()[2].hoursUsed).toBeCloseTo(20.55); expect(view.logs()[2].hoursRemaining).toBeCloseTo(79.45);
+    const arrived = JSON.stringify(view.currentJourney()); view.resolveDay(); expect(JSON.stringify(view.currentJourney())).toBe(arrived);
+  });
+  it('recarga y cambio de grupo/campaña conservan red, geometría, avance y posiciones independientes', () => {
+    let id = 'progress-one';
+    TestBed.overrideProvider(ACCESS_CONTEXT, { useValue: { user: () => ({ role: 'director' }) } });
+    TestBed.configureTestingModule({ providers: [{ provide: ActivatedRoute, useValue: { snapshot: { get paramMap() { return convertToParamMap({ campaignId: id }); } } } }] });
+    TestBed.overrideProvider(CampaignDataService, { useValue: { getCampaignById: (campaignId: string) => of({ id: campaignId, playerCharacters: [], playerOptions: [], npcs: [] }) } });
+    const view = make(); view.groups.set(groups()); view.selectGroup('a'); view.guideChanged('player-option-scout'); calculated(view);
+    spyOn(view, 'resolveRoleEvents').and.returnValue([]); view.resolveDay(); const progress = structuredClone(view.routeProgress()), position = structuredClone(view.selectedGroup());
+    view.networkChanged({ ...syntheticNetwork(), revision: 4 }); expect(view.routeProgress()).toEqual(progress);
+    view.selectGroup('b'); expect(view.routeProgress()).toBeUndefined(); view.planFieldChanged('foodKg', 99);
+    const restored = make(); expect(restored.plan().foodKg).toBe(99); restored.selectGroup('a');
+    expect(restored.routeProgress()).toEqual(progress); expect(restored.selectedGroup()).toEqual(position);
+    id = 'progress-two'; expect(make().groups()).toEqual([]); id = 'progress-one'; expect(make().routeProgress()).toEqual(progress);
+  });
+  it('un encuentro pendiente pausa el cursor y al omitirlo continúa sin doble consumo', () => {
+    legacy(); const view = make(); view.skipPendingEncounter(); calculated(view);
+    spyOn(view, 'resolveRoleEvents').and.returnValue([]); view.resolveDay();
+    view.pendingEncounter.set(pending('route-run')); view.logs.update((logs: any[]) => logs.map((l, i) => i === logs.length - 1 ? { ...l, pendingDecision: true } : l)); view.persistState();
+    const paused = make(), before = JSON.stringify(paused.currentJourney()); paused.resolveDay();
+    expect(JSON.stringify(paused.currentJourney())).toBe(before); expect(paused.pendingEncounter().runId).toBe('route-run');
+    paused.skipPendingEncounter(); spyOn(paused, 'resolveRoleEvents').and.returnValue([]); paused.resolveDay();
+    expect(paused.routeProgress().travelledKm).toBeCloseTo(32); expect(paused.plan().foodKg).toBe(9.2);
+  });
+  it('rechaza una instantánea corrupta conservando el guardado y no consume ante velocidad desconocida', () => {
+    legacy(); const view = make(); view.skipPendingEncounter(); calculated(view, { 'foot:plain': 2 } as any);
+    spyOn(view, 'resolveRoleEvents').and.returnValue([]); view.planFieldChanged('hours', 100); view.resolveDay();
+    expect(view.routeProgress().travelledKm).toBeCloseTo(122.2); const before = JSON.stringify(view.currentJourney()); view.resolveDay(); expect(JSON.stringify(view.currentJourney())).toBe(before);
+    const state = JSON.parse(values.get(KEY)!); state.journeys.a.routeProgress.itinerary.legs[0].durationHours = 1;
+    const raw = JSON.stringify(state); values.set(KEY, raw); const invalid = make(); invalid.persistState(); expect(values.get(KEY)).toBe(raw);
+  });
+
+  it('una llegada fraccionaria no estima otra jornada por residuos de tiempo', () => {
+    const n = syntheticNetwork(), a = {x:0,y:0}, b = {x:.7/61.1,y:0}, c = {x:b.x,y:.2/43.1};
+    n.nodes = [{...n.nodes[0],...a},{...n.nodes[1],...b},{...n.nodes[2],...c}];
+    n.edges[0].geometry=[a,b]; n.edges[1].geometry=[b,c];
+    const result = planTravelRoute(n,a,c,{startMode:'foot',allowTransfers:true,allowOffRoad:false,speedsKmh:{'foot:plain':2,'boat:water':1},speedSource:'Fixture fraccionaria'});
+    if(result.status!=='ok') throw Error(result.message);
+    const view=make();view.routeProgress.set(advanceRouteTravel(startRouteTravel(n,result.itinerary),8).progress);
+    expect(view.remainingDistance()).toBe(0);expect(view.estimatedDays()).toBe(0);
   });
 
 });
