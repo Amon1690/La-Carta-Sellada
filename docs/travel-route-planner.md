@@ -24,10 +24,31 @@ Se optimiza distancia, no un tiempo cuyos parámetros pueden ser desconocidos.
 
 El resultado es una vista previa en azul claro sobre el mapa. Cambiar grupo,
 extremos, opciones, velocidades o red la invalida. Salir del panel también la
-retira. No sustituye rutas, jornadas, encuentros o provisiones. El consumo de
-horas por tramos y la instantánea persistente del viaje calculado pertenecen a
-la tarea siguiente `travel-route-progress`; no se entrega un itinerario acuático
-al avance global antiguo.
+retira. «Iniciar este itinerario» es una acción explícita: conserva provisiones,
+roles y jornadas anteriores y sustituye la ruta desde la posición actual. No se
+puede sustituir un itinerario pendiente ni uno con encuentro sin resolver. Para
+recalcular, retíralo expresamente; las jornadas y la posición se conservan.
+
+El viaje conserva una instantánea validada de la red completa, su procedencia,
+revisión, opciones, geometría y velocidades por medio/terreno. La red de la
+campaña puede cambiar sin alterar el viaje. El cursor y las jornadas se guardan
+por grupo y campaña y se validan también en las copias. Los guardados anteriores
+sin itinerario mantienen sus reglas de ruta manual.
+
+Cada jornada consume horas sucesivamente en sus tramos, a pie y en barco con sus
+velocidades declaradas. Al llegar se devuelve el tiempo sobrante. Si falta una
+velocidad, se detiene en ese tramo: no se usa la marcha terrestre para el barco.
+Los controles globales de ritmo, montura y terreno se reservan a rutas manuales;
+en un itinerario se usan las velocidades declaradas para cada medio y terreno.
+El director indica las horas del día. Provisiones, tiradas de puestos y encuentros
+conservan el funcionamiento existente; un encuentro pendiente impide otra jornada.
+
+Los eventos conservan sus modificadores globales de recorrido: el porcentaje
+modifica el rendimiento de la jornada en cada tramo y los km añaden avance por la
+misma geometría, sin crear atajos ni cruzar tramos de velocidad desconocida. El
+registro muestra km físicos y horas de jornada por separado. `baseHours` del
+cursor es la duración equivalente a velocidades declaradas, usada para validar el
+cursor y estimar días sin eventos; no suma el tiempo real de las jornadas.
 
 Sin cobertura, nodos o conexión adecuada se explica que no hay itinerario
 verificado. «Añadir destino como ruta manual» conserva la acción anterior,

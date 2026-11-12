@@ -37,6 +37,7 @@ import { RouteNetworkEditor } from '../../components/route-network-editor/route-
 import { RoutePlanner } from '../../components/route-planner/route-planner';
 import { TravelNetwork } from '../../../../core/models/travel-network';
 import { TravelItinerary } from '../../../../core/services/travel-route-planner';
+import { RouteTravelProgress, advanceRouteTravel, advanceRouteTravelDay, assertRouteTravelProgress, startRouteTravel } from '../../../../core/services/travel-route-progress';
 
 type MapMode = 'select' | 'place' | 'route' | 'pan';
 type SideTab = 'groups' | 'plan' | 'days';
@@ -123,6 +124,8 @@ interface DayLog {
   position: string;
   pendingDecision: boolean;
   events?: RoleEventResult[];
+  hoursUsed?: number;
+  hoursRemaining?: number;
 }
 
 interface TravelDayEffects {
@@ -150,6 +153,8 @@ interface GroupJourney {
   plan: TravelPlan;
   logs: DayLog[];
   pendingEncounter?: PendingTravelEncounter;
+  routeProgress?: RouteTravelProgress;
+  routeLogStartIndex?: number;
 }
 
 interface StoredTravelState {
@@ -161,6 +166,8 @@ interface StoredTravelState {
   plan: TravelPlan;
   logs: DayLog[];
   pendingEncounter?: PendingTravelEncounter;
+  routeProgress?: RouteTravelProgress;
+  routeLogStartIndex?: number;
   selectedGroupId?: string;
   zoom: number;
 }
@@ -222,12 +229,14 @@ export class TravelMap implements AfterViewInit {
   protected readonly groups = signal<TravelGroup[]>([]);
   protected readonly route = signal<MapPoint[]>([]);
   protected readonly routeNetwork = signal<TravelNetwork | null>(null);
+  protected readonly routeProgress = signal<RouteTravelProgress | undefined>(undefined);
   protected readonly plannedItinerary = signal<TravelItinerary | undefined>(undefined);
   protected readonly plannerOrigin = computed(() => this.selectedGroup());
   protected readonly plannerDestination = computed(() => LOCATIONS.find(location => location.id === this.plan().destinationId));
   protected readonly plannedPolyline = computed(() => this.plannedItinerary()?.geometry.map(point => `${point.x},${point.y}`).join(' ') ?? '');
   protected networkChanged(network: TravelNetwork | null): void { this.routeNetwork.set(network); this.plannedItinerary.set(undefined); }
   protected readonly logs = signal<DayLog[]>([]);
+  protected readonly routeLogStartIndex = signal(0);
   protected readonly pendingEncounter = signal<PendingTravelEncounter | undefined>(undefined);
   protected readonly selectedGroupId = signal<string | undefined>(undefined);
   protected readonly selectedLocationId = signal<string | undefined>(undefined);
@@ -260,9 +269,9 @@ export class TravelMap implements AfterViewInit {
       this.normalize(`${member.name} ${member.kind} ${member.detail}`).includes(query)
     );
   });
-  protected readonly routeDistance = computed(() => this.calculateRouteDistance(this.route()));
+  protected readonly routeDistance = computed(() => this.routeProgress()?.itinerary.distanceKm ?? this.calculateRouteDistance(this.route()));
   protected readonly travelledDistance = computed(() =>
-    this.logs().reduce((total, log) => total + log.distance, 0)
+    this.routeProgress()?.travelledKm ?? this.logs().slice(this.routeLogStartIndex()).reduce((total, log) => total + log.distance, 0)
   );
   protected readonly remainingDistance = computed(() => {
     const total = this.routeDistance(), travelled = this.travelledDistance();
@@ -271,12 +280,19 @@ export class TravelMap implements AfterViewInit {
   });
   protected readonly dailyDistance = computed(() => {
     const plan = this.plan();
+    if (this.routeProgress()) return advanceRouteTravel(this.routeProgress()!, Math.max(0, plan.hours)).distanceKm;
     const speed = this.paceSpeed(plan.pace);
     const base = speed * Math.max(1, plan.hours);
     const mountBonus = speed * Math.max(0, plan.mountBoostHours);
     return (base + mountBonus) * (plan.difficultTerrain ? 0.5 : 1);
   });
   protected readonly estimatedDays = computed(() => {
+    const progress = this.routeProgress();
+    if (progress) {
+      if (this.remainingDistance() === 0) return 0;
+      const duration = progress.itinerary.durationHours;
+      return duration === undefined || this.plan().hours <= 0 ? 0 : Math.ceil(Math.max(0, duration - progress.baseHours) / this.plan().hours);
+    }
     const daily = this.dailyDistance();
     return daily > 0 && this.routeDistance() > 0
       ? Math.ceil(this.remainingDistance() / daily)
@@ -463,6 +479,7 @@ export class TravelMap implements AfterViewInit {
     const point = this.mapPoint(event.clientX, event.clientY);
     if (!point) return;
 
+    if (this.mode() === 'place' && this.routeProgress()) { this.status.set('Retira el itinerario guardado antes de recolocar el grupo.'); return; }
     if (this.mode() === 'place') {
       const selectedId = this.selectedGroupId();
       if (!selectedId) {
@@ -475,6 +492,7 @@ export class TravelMap implements AfterViewInit {
       return;
     }
 
+    if (this.mode() === 'route' && this.routeProgress()) { this.status.set('Termina o retira el itinerario guardado antes de dibujar una ruta manual.'); return; }
     if (this.mode() === 'route') {
       this.route.update((route) => {
         if (route.length === 0 && this.selectedGroup()) {
@@ -491,11 +509,13 @@ export class TravelMap implements AfterViewInit {
   protected locationClicked(location: FaerunLocation, event: Event): void {
     event.stopPropagation();
     this.selectedLocationId.set(location.id);
+    if (this.mode() === 'place' && this.routeProgress()) { this.status.set('Retira el itinerario guardado antes de recolocar el grupo.'); return; }
     if (this.mode() === 'place' && this.selectedGroupId()) {
       this.updateGroupPosition(this.selectedGroupId()!, location);
       this.updatePlan({ originId: location.id });
       this.status.set(`Grupo colocado en ${location.name}`);
     } else if (this.mode() === 'route') {
+      if (this.routeProgress()) { this.status.set('Retira el itinerario guardado antes de añadir una ruta manual.'); return; }
       if (this.route().length === 0 && this.selectedGroup()) {
         const group = this.selectedGroup()!;
         this.route.set([{ x: group.x, y: group.y }, { x: location.x, y: location.y }]);
@@ -515,6 +535,7 @@ export class TravelMap implements AfterViewInit {
     event.stopPropagation();
     event.preventDefault();
     this.selectGroup(group.id);
+    if (this.routeProgress()) { this.status.set('Retira el itinerario guardado antes de arrastrar el grupo.'); return; }
     this.dragState = {
       kind: 'token',
       id: group.id,
@@ -604,14 +625,16 @@ export class TravelMap implements AfterViewInit {
   }
 
   protected undoRoutePoint(): void {
+    if (this.routeProgress()) { this.status.set('El itinerario guardado conserva su geometría; retíralo para editar una ruta manual.'); return; }
     this.route.update((route) => route.slice(0, -1));
     this.persistState();
   }
 
   protected clearRoute(): void {
+    if (this.pendingEncounter()) { this.status.set('Resuelve primero el encuentro pendiente.'); return; }
+    this.routeProgress.set(undefined);
+    this.routeLogStartIndex.set(this.logs().length);
     this.route.set([]);
-    this.logs.set([]);
-    this.pendingEncounter.set(undefined);
     this.status.set('Ruta eliminada');
     this.persistState();
   }
@@ -622,6 +645,7 @@ export class TravelMap implements AfterViewInit {
   }
 
   protected addManualDestination(): void {
+    if (this.routeProgress()) { this.status.set('Retira el itinerario guardado antes de añadir una ruta manual. Las jornadas se conservan.'); return; }
     const destination = LOCATIONS.find((location) => location.id === this.plan().destinationId);
     if (!destination) return;
     const start = this.route().length
@@ -638,7 +662,23 @@ export class TravelMap implements AfterViewInit {
     this.persistState();
   }
 
+  protected startPlannedJourney(): void {
+    const itinerary = this.plannedItinerary(), network = this.routeNetwork(), group = this.selectedGroup();
+    if (!itinerary || !network || !group || !this.canManageNetwork()) return;
+    if (this.pendingEncounter()) { this.status.set('Resuelve primero el encuentro pendiente; el viaje se conserva.'); return; }
+    if (this.routeProgress() && this.remainingDistance() > 0) { this.status.set('Retira expresamente el itinerario actual antes de sustituirlo.'); return; }
+    if (group.x !== itinerary.geometry[0]?.x || group.y !== itinerary.geometry[0]?.y) { this.status.set('El grupo se ha movido. Calcula de nuevo desde su posición actual.'); return; }
+    try {
+      const progress = startRouteTravel(network, itinerary);
+      this.routeProgress.set(progress); this.route.set(structuredClone(itinerary.geometry));
+      this.plannedItinerary.set(undefined);
+      this.status.set('Itinerario iniciado. La red, sus velocidades y los registros anteriores se conservan.');
+      this.persistState();
+    } catch { this.status.set('El itinerario ya no coincide con la red. Calcula de nuevo; el viaje actual se conserva.'); }
+  }
+
   protected originChanged(id: string): void {
+    if (this.routeProgress()) { this.status.set('El origen del itinerario iniciado se conserva. Retíralo antes de recolocar el grupo.'); return; }
     this.updatePlan({ originId: id });
     const location = LOCATIONS.find((item) => item.id === id);
     if (location && this.selectedGroupId()) {
@@ -648,6 +688,7 @@ export class TravelMap implements AfterViewInit {
   }
 
   protected destinationChanged(id: string): void {
+    this.plannedItinerary.set(undefined);
     this.updatePlan({ destinationId: id });
     this.persistState();
   }
@@ -733,18 +774,29 @@ export class TravelMap implements AfterViewInit {
       return;
     }
 
+    if (!Number.isFinite(this.plan().hours) || this.plan().hours <= 0) { this.status.set('Indica horas positivas y finitas para resolver la jornada.'); return; }
+    const before = this.routeProgress();
+    const preview = before ? advanceRouteTravel(before, this.plan().hours) : undefined;
+    if (preview?.status === 'needs-speed' && preview.distanceKm === 0) {
+      this.status.set('Falta una velocidad declarada en el siguiente tramo. No se han consumido provisiones ni horas; calcula un nuevo itinerario con sus velocidades.'); return;
+    }
     const day = this.logs().length + 1;
     const weather = this.rollWeather();
     const travelers = Math.max(1, this.memberCount());
     const events = this.resolveRoleEvents();
     const eventEffects = this.aggregateEventEffects(events);
-    const adjustedDistance = Math.max(
+    const progress = this.routeProgress();
+    const advance = progress ? advanceRouteTravelDay(progress, Math.max(0, this.plan().hours), eventEffects) : undefined;
+    if (advance?.status === 'needs-speed' && advance.distanceKm === 0) {
+      this.status.set('Falta una velocidad declarada en el siguiente tramo. No se han consumido provisiones ni horas; calcula un nuevo itinerario con sus velocidades.'); return;
+    }
+    const adjustedDistance = advance?.distanceKm ?? Math.max(
       0,
       this.dailyDistance() * (1 + eventEffects.distancePercent) + eventEffects.distanceKm
     );
     const remaining = this.remainingDistance();
     const distance = Math.min(adjustedDistance, remaining);
-    const totalDistance = adjustedDistance >= remaining
+    const totalDistance = advance ? advance.progress.travelledKm : adjustedDistance >= remaining
       ? this.routeDistance() : this.travelledDistance() + distance;
     const foodUsed = travelers * 0.45;
     const waterUsed = travelers * 3.8;
@@ -757,7 +809,12 @@ export class TravelMap implements AfterViewInit {
       fatigue: Math.max(0, this.plan().fatigue + eventEffects.fatigue),
     });
 
-    const position = this.positionGroupAlongRoute(totalDistance);
+    let position: string;
+    if (advance) {
+      this.routeProgress.set(advance.progress);
+      this.updateGroupPosition(this.selectedGroupId()!, advance.position);
+      position = this.nearestLocation(advance.position)?.name ?? 'En ruta';
+    } else position = this.positionGroupAlongRoute(totalDistance);
     const pending = events.some((event) => event.encounterTriggered)
       ? this.createPendingEncounter(day, position)
       : undefined;
@@ -776,6 +833,7 @@ export class TravelMap implements AfterViewInit {
       position,
       pendingDecision: Boolean(pending),
       events,
+      ...(advance ? { hoursUsed: advance.hoursUsed, hoursRemaining: advance.hoursRemaining } : {}),
     };
     this.logs.update((logs) => [...logs, log]);
     this.status.set(
@@ -783,15 +841,23 @@ export class TravelMap implements AfterViewInit {
         ? `Jornada ${day}: decide si quieres jugar ${encounter?.name ?? 'el encuentro'}`
         : `Jornada ${day} resuelta · ${this.formatDistance(distance)} km recorridos`
     );
+    if (advance?.status === 'needs-speed') this.status.update(message => message + ' · Parada ante un tramo sin velocidad declarada.');
     this.sideTab.set('days');
     this.persistState();
   }
 
   protected resetJourney(): void {
+    if (this.pendingEncounter()) { this.status.set('Resuelve primero el encuentro pendiente.'); return; }
+    const progress = this.routeProgress();
+    if (progress) {
+      this.routeProgress.set(startRouteTravel(progress.network, progress.itinerary));
+      this.updateGroupPosition(this.selectedGroupId()!, progress.itinerary.geometry[0]);
+    }
     this.logs.set([]);
+    this.routeLogStartIndex.set(0);
     this.pendingEncounter.set(undefined);
     const origin = LOCATIONS.find((location) => location.id === this.plan().originId);
-    if (origin && this.selectedGroupId()) this.updateGroupPosition(this.selectedGroupId()!, origin);
+    if (!progress && origin && this.selectedGroupId()) this.updateGroupPosition(this.selectedGroupId()!, origin);
     this.status.set('Registro de jornadas reiniciado');
     this.persistState();
   }
@@ -830,7 +896,7 @@ export class TravelMap implements AfterViewInit {
   }
 
   protected activePaceLabel(): string {
-    return this.paceLabel(this.plan().pace);
+    return this.routeProgress() ? 'Por tramos' : this.paceLabel(this.plan().pace);
   }
 
   protected locationName(id: string): string {
@@ -1434,7 +1500,7 @@ export class TravelMap implements AfterViewInit {
   }
 
   private currentJourney(): GroupJourney {
-    return structuredClone({ route: this.route(), plan: this.plan(), logs: this.logs(), pendingEncounter: this.pendingEncounter() });
+    return structuredClone({ route: this.route(), plan: this.plan(), logs: this.logs(), pendingEncounter: this.pendingEncounter(), routeProgress: this.routeProgress(), routeLogStartIndex: this.routeLogStartIndex() });
   }
 
   private captureJourney(): void {
@@ -1444,13 +1510,16 @@ export class TravelMap implements AfterViewInit {
   }
 
   private activateJourney(id: string | undefined): void {
+    this.plannedItinerary.set(undefined);
     this.selectedGroupId.set(id);
     const saved = id && Object.hasOwn(this.journeys, id) ? this.journeys[id] : !id ? this.unassignedJourney : undefined;
-    const journey = saved ? structuredClone(saved) : { route: [], logs: [], plan: this.defaultPlan(), pendingEncounter: undefined };
+    const journey: GroupJourney = saved ? structuredClone(saved) : { route: [], logs: [], plan: this.defaultPlan(), pendingEncounter: undefined };
     this.route.set(journey.route);
     this.plan.set(journey.plan);
     this.logs.set(journey.logs);
     this.pendingEncounter.set(journey.pendingEncounter);
+    this.routeProgress.set(journey.routeProgress);
+    this.routeLogStartIndex.set(journey.routeLogStartIndex ?? 0);
     this.sanitizeRoleAssignments();
   }
 
@@ -1488,7 +1557,15 @@ export class TravelMap implements AfterViewInit {
     if (!LOCATIONS.some((location) => location.id === plan.destinationId)) plan.destinationId = defaults.destinationId;
     const pending = value.pendingEncounter;
     if (pending && (!GENERIC_ENCOUNTERS.some((encounter) => encounter.id === pending.encounterId) || !Array.isArray(pending.memberActorIds))) throw new Error('Encuentro ilegible');
-    return structuredClone({ route, logs, plan, pendingEncounter: pending });
+    if (value.routeProgress !== undefined) {
+      assertRouteTravelProgress(value.routeProgress);
+      const geometry = value.routeProgress.itinerary.geometry;
+      if (route.length !== geometry.length || route.some((point, i) => point.x !== geometry[i].x || point.y !== geometry[i].y)) throw new Error('La ruta no coincide con el itinerario guardado');
+    }
+    if (logs.some(log => [log.hoursUsed, log.hoursRemaining].some(hours => hours !== undefined && (!Number.isFinite(hours) || hours < 0)))) throw new Error('Tiempo de jornada ilegible');
+    const index = value.routeLogStartIndex ?? 0;
+    if (!Number.isInteger(index) || index < 0 || index > logs.length) throw new Error('Índice de jornadas ilegible');
+    return structuredClone({ route, logs, plan, pendingEncounter: pending, routeProgress: value.routeProgress, routeLogStartIndex: index });
   }
 
   private restoreState(): void {

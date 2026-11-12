@@ -18,7 +18,7 @@
     <p role="status"><strong>{{format(plan.distanceKm)}} km</strong> · {{plan.durationHours === undefined ? 'Tiempo pendiente: faltan velocidades declaradas' : format(plan.durationHours) + ' h estimadas'}}</p>
     <p>{{plan.network.name}} · revisión {{plan.network.revision}} · {{plan.transfers.length}} transbordos. Ruta de menor distancia, sin comparar tiempos desconocidos.</p>
     <ol>@for (leg of plan.legs; track $index) { <li>{{nodeName(leg.from)}} → {{nodeName(leg.to)}} · {{kindName(leg.kind)}} · {{leg.mode === 'foot' ? 'A pie' : 'En barco'}} · {{format(leg.distanceKm)}} km @if (leg.crossing !== 'none') { · {{leg.crossing === 'bridge' ? 'Puente' : 'Vado'}} }</li> }</ol>
-    <p>La aplicación de jornadas por tramos se incorporará en la siguiente fase. Puedes revisar esta geometría sin sustituir tu partida.</p>
+    <p>Puedes revisar esta geometría o iniciar expresamente el itinerario para avanzar por horas en cada tramo.</p>
   }
   <button type="button" class="manual" (click)="manual()">Añadir destino como ruta manual</button>
   <p>La ruta manual une los puntos que eliges; no certifica caminos, pasos acuáticos ni zonas transitables.</p>

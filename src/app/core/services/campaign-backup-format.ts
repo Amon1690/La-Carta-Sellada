@@ -3,6 +3,7 @@ import { SheetCollection } from './remote-sheets';
 import { validState } from './vtt-combat';
 import { assertVisionProfile, assertBoardVision } from './vision-state';
 import { assertTravelNetwork } from './travel-network-format';
+import { assertRouteTravelProgress } from './travel-route-progress';
 import { networkStorageKey } from '../models/travel-network';
 
 export const BACKUP_FORMAT = 'la-carta-sellada:campaign-backup';
@@ -108,6 +109,8 @@ function point(value:unknown):void {const p=object(value,'punto de mapa');if(!nu
 function pendingEncounter(value:unknown):void {const p=object(value,'encuentro pendiente');if(!GENERIC_ENCOUNTERS.some((e)=>e.id===p['encounterId']))fail('el encuentro pendiente no existe en el catálogo');for(const key of ['encounterId','runId','region','position'])if(!text(p[key]))fail('encuentro pendiente');if(!integer(p['day'],1)||!integer(p['level'],1,20)||!integer(p['partySize'],1,1000)||!strings(p['memberActorIds']))fail('encuentro pendiente');}
 function journey(value:unknown, legacy=false):void {
   const j=object(value,'viaje');for(const p of array(j['route']??[],'ruta'))point(p);
+  if(j['routeProgress']!==undefined){assertRouteTravelProgress(j['routeProgress']);const route=j['route']??[],geometry=j['routeProgress'].itinerary.geometry;if(route.length!==geometry.length||route.some((p:Data,i:number)=>p['x']!==geometry[i].x||p['y']!==geometry[i].y))fail('ruta distinta del itinerario');}
+  if(j['routeLogStartIndex']!==undefined&&!integer(j['routeLogStartIndex'],0,array(j['logs']??[],'jornadas').length))fail('índice de jornadas');
   const plan=object(j['plan']??{},'plan de viaje');
   for(const key of ['hours','mountBoostHours','foodKg','waterLiters','gold','fatigue'])if((!legacy||plan[key]!==undefined)&&!number(plan[key],0,1e9))fail('recursos o tiempos del viaje');
   for(const key of ['originId','destinationId','season','guideId','marchOrder','activities','preparedEncounters','dmSecrets'])if((!legacy||plan[key]!==undefined)&&!text(plan[key]))fail('plan del viaje');
@@ -116,7 +119,7 @@ function journey(value:unknown, legacy=false):void {
   if((!legacy||plan['difficultTerrain']!==undefined)&&typeof plan['difficultTerrain']!=='boolean')fail('terreno del viaje');
   for(const key of ['hunterIds','watcherIds'])if((!legacy||plan[key]!==undefined)&&!strings(plan[key]))fail('roles del viaje');
   for(const log of array(j['logs']??[],'jornadas')){
-    const l=object(log,'jornada');for(const key of ['day','distance','totalDistance'])if(!number(l[key],0))fail('jornada');
+    const l=object(log,'jornada');for(const key of ['hoursUsed','hoursRemaining'])if(l[key]!==undefined&&!number(l[key],0))fail('horas de jornada');for(const key of ['day','distance','totalDistance'])if(!number(l[key],0))fail('jornada');
     for(const key of ['weather','encounter','resources','position'])if(!text(l[key]))fail('detalle de jornada');if(typeof l['pendingDecision']!=='boolean')fail('decisión de jornada');
     for(const event of array(l['events']??[],'eventos')){const e=object(event,'evento');for(const key of ['id','role','title','polarity','story','actorId','actorName','skill','outcome','effectSummary'])if(!text(e[key]))fail('evento de jornada');for(const key of ['roll','bonus','total','dc'])if(!number(e[key]))fail('tirada de jornada');if(typeof e['success']!=='boolean'||typeof e['encounterTriggered']!=='boolean'||!['guide','hunter','watch'].includes(e['role'])||!['positive','negative'].includes(e['polarity'])||!['survival','perception'].includes(e['skill']))fail('resultado de jornada');
       if(e['effect']!==undefined)for(const [key,v] of Object.entries(object(e['effect'],'efecto de jornada')))if(!['foodKg','foodPerTraveler','waterLiters','waterPerTraveler','gold','fatigue','distancePercent','distanceKm'].includes(key)||!number(v))fail('efecto de jornada');}
