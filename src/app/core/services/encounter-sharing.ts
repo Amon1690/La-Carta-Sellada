@@ -1,11 +1,11 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, InjectionToken, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
-import { BoardVisionState, VisionProfile } from '../models/vision';
+import { BoardVisionState, ExplorationArea, VisionProfile } from '../models/vision';
 import { PreviewFog, PreviewToken, previewSight } from './vision-preview';
 import { isVisionDoor } from './vision-geometry';
 import { orientedTokenVisible } from './token-orientation';
-import { explorationRects, rememberExploration } from './vision-exploration';
+import { explorationAreas, explorationRects, rememberExploration } from './vision-exploration';
 import { REMOTE_SHEETS, SheetCollection } from './remote-sheets';
 import { CommandReceipt, DirectorEncounter, LiveBoardState, PlayerControls } from '../models/encounter-live';
 
@@ -40,10 +40,11 @@ export async function renderPersonalView(snapshot: SharingSnapshot, observerId: 
   const recipient = snapshot.tokens.find((token) => token.instanceId === observerId);
   const memory = rememberExploration(vision, snapshot.tokens, snapshot.profiles, snapshot.fog, grid);
   const explored = explorationRects(memory, recipient?.hidden ? [] : observerIds, grid);
+  const areas = explorationAreas(memory, recipient?.hidden ? [] : observerIds);
   const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
   const ctx = canvas.getContext('2d'); if (!ctx) throw new Error('No se puede componer la vista del personaje.');
   ctx.fillStyle = '#090c10'; ctx.fillRect(0, 0, width, height);
-  if (geometry.circles.length || explored.length) {
+  if (geometry.circles.length || explored.length || areas.length) {
     const map = await load(snapshot.mapUrl);
     if (explored.length) {
       ctx.save(); ctx.beginPath();
@@ -51,17 +52,12 @@ export async function renderPersonalView(snapshot: SharingSnapshot, observerId: 
       ctx.clip(); ctx.drawImage(map, 0, 0, width, height);
       ctx.fillStyle = 'rgba(0,0,0,0.72)'; ctx.fillRect(0, 0, width, height); ctx.restore();
     }
+    for(const area of areas){
+      ctx.save();clipArea(ctx,area,width,height);ctx.drawImage(map,0,0,width,height);
+      ctx.fillStyle='rgba(0,0,0,0.72)';ctx.fillRect(0,0,width,height);ctx.restore();
+    }
     for (const circle of geometry.circles) {
-      ctx.save(); ctx.beginPath(); ctx.arc(circle.x, circle.y, circle.radius, 0, 2 * Math.PI); ctx.clip();
-      if (circle.clip) { ctx.beginPath(); ctx.arc(circle.clip.x, circle.clip.y, circle.clip.radius, 0, 2 * Math.PI); ctx.clip(); }
-      for (const excluded of circle.exclude ?? []) {
-        ctx.beginPath(); ctx.rect(0, 0, width, height); ctx.arc(excluded.x, excluded.y, excluded.radius, 0, 2 * Math.PI); ctx.clip('evenodd');
-      }
-      for (const polygon of circle.shadows ?? []) {
-        ctx.beginPath(); ctx.rect(0, 0, width, height); ctx.moveTo(polygon[0].x, polygon[0].y);
-        for (const point of polygon.slice(1)) ctx.lineTo(point.x, point.y);
-        ctx.closePath(); ctx.clip('evenodd');
-      }
+      ctx.save();clipArea(ctx,circle,width,height);
       ctx.drawImage(map, 0, 0, width, height);
       // Solo puertas y solo dentro del mismo recorte personal del mapa. Nunca
       // enviar coordenadas ni dibujar paredes/ventanas en la imagen del jugador.
@@ -88,6 +84,14 @@ export async function renderPersonalView(snapshot: SharingSnapshot, observerId: 
     ctx.fillStyle = '#f4f0e7'; ctx.fillText(token.name, token.x + 6, token.y + size + 15, labelWidth - 12);
   }
   return { image: canvas.toDataURL('image/png'), pending: geometry.pending };
+}
+
+function clipArea(ctx: CanvasRenderingContext2D, area: ExplorationArea, width: number, height: number): void {
+  ctx.beginPath();ctx.arc(area.x,area.y,area.radius,0,Math.PI*2);ctx.clip();
+  if(area.clip){ctx.beginPath();ctx.arc(area.clip.x,area.clip.y,area.clip.radius,0,Math.PI*2);ctx.clip();}
+  for(const disk of area.exclude??[]){ctx.beginPath();ctx.rect(0,0,width,height);ctx.moveTo(disk.x+disk.radius,disk.y);ctx.arc(disk.x,disk.y,disk.radius,0,Math.PI*2);ctx.clip('evenodd');}
+  for(const polygon of area.shadows??[]){ctx.beginPath();ctx.rect(0,0,width,height);ctx.moveTo(polygon[0].x,polygon[0].y);for(const point of polygon.slice(1))ctx.lineTo(point.x,point.y);ctx.closePath();ctx.clip('evenodd');}
+  for(const fog of area.fog??[]){ctx.beginPath();ctx.rect(0,0,width,height);ctx.rect(fog.x,fog.y,fog.width,fog.height);ctx.clip('evenodd');}
 }
 
 async function loadImage(url: string): Promise<HTMLImageElement> {

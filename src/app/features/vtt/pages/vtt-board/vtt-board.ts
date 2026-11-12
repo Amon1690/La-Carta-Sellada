@@ -21,7 +21,7 @@ import { advanceVisionEffects, endVisionConcentration, endVisionEffect } from '.
 import { assertBoardVision, emptyBoardVision, withoutRemovedObservers } from '../../../../core/services/vision-state';
 import { previewSight, previewTokenVisible } from '../../../../core/services/vision-preview';
 import { canOrientStep, orientedTokenVisible } from '../../../../core/services/token-orientation';
-import { explorationRects, rememberExploration } from '../../../../core/services/vision-exploration';
+import { explorationAreas, explorationRects, mergeExploration, rememberExploration } from '../../../../core/services/vision-exploration';
 import { evaluateVision } from '../../../../core/services/vision-engine';
 import { ENCOUNTER_PUBLISHER, SharingSnapshot } from '../../../../core/services/encounter-sharing';
 import { CampaignDataService } from '../../../../core/services/campaign-data';
@@ -270,6 +270,8 @@ export class VttBoard {
     this.tokenVisionProfiles(), this.gridSize, this.mapWidth, this.mapHeight));
   protected readonly exploredRects = computed(() => explorationRects(this.vision(), this.visionObserverIds().filter((id) =>
     this.tokens().some((token) => token.instanceId === id && !token.hidden)), this.gridSize));
+  protected readonly exploredAreas = computed(() => explorationAreas(this.vision(), this.visionObserverIds().filter((id) =>
+    this.tokens().some((token) => token.instanceId === id && !token.hidden))));
   protected readonly displayedTokens = computed(() => this.visionPreview()
     ? this.tokens().filter((token) => orientedTokenVisible(token, { state: this.vision(), tokens: this.tokens(), profiles: this.tokenVisionProfiles(),
       observerIds: this.visionObserverIds(), circles: this.previewGeometry().circles, fog: this.fogRects(), grid: this.gridSize }))
@@ -1819,7 +1821,7 @@ export class VttBoard {
 
   private recordExploration(tokens: BoardToken[]): void {
     if (this.visionStorageBlocked) return;
-    const value = rememberExploration(this.vision(), tokens, this.tokenVisionProfiles(), this.fogRects(), this.gridSize);
+    const value = rememberExploration(this.vision(), tokens, this.tokenVisionProfiles(), this.fogRects(), this.gridSize, () => this.visionMessage.set('Se conserva la memoria anterior; no se pudieron añadir más contornos. Exporta una copia antes de reorganizar el escenario.'));
     if (value !== this.vision()) this.vision.set(value);
   }
 
@@ -1836,14 +1838,7 @@ export class VttBoard {
           const saved = JSON.parse(raw) as StoredBoardState;
           const ids = new Set(saved.tokens.map((token) => token.instanceId));
           assertBoardVision(saved.vision, ids);
-          const memories = new Map((saved.vision.exploration ?? []).map((m) => [m.tokenId, new Set(m.cells)]));
-          for (const memory of this.vision().exploration ?? []) {
-            if (!ids.has(memory.tokenId)) continue;
-            const cells = memories.get(memory.tokenId) ?? new Set<number>();
-            for (const cell of memory.cells) cells.add(cell);
-            memories.set(memory.tokenId, cells);
-          }
-          const vision = { ...saved.vision, exploration: [...memories].map(([tokenId, cells]) => ({ tokenId, cells: [...cells].sort((a, b) => a - b) })) };
+          const vision = { ...saved.vision, exploration: mergeExploration(saved.vision.exploration ?? [], this.vision().exploration ?? [], ids) };
           assertBoardVision(vision, ids);
           localStorage.setItem(this.storageKey, JSON.stringify({ ...saved, vision }));
         }
