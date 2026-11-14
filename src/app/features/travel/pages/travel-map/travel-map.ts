@@ -35,6 +35,9 @@ import { Campaign } from '../../../../core/models/campaign';
 import { CampaignDataService } from '../../../../core/services/campaign-data';
 import { RouteNetworkEditor } from '../../components/route-network-editor/route-network-editor';
 import { RoutePlanner } from '../../components/route-planner/route-planner';
+import { JourneyEnvironment } from '../../components/journey-environment';
+import { VisionEnvironment } from '../../../../core/models/vision';
+import { EncounterWorldContext, assertEncounterWorldReference, assertWorldEnvironment, snapshotEncounterWorld, unknownWorldEnvironment } from '../../../../core/services/encounter-environment';
 import { TravelNetwork } from '../../../../core/models/travel-network';
 import { TravelItinerary } from '../../../../core/services/travel-route-planner';
 import { RouteTravelProgress, advanceRouteTravel, advanceRouteTravelDay, assertRouteTravelProgress, startRouteTravel } from '../../../../core/services/travel-route-progress';
@@ -115,6 +118,7 @@ interface RoleEventResult {
 }
 
 interface DayLog {
+  context?: EncounterWorldContext;
   day: number;
   weather: string;
   distance: number;
@@ -138,6 +142,7 @@ interface TravelDayEffects {
 }
 
 interface PendingTravelEncounter {
+  context?: EncounterWorldContext;
   encounterId: string;
   runId: string;
   day: number;
@@ -149,6 +154,7 @@ interface PendingTravelEncounter {
 }
 
 interface GroupJourney {
+  environment?: VisionEnvironment;
   route: MapPoint[];
   plan: TravelPlan;
   logs: DayLog[];
@@ -193,7 +199,7 @@ const DISTANCE_FORMAT = new Intl.NumberFormat('es-ES', { maximumFractionDigits: 
 
 @Component({
   selector: 'app-travel-map',
-  imports: [CommonModule, FormsModule, RouteNetworkEditor, RoutePlanner],
+  imports: [CommonModule, FormsModule, RouteNetworkEditor, RoutePlanner, JourneyEnvironment],
   templateUrl: './travel-map.html',
   styleUrl: './travel-map.scss',
 })
@@ -236,6 +242,7 @@ export class TravelMap implements AfterViewInit {
   protected readonly plannedPolyline = computed(() => this.plannedItinerary()?.geometry.map(point => `${point.x},${point.y}`).join(' ') ?? '');
   protected networkChanged(network: TravelNetwork | null): void { this.routeNetwork.set(network); this.plannedItinerary.set(undefined); }
   protected readonly logs = signal<DayLog[]>([]);
+  protected readonly worldEnvironment = signal<VisionEnvironment>(unknownWorldEnvironment());
   protected readonly routeLogStartIndex = signal(0);
   protected readonly pendingEncounter = signal<PendingTravelEncounter | undefined>(undefined);
   protected readonly selectedGroupId = signal<string | undefined>(undefined);
@@ -342,6 +349,7 @@ export class TravelMap implements AfterViewInit {
       partySize: String(pending.partySize),
       members: pending.memberActorIds.join(','),
       run: pending.runId || `travel-${pending.day}`,
+      ...(pending.context ? { group: pending.context.groupId } : {}),
     });
     return `/vtt/${this.campaign()?.id ?? 'la-carta-sellada'}/generic/${encounter.id}?${query.toString()}`;
   });
@@ -822,6 +830,7 @@ export class TravelMap implements AfterViewInit {
       ? GENERIC_ENCOUNTERS.find((candidate) => candidate.id === pending.encounterId)
       : undefined;
     const log: DayLog = {
+      ...(pending?.context ? { context: structuredClone(pending.context) } : {}),
       day,
       weather,
       distance,
@@ -1353,6 +1362,7 @@ export class TravelMap implements AfterViewInit {
       position,
       memberActorIds: group.memberIds.map((id) => this.toVttActorId(id)),
     };
+    pending.context = snapshotEncounterWorld({ version: 1, campaignId: this.campaign()!.id, groupId: group.id, runId: pending.runId, encounterId: pending.encounterId, environment: this.worldEnvironment() });
     this.pendingEncounter.set(pending);
     return pending;
   }
@@ -1499,8 +1509,12 @@ export class TravelMap implements AfterViewInit {
     return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   }
 
+  protected saveWorldEnvironment(value: VisionEnvironment): void {
+    assertWorldEnvironment(value); this.worldEnvironment.set(structuredClone(value)); this.persistState();
+  }
+
   private currentJourney(): GroupJourney {
-    return structuredClone({ route: this.route(), plan: this.plan(), logs: this.logs(), pendingEncounter: this.pendingEncounter(), routeProgress: this.routeProgress(), routeLogStartIndex: this.routeLogStartIndex() });
+    return structuredClone({ environment: this.worldEnvironment(), route: this.route(), plan: this.plan(), logs: this.logs(), pendingEncounter: this.pendingEncounter(), routeProgress: this.routeProgress(), routeLogStartIndex: this.routeLogStartIndex() });
   }
 
   private captureJourney(): void {
@@ -1514,6 +1528,7 @@ export class TravelMap implements AfterViewInit {
     this.selectedGroupId.set(id);
     const saved = id && Object.hasOwn(this.journeys, id) ? this.journeys[id] : !id ? this.unassignedJourney : undefined;
     const journey: GroupJourney = saved ? structuredClone(saved) : { route: [], logs: [], plan: this.defaultPlan(), pendingEncounter: undefined };
+    this.worldEnvironment.set(journey.environment ?? unknownWorldEnvironment());
     this.route.set(journey.route);
     this.plan.set(journey.plan);
     this.logs.set(journey.logs);
@@ -1544,7 +1559,7 @@ export class TravelMap implements AfterViewInit {
     }
   }
 
-  private readJourney(value: Partial<GroupJourney>): GroupJourney {
+  private readJourney(value: Partial<GroupJourney>, groupId?: string): GroupJourney {
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Viaje ilegible');
     const route = value.route ?? [], logs = value.logs ?? [];
     if (!Array.isArray(route) || route.some((point) => !point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) ||
@@ -1555,7 +1570,11 @@ export class TravelMap implements AfterViewInit {
     if (!Array.isArray(plan.hunterIds) || !Array.isArray(plan.watcherIds)) throw new Error('Roles ilegibles');
     if (!LOCATIONS.some((location) => location.id === plan.originId)) plan.originId = defaults.originId;
     if (!LOCATIONS.some((location) => location.id === plan.destinationId)) plan.destinationId = defaults.destinationId;
+    if (value.environment !== undefined) assertWorldEnvironment(value.environment);
+    const scope = { ...(this.campaignId ? { campaignId: this.campaignId } : {}), ...(groupId ? { groupId } : {}) };
+    for (const log of logs) if (log.context !== undefined) assertEncounterWorldReference(log.context, scope);
     const pending = value.pendingEncounter;
+    if (pending?.context !== undefined) assertEncounterWorldReference(pending.context, { ...scope, runId: pending.runId, encounterId: pending.encounterId });
     if (pending && (!GENERIC_ENCOUNTERS.some((encounter) => encounter.id === pending.encounterId) || !Array.isArray(pending.memberActorIds))) throw new Error('Encuentro ilegible');
     if (value.routeProgress !== undefined) {
       assertRouteTravelProgress(value.routeProgress);
@@ -1565,7 +1584,7 @@ export class TravelMap implements AfterViewInit {
     if (logs.some(log => [log.hoursUsed, log.hoursRemaining].some(hours => hours !== undefined && (!Number.isFinite(hours) || hours < 0)))) throw new Error('Tiempo de jornada ilegible');
     const index = value.routeLogStartIndex ?? 0;
     if (!Number.isInteger(index) || index < 0 || index > logs.length) throw new Error('Índice de jornadas ilegible');
-    return structuredClone({ route, logs, plan, pendingEncounter: pending, routeProgress: value.routeProgress, routeLogStartIndex: index });
+    return structuredClone({ environment: value.environment, route, logs, plan, pendingEncounter: pending, routeProgress: value.routeProgress, routeLogStartIndex: index });
   }
 
   private restoreState(): void {
@@ -1581,7 +1600,7 @@ export class TravelMap implements AfterViewInit {
       let unassigned: GroupJourney | undefined;
       if (state.version === 2) {
         if (!state.journeys || typeof state.journeys !== 'object' || Array.isArray(state.journeys)) throw new Error('Viajes por grupo ilegibles');
-        journeys = Object.fromEntries(Object.entries(state.journeys).map(([id, journey]) => [id, this.readJourney(journey)]));
+        journeys = Object.fromEntries(Object.entries(state.journeys).map(([id, journey]) => [id, this.readJourney(journey,id)]));
         if (state.unassignedJourney) unassigned = this.readJourney(state.unassignedJourney);
       } else {
         const legacy = this.readJourney(state);

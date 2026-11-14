@@ -48,6 +48,16 @@ describe('Copias de seguridad por campaña',()=>{
    const next={...network,revision:2};await store.restore(await store.preview(file({[key]:next}),campaign));expect(JSON.parse(storage.getItem(key)!)).toEqual(next);
    const before=storage.writes;await expectAsync(store.preview(file({[key]:{...network,version:99}}),campaign)).toBeRejected();await expectAsync(store.preview(file({[networkStorageKey('other')]:network}),campaign)).toBeRejected();expect(storage.writes).toBe(before);
  });
+ it('restaura condiciones de grupo e instantáneas de encuentro y rechaza horas corruptas antes de escribir',async()=>{
+   const data:any=travel(),environment={illumination:'dim',timeOfDay:'night',weather:'fog',obscurement:'light',gameTime:{day:8,minuteOfDay:60},source:{kind:'director',reference:'Condiciones sintéticas'}};
+   const context={version:1,campaignId:campaign,groupId:'grupo',runId:'travel-snapshot',encounterId:'emboscada-camino',environment};
+   data.journeys.grupo.environment=environment;data.journeys.grupo.logs=[{day:1,weather:'Texto histórico intacto',distance:1,totalDistance:1,encounter:'Jugado',resources:'Reservas',position:'Norte',pendingDecision:false,context}];
+   storage.setItem(travelStorageKey(campaign),JSON.stringify(data));const raw=await store.export(campaign);await store.restore(await store.preview(raw,campaign));
+   const restored=JSON.parse(storage.getItem(travelStorageKey(campaign))!);expect(restored.journeys.grupo.environment).toEqual(environment);expect(restored.journeys.grupo.logs[0].context).toEqual(context);expect(restored.journeys.grupo.logs[0].weather).toBe('Texto histórico intacto');
+   const bad=JSON.parse(raw);bad.local[travelStorageKey(campaign)].journeys.grupo.logs[0].context.environment.gameTime.minuteOfDay=1440;
+   const before=storage.writes;put.calls.reset();await expectAsync(store.preview(JSON.stringify(bad),campaign)).toBeRejected();expect(storage.writes).toBe(before);expect(put).not.toHaveBeenCalled();
+   for(const reference of [{campaignId:'otra'},{groupId:'sur'}]){const foreign=JSON.parse(raw);Object.assign(foreign.local[travelStorageKey(campaign)].journeys.grupo.logs[0].context,reference);await expectAsync(store.preview(JSON.stringify(foreign),campaign)).toBeRejected();expect(storage.writes).toBe(before);expect(put).not.toHaveBeenCalled();}
+ });
  it('una copia antigua sin red conserva la red local actual',async()=>{const key=networkStorageKey(campaign);storage.setItem(key,JSON.stringify(syntheticNetwork()));const before=storage.getItem(key);await store.restore(await store.preview(file(),campaign));expect(storage.getItem(key)).toBe(before);});
  it('no sustituye desde una copia una red local ilegible o de versión futura',async()=>{
    const key=networkStorageKey(campaign);for(const raw of ['{',JSON.stringify({...syntheticNetwork(),version:99})]){

@@ -623,6 +623,19 @@ describe('Multiselección de fichas en VTT', () => {
     expect(board.tokens()[0].x).toBe(GRID * 3); expect(view.pendingAck.status).toBe('applied');
     board.activeTurnId.set('B'); expect(view.playerControls(view.tokens()).A.canMove).toBeFalse();
   });
+  it('importa solo el entorno del grupo/run exacto y no sobrescribe una corrección del encuentro al volver',async()=>{
+    const c='vtt-selection-test',travelKey=`la-carta-sellada:travel-map:faerun-atlas-v3:campaign:${c}`,aKey=`la-carta-sellada:vtt:${c}:scene:test-scene:norte:spec`,bKey=`la-carta-sellada:vtt:${c}:scene:test-scene:sur:spec`;
+    for(const k of [travelKey,aKey,bKey]){previous.set(k,localStorage.getItem(k));localStorage.removeItem(k);}
+    const context=(groupId:string,illumination:string)=>({version:1,campaignId:c,groupId,runId:'spec',encounterId:'test-scene',environment:{illumination,timeOfDay:'night',weather:'fog',obscurement:'light',gameTime:{day:8,minuteOfDay:80},source:{kind:'director',reference:'Grupo '+groupId}}});
+    localStorage.setItem(travelKey,JSON.stringify({version:2,journeys:{norte:{logs:[{context:context('norte','dim')}]},sur:{logs:[{context:context('sur','darkness')}]}}}));
+    const route=TestBed.inject(ActivatedRoute) as any,view=fixture.componentInstance as any;
+    route.snapshot.queryParamMap=convertToParamMap({run:'spec',group:'norte'});routeParams.next(params());fixture.detectChanges();await fixture.whenStable();
+    expect(view.vision().environment.illumination).toBe('dim');expect(view.vision().environment.gameTime.day).toBe(8);
+    view.setPreviewEnvironment('illumination','bright');
+    route.snapshot.queryParamMap=convertToParamMap({run:'spec',group:'sur'});routeParams.next(params());fixture.detectChanges();await fixture.whenStable();expect(view.vision().environment.illumination).toBe('darkness');
+    route.snapshot.queryParamMap=convertToParamMap({run:'spec',group:'norte'});routeParams.next(params());fixture.detectChanges();await fixture.whenStable();expect(view.vision().environment.illumination).toBe('bright');
+    expect(JSON.parse(localStorage.getItem(aKey)!).vision.environment.illumination).toBe('bright');expect(JSON.parse(localStorage.getItem(bKey)!).vision.environment.illumination).toBe('darkness');
+  });
   it('la exploración se conserva al mover y recargar, sin compartirla con otra campaña', async () => {
     const view = confirmedPreview(); actorFor('A', 'player:hero'); view.setPreviewEnvironment('illumination', 'darkness');
     expect(view.vision().exploration.find((m: any) => m.tokenId === 'A').cells).toContain(62);

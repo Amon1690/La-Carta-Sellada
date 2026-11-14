@@ -217,6 +217,7 @@
           <section class="panel-section plan-section">
             <header class="section-heading"><div><small>Preparación</small><h2>Plan de viaje</h2></div></header>
 
+            <app-journey-environment [value]="worldEnvironment()" (saved)="saveWorldEnvironment($event)" />
             <div class="field-pair">
               <label>Origen
                 <select [ngModel]="plan().originId" (ngModelChange)="originChanged($event)">

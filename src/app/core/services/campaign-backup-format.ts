@@ -1,3 +1,4 @@
+import { assertEncounterWorldReference, assertWorldEnvironment } from './encounter-environment';
 import { GENERIC_ENCOUNTERS } from '../data/generic-encounters';
 import { SheetCollection } from './remote-sheets';
 import { validState } from './vtt-combat';
@@ -106,9 +107,9 @@ export function validateSheetCollection(value:unknown, kind:'player'|'npc'|'gene
   return data as unknown as SheetCollection;
 }
 function point(value:unknown):void {const p=object(value,'punto de mapa');if(!number(p['x'],-100000,100000)||!number(p['y'],-100000,100000))fail('coordenadas');}
-function pendingEncounter(value:unknown):void {const p=object(value,'encuentro pendiente');if(!GENERIC_ENCOUNTERS.some((e)=>e.id===p['encounterId']))fail('el encuentro pendiente no existe en el catálogo');for(const key of ['encounterId','runId','region','position'])if(!text(p[key]))fail('encuentro pendiente');if(!integer(p['day'],1)||!integer(p['level'],1,20)||!integer(p['partySize'],1,1000)||!strings(p['memberActorIds']))fail('encuentro pendiente');}
-function journey(value:unknown, legacy=false):void {
-  const j=object(value,'viaje');for(const p of array(j['route']??[],'ruta'))point(p);
+function pendingEncounter(value:unknown, scope: {campaignId?:string;groupId?:string} = {}):void {const p=object(value,'encuentro pendiente');if(p['context']!==undefined){assertEncounterWorldReference(p['context'],{...scope,runId:p['runId'],encounterId:p['encounterId']});}if(!GENERIC_ENCOUNTERS.some((e)=>e.id===p['encounterId']))fail('el encuentro pendiente no existe en el catálogo');for(const key of ['encounterId','runId','region','position'])if(!text(p[key]))fail('encuentro pendiente');if(!integer(p['day'],1)||!integer(p['level'],1,20)||!integer(p['partySize'],1,1000)||!strings(p['memberActorIds']))fail('encuentro pendiente');}
+function journey(value:unknown, legacy=false, scope: {campaignId?:string;groupId?:string} = {}):void {
+  const j=object(value,'viaje');if(j['environment']!==undefined)assertWorldEnvironment(j['environment']);for(const p of array(j['route']??[],'ruta'))point(p);
   if(j['routeProgress']!==undefined){assertRouteTravelProgress(j['routeProgress']);const route=j['route']??[],geometry=j['routeProgress'].itinerary.geometry;if(route.length!==geometry.length||route.some((p:Data,i:number)=>p['x']!==geometry[i].x||p['y']!==geometry[i].y))fail('ruta distinta del itinerario');}
   if(j['routeLogStartIndex']!==undefined&&!integer(j['routeLogStartIndex'],0,array(j['logs']??[],'jornadas').length))fail('índice de jornadas');
   const plan=object(j['plan']??{},'plan de viaje');
@@ -119,21 +120,21 @@ function journey(value:unknown, legacy=false):void {
   if((!legacy||plan['difficultTerrain']!==undefined)&&typeof plan['difficultTerrain']!=='boolean')fail('terreno del viaje');
   for(const key of ['hunterIds','watcherIds'])if((!legacy||plan[key]!==undefined)&&!strings(plan[key]))fail('roles del viaje');
   for(const log of array(j['logs']??[],'jornadas')){
-    const l=object(log,'jornada');for(const key of ['hoursUsed','hoursRemaining'])if(l[key]!==undefined&&!number(l[key],0))fail('horas de jornada');for(const key of ['day','distance','totalDistance'])if(!number(l[key],0))fail('jornada');
+    const l=object(log,'jornada');if(l['context']!==undefined)assertEncounterWorldReference(l['context'],scope);for(const key of ['hoursUsed','hoursRemaining'])if(l[key]!==undefined&&!number(l[key],0))fail('horas de jornada');for(const key of ['day','distance','totalDistance'])if(!number(l[key],0))fail('jornada');
     for(const key of ['weather','encounter','resources','position'])if(!text(l[key]))fail('detalle de jornada');if(typeof l['pendingDecision']!=='boolean')fail('decisión de jornada');
     for(const event of array(l['events']??[],'eventos')){const e=object(event,'evento');for(const key of ['id','role','title','polarity','story','actorId','actorName','skill','outcome','effectSummary'])if(!text(e[key]))fail('evento de jornada');for(const key of ['roll','bonus','total','dc'])if(!number(e[key]))fail('tirada de jornada');if(typeof e['success']!=='boolean'||typeof e['encounterTriggered']!=='boolean'||!['guide','hunter','watch'].includes(e['role'])||!['positive','negative'].includes(e['polarity'])||!['survival','perception'].includes(e['skill']))fail('resultado de jornada');
       if(e['effect']!==undefined)for(const [key,v] of Object.entries(object(e['effect'],'efecto de jornada')))if(!['foodKg','foodPerTraveler','waterLiters','waterPerTraveler','gold','fatigue','distancePercent','distanceKm'].includes(key)||!number(v))fail('efecto de jornada');}
   }
-  if(j['pendingEncounter']!==undefined)pendingEncounter(j['pendingEncounter']);
+  if(j['pendingEncounter']!==undefined)pendingEncounter(j['pendingEncounter'],scope);
 }
-export function validateTravel(value:unknown):void {
+export function validateTravel(value:unknown,campaignId?:string):void {
   const s=object(value,'partida de viaje');if(s['version']!==undefined&&s['version']!==2)fail('versión del viaje');
   const groups=array(s['groups']??[],'grupos',1000), ids=new Set<string>();
   for(const group of groups){const g=object(group,'grupo');point(g);if(!identifier(g['id'])||ids.has(g['id'])||!text(g['name'])||!text(g['color'])||!strings(g['memberIds']))fail('grupo de viaje');ids.add(g['id']);}
   if(s['selectedGroupId']!==undefined&&!ids.has(s['selectedGroupId']))fail('grupo seleccionado');
   if(s['zoom']!==undefined&&!number(s['zoom'],0.08,5))fail('escala del mapa');
-  if(s['version']===2){for(const [id,j] of Object.entries(object(s['journeys'],'viajes por grupo'))){if(!ids.has(id))fail('viaje de grupo inexistente');journey(j);}if(s['unassignedJourney']!==undefined)journey(s['unassignedJourney']);journey(s);}
-  else journey(s,true);
+  if(s['version']===2){for(const [id,j] of Object.entries(object(s['journeys'],'viajes por grupo'))){if(!ids.has(id))fail('viaje de grupo inexistente');journey(j,false,{campaignId,groupId:id});}if(s['unassignedJourney']!==undefined)journey(s['unassignedJourney'],false,{campaignId});journey(s,false,{campaignId,groupId:s['selectedGroupId']});}
+  else journey(s,true,{campaignId});
 }
 export function validateBoard(value:unknown):void {
   const s=object(value,'tablero'), ids=new Set<string>();
@@ -181,7 +182,7 @@ export function parseCampaignBackup(raw:string,campaignId:string):CampaignBackup
   for(const key of Object.keys(b))if(!['format','version','campaignId','createdAt','sheets','local'].includes(key))fail('campo desconocido en la copia');
   validateSheetCollection(b['sheets']);
   if(new TextEncoder().encode(JSON.stringify(b['sheets'])).byteLength>3*1024*1024)fail('colección de fichas demasiado grande');
-  for(const [key,data] of Object.entries(object(b['local'],'datos locales'))){const kind=localBackupKind(key,campaignId);if(kind==='npc'||kind==='generic')validateSheetCollection(data,kind);else if(kind==='travel')validateTravel(data);else if(kind==='board')validateBoard(data);else if(kind==='network')assertTravelNetwork(data);else fail('clave fuera de la campaña');}
+  for(const [key,data] of Object.entries(object(b['local'],'datos locales'))){const kind=localBackupKind(key,campaignId);if(kind==='npc'||kind==='generic')validateSheetCollection(data,kind);else if(kind==='travel')validateTravel(data,campaignId);else if(kind==='board')validateBoard(data);else if(kind==='network')assertTravelNetwork(data);else fail('clave fuera de la campaña');}
   return b as unknown as CampaignBackup;
 }
 export function withoutAssociations(collection:SheetCollection):SheetCollection {

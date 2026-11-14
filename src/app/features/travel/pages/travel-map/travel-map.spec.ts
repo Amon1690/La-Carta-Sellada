@@ -51,6 +51,23 @@ describe('Viajes independientes por grupo', () => {
     expect(restored.logs()[0].weather).toBe('Lluvia B'); expect(restored.pendingEncounter().runId).toBe('run-b');
     restored.selectGroup('a'); expect(restored.pendingEncounter().runId).toBe('run-a');
   });
+  it('conserva entorno por grupo y congela encuentros con el mismo run sin reinterpretar textos antiguos',()=>{
+    legacy();const view=make();spyOn(Date,'now').and.returnValue(1234);
+    const north={illumination:'dim',timeOfDay:'dawn',weather:'fog',obscurement:'light',gameTime:{day:7,minuteOfDay:450},source:{kind:'director',reference:'Norte confirmado'}};
+    view.saveWorldEnvironment(north);const a=view.createPendingEncounter(2,'Norte');view.persistState();
+    north.illumination='darkness';expect(a.context.environment.illumination).toBe('dim');expect(view.logs()[0].weather).toBe('Despejado');
+    const aUrl=view.pendingEncounterVttUrl();expect(aUrl).toContain('group=a');
+    view.selectGroup('b');expect(view.worldEnvironment().illumination).toBe('unknown');
+    view.saveWorldEnvironment({...north,source:{kind:'director',reference:'Sur confirmado'}});const b=view.createPendingEncounter(2,'Sur');view.persistState();
+    expect(b.runId).toBe(a.runId);expect(view.pendingEncounterVttUrl()).toContain('group=b');expect(view.pendingEncounterVttUrl()).not.toBe(aUrl);
+    view.selectGroup('a');expect(view.worldEnvironment().illumination).toBe('dim');view.saveWorldEnvironment({...north,illumination:'bright'});
+    expect(view.pendingEncounter().context.environment.illumination).toBe('dim');const reloaded=make();expect(reloaded.worldEnvironment().illumination).toBe('bright');expect(reloaded.pendingEncounter().context).toEqual(a.context);
+  });
+  it('conserva el guardado sin escribir si una instantánea declara otro grupo',()=>{
+    legacy();const view=make();view.saveWorldEnvironment({illumination:'dim',timeOfDay:'unknown',weather:'unknown',source:{kind:'director',reference:'Prueba'}});view.createPendingEncounter(2,'Norte');view.persistState();
+    const corrupt=JSON.parse(values.get(KEY)!);corrupt.journeys.a.pendingEncounter.context.groupId='b';const raw=JSON.stringify(corrupt);values.set(KEY,raw);
+    const reload=make();expect(reload.status()).toContain('original se conserva');reload.planFieldChanged('foodKg',1);expect(values.get(KEY)).toBe(raw);
+  });
   it('calcular no modifica ruta manual, provisiones, jornadas ni encuentro pendiente', () => {
     legacy(); const view = make(), original = values.get(KEY), snapshot = { route: structuredClone(view.route()), plan: structuredClone(view.plan()), logs: structuredClone(view.logs()), encounter: structuredClone(view.pendingEncounter()) };
     view.routeToSelectedDestination();

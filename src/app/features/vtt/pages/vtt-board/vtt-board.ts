@@ -43,6 +43,8 @@ import {
 } from '../../../../core/data/generic-encounters';
 
 import { TokenSheet, VttTokenSheet } from './token-sheet';
+import { findEncounterWorld } from '../../../../core/services/encounter-environment';
+import { travelStorageKey } from '../../../../core/services/campaign-backup-format';
 import { WeatherOverlay } from '../../components/weather-overlay';
 
 type VttEntryKind = 'scene' | 'encounter' | 'location' | 'generic';
@@ -356,7 +358,9 @@ export class VttBoard {
       this.selectedTokenIds.set([]);
       this.currentCampaign = vm.campaign;
       const runId = this.route.snapshot.queryParamMap.get('run');
-      const runSuffix = runId ? `:${runId.replace(/[^a-zA-Z0-9_-]/g, '')}` : '';
+      const groupId = this.route.snapshot.queryParamMap.get('group');
+      const validGroup = groupId && /^[a-zA-Z0-9_-]{1,120}$/.test(groupId) ? groupId : undefined;
+      const runSuffix = runId ? `${validGroup ? ':' + validGroup : ''}:${runId.replace(/[^a-zA-Z0-9_-]/g, '')}` : '';
       this.storageKey = `la-carta-sellada:vtt:${vm.campaign.id}:${vm.entry.kind}:${vm.entry.id}${runSuffix}`;
       this.sharingEntry = vm.entry;
       this.sharingRevision = 0; this.sharingDirty = false; this.pendingAck = undefined;
@@ -372,6 +376,14 @@ export class VttBoard {
       const restored = this.loadState();
       if (!restored && vm.entry.seedTokens?.length) {
         this.seedEncounterTokens(vm.entry.seedTokens);
+      }
+      if (!restored && !this.visionStorageBlocked && validGroup && runId) {
+        try {
+          const raw = localStorage.getItem(travelStorageKey(vm.campaign.id));
+          const context = raw ? findEncounterWorld(JSON.parse(raw), { campaignId: vm.campaign.id, groupId: validGroup, runId, encounterId: vm.entry.id }) : undefined;
+          if (context) { this.vision.update(vision => ({ ...vision, environment: context.environment })); this.persist(); this.visionMessage.set('Entorno del viaje importado. Dirección puede corregirlo en Visión; otros encuentros conservan sus condiciones.'); }
+          else this.visionMessage.set('Este encuentro no tiene condiciones de viaje confirmadas. Complétalas en Visión.');
+        } catch { this.visionMessage.set('No se pudo leer el entorno del viaje. Se conserva el original; confirma las condiciones en Visión.'); }
       }
       if (!restored) setTimeout(() => this.fitMap(), 0);
     });
