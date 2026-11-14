@@ -155,6 +155,15 @@
                         @for (polygon of circle.shadows ?? []; track $index) { <polygon [attr.points]="shadowPoints(polygon)" fill="black" /> }
                       </mask>
                     }
+                    @for(area of exploredAreas(); track $index; let i=$index){
+                      @if(area.clip; as clip){<clipPath [attr.id]="visionMaskId+'-memory-clip-'+i"><circle [attr.cx]="clip.x" [attr.cy]="clip.y" [attr.r]="clip.radius" /></clipPath>}
+                      <mask [attr.id]="visionMaskId+'-memory-area-'+i" maskUnits="userSpaceOnUse" x="0" y="0" [attr.width]="mapWidth" [attr.height]="mapHeight">
+                        <circle [attr.cx]="area.x" [attr.cy]="area.y" [attr.r]="area.radius" fill="white" />
+                        @for(disk of area.exclude??[];track $index){<circle [attr.cx]="disk.x" [attr.cy]="disk.y" [attr.r]="disk.radius" fill="black" />}
+                        @for(polygon of area.shadows??[];track $index){<polygon [attr.points]="shadowPoints(polygon)" fill="black" />}
+                        @for(fog of area.fog??[];track $index){<rect [attr.x]="fog.x" [attr.y]="fog.y" [attr.width]="fog.width" [attr.height]="fog.height" fill="black" />}
+                      </mask>
+                    }
                     <mask [attr.id]="visionMaskId" maskUnits="userSpaceOnUse">
                     <rect x="0" y="0" [attr.width]="mapWidth" [attr.height]="mapHeight" fill="white" />
                     @for (circle of previewGeometry().circles; track circle.id; let i = $index) {
@@ -175,6 +184,9 @@
                   <mask [attr.id]="visionMaskId + '-unknown'" maskUnits="userSpaceOnUse" x="0" y="0" [attr.width]="mapWidth" [attr.height]="mapHeight">
                     <rect x="0" y="0" [attr.width]="mapWidth" [attr.height]="mapHeight" fill="white" />
                     @for (rect of exploredRects(); track $index) { <rect [attr.x]="rect.x" [attr.y]="rect.y" [attr.width]="rect.width" [attr.height]="rect.height" fill="black" /> }
+                    @for(area of exploredAreas();track $index;let i=$index){
+                      <g [attr.clip-path]="area.clip?'url(#'+visionMaskId+'-memory-clip-'+i+')':null"><rect x="0" y="0" [attr.width]="mapWidth" [attr.height]="mapHeight" fill="black" [attr.mask]="'url(#'+visionMaskId+'-memory-area-'+i+')'" /></g>
+                    }
                     @for (circle of previewGeometry().circles; track circle.id; let i = $index) {
                       <g [attr.clip-path]="circle.clip ? 'url(#' + visionMaskId + '-clip-' + i + ')' : null">
                         <rect x="0" y="0" [attr.width]="mapWidth" [attr.height]="mapHeight" fill="black" [attr.mask]="'url(#' + visionMaskId + '-area-' + i + ')'" />

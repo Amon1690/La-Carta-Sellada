@@ -51,6 +51,15 @@ export interface VisionEffect {
   obscurement?: 'light' | 'heavy';
   grantedSense?: SourcedSense;
 }
+export interface VisionDisk extends VisionPoint { radius: number; }
+/** Máscara del terreno visto en un instante, sin tokens ni datos de fichas. */
+export interface ExplorationArea extends VisionDisk {
+  clip?: VisionDisk;
+  exclude?: VisionDisk[];
+  shadows?: VisionPoint[][];
+  fog?: { x: number; y: number; width: number; height: number }[];
+}
+export interface ExplorationMemory { tokenId: string; cells: number[]; areas?: ExplorationArea[]; }
 export interface BoardVisionState {
   version: 1;
   enabled: boolean;
@@ -62,6 +71,6 @@ export interface BoardVisionState {
   obstacles?: VisionObstacle[];
   /** Contacto confirmado por instancia y encuentro para sentidos de detección. */
   contacts?: VisionContact[];
-  /** Memoria personal del terreno: índices de las 30 × 20 casillas del tablero. */
-  exploration?: { tokenId: string; cells: number[] }[];
+  /** cells conserva el historial antiguo; areas guarda el contorno exacto nuevo. */
+  exploration?: ExplorationMemory[];
 }

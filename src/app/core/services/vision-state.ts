@@ -1,4 +1,4 @@
-import type { BoardVisionState, VisionProfile } from '../models/vision';
+import type { BoardVisionState, ExplorationArea, VisionProfile } from '../models/vision';
 
 type Data = Record<string, unknown>;
 const fail = (): never => { throw new Error('Datos de visión no válidos o versión no admitida.'); };
@@ -32,18 +32,36 @@ function references(v: unknown, tokenIds: ReadonlySet<string>, max = 1000): stri
   if (ids.some((id) => !text(id) || !tokenIds.has(id)) || new Set(ids).size !== ids.length) fail();
   return ids as string[];
 }
+export const MAX_EXPLORATION_AREAS = 8192;
+export const MAX_EXPLORATION_BYTES = 2 * 1024 * 1024;
+export function assertExplorationArea(value: unknown): asserts value is ExplorationArea {
+  const point = (v: unknown, radius = false): void => {
+    const p=record(v,radius?['x','y','radius']:['x','y']);
+    if(!['x','y'].every(k=>typeof p[k]==='number'&&Number.isFinite(p[k])&&Math.abs(p[k] as number)<=10000000)||radius&&!numeric(p['radius'],10000000))fail();
+  };
+  const a=record(value,['x','y','radius','clip','exclude','shadows','fog']);
+  point({x:a['x'],y:a['y'],radius:a['radius']},true);
+  if(a['clip']!==undefined)point(a['clip'],true);
+  if(a['exclude']!==undefined)for(const d of list(a['exclude'],2000))point(d,true);
+  if(a['shadows']!==undefined)for(const p of list(a['shadows'],4000)){const points=list(p,64);if(points.length<3)fail();points.forEach(v=>point(v));}
+  if(a['fog']!==undefined)for(const f of list(a['fog'],1000)){const r=record(f,['x','y','width','height']);point({x:r['x'],y:r['y']});if(!numeric(r['width'],10000000)||!numeric(r['height'],10000000))fail();}
+}
 export function assertBoardVision(v: unknown, tokenIds: ReadonlySet<string>): asserts v is BoardVisionState {
   const b = record(v, ['version', 'enabled', 'environment', 'groups', 'activeGroupId', 'effects', 'obstacles', 'contacts', 'exploration']);
   if (b['version'] !== 1 || typeof b['enabled'] !== 'boolean') fail();
   if (b['exploration'] !== undefined) {
+    const allAreas: ExplorationArea[] = [];
+    let areaCount=0;
     const observers = new Set<string>();
     for (const item of list(b['exploration'], 1000)) {
-      const memory = record(item, ['tokenId', 'cells']);
+      const memory = record(item, ['tokenId', 'cells', 'areas']);
       if (!text(memory['tokenId']) || !tokenIds.has(memory['tokenId']) || observers.has(memory['tokenId'])) fail();
       observers.add(memory['tokenId'] as string);
       const cells = list(memory['cells'], 600);
       if (cells.some((cell) => !numeric(cell, 599) || !Number.isInteger(cell)) || new Set(cells).size !== cells.length) fail();
+      if(memory['areas']!==undefined){const areas=list(memory['areas'],MAX_EXPLORATION_AREAS);areaCount+=areas.length;if(areaCount>MAX_EXPLORATION_AREAS)fail();areas.forEach(assertExplorationArea);allAreas.push(...areas as ExplorationArea[]);}
     }
+    if(new TextEncoder().encode(JSON.stringify(allAreas)).length>MAX_EXPLORATION_BYTES)fail();
   }
   const env = record(b['environment'], ['illumination', 'timeOfDay', 'weather', 'gameTime', 'source', 'obscurement']);
   if (!choice(env['illumination'], ['unknown', 'bright', 'dim', 'darkness']) ||

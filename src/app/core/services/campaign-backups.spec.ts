@@ -82,6 +82,14 @@ describe('Copias de seguridad por campaña',()=>{
    }
    expect(storage.writes).toBe(0);expect(put).not.toHaveBeenCalled();
  });
+ it('exporta e importa contornos con sombras y fog, y rechaza máscaras corruptas antes de escribir',async()=>{
+   const area={x:350,y:220,radius:100,clip:{x:400,y:220,radius:80},shadows:[[{x:300,y:200},{x:310,y:200},{x:320,y:1000}]],fog:[{x:300,y:200,width:15,height:20}]};
+   const vision={...emptyBoardVision(),exploration:[{tokenId:'observer',cells:[0],areas:[area]}]};
+   const state={...board(),tokens:[{instanceId:'observer',actorId:'player:custom-backup',name:'Observador',image:'',x:100,y:100,size:1,hp:10,maxHp:10,initiative:1,hidden:false}],vision};
+   storage.setItem(boardKey,JSON.stringify(state));const raw=await store.export(campaign);await store.restore(await store.preview(raw,campaign));
+   expect(JSON.parse(storage.getItem(boardKey)!).vision.exploration).toEqual(vision.exploration);
+   const bad=JSON.parse(raw);bad.local[boardKey].vision.exploration[0].areas[0].radius=-1;const before=storage.writes;put.calls.reset();await expectAsync(store.preview(JSON.stringify(bad),campaign)).toBeRejected();expect(storage.writes).toBe(before);expect(put).not.toHaveBeenCalled();
+ });
  it('si no hay espacio para la copia previa no escribe partidas ni servidor',async()=>{storage.setItem(boardKey,JSON.stringify(board()));const preview=await store.preview(file(),campaign);const before=[...storage.values];storage.failAt.add(storage.writes+1);await expectAsync(store.restore(preview)).toBeRejected();expect([...storage.values]).toEqual(before);expect(put).not.toHaveBeenCalled();});
  it('revierte las escrituras locales si falla una posterior y no envía PUT',async()=>{storage.setItem(boardKey,JSON.stringify({...board(),zoom:1}));storage.setItem(npcKey,JSON.stringify({edited:{},created:[]}));const before=storage.getItem(boardKey);const preview=await store.preview(file({[boardKey]:board(),[npcKey]:{edited:{},created:[]}}),campaign);storage.failAt.add(storage.writes+3);await expectAsync(store.restore(preview)).toBeRejected();expect(storage.getItem(boardKey)).toBe(before);expect(put).not.toHaveBeenCalled();expect(storage.getItem(recoveryKey(campaign))).toBeNull();});
  it('revierte localmente un rechazo de revisión del servidor',async()=>{const before=JSON.stringify({...board(),zoom:1});storage.setItem(boardKey,before);put.and.rejectWith(Object.assign(new Error('Conflict'),{status:409}));const preview=await store.preview(file(),campaign);await expectAsync(store.restore(preview)).toBeRejected();expect(storage.getItem(boardKey)).toBe(before);expect(store.hasRecovery(campaign)).toBeFalse();});

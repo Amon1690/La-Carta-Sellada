@@ -1,4 +1,5 @@
 import { SharingSnapshot, renderPersonalView } from './encounter-sharing';
+import { rememberExploration } from './vision-exploration';
 import { emptyBoardVision } from './vision-state';
 
 describe('Imagen personal de encuentros', () => {
@@ -146,4 +147,28 @@ describe('Imagen personal de encuentros', () => {
       scope: { kind: 'circle', x: 200, y: 125.6, radiusFeet: 2 }, active: true, duration: { kind: 'until-ended' } }];
     expect(color(await pixels(), 400, 125)).toEqual([9, 12, 16, 255]);
   });
+  it('la memoria conserva el arco y el cono recortado de una luz, incluso al retirarla y quitar el fog posterior',async()=>{
+    const source={kind:'director' as const,reference:'Geometría sintética de cono'};
+    snapshot.profiles.set('hero',{version:1,senses:[{sense:'normal',rangeFeet:60,source}]});
+    snapshot.vision.environment.illumination='darkness';
+    snapshot.vision.obstacles=[{id:'wall',name:'Borde de puerta',kind:'wall',start:{x:210,y:0},end:{x:210,y:200},blocksSight:true,blocksEffect:true,source}];
+    snapshot.vision.effects=[{id:'light',name:'Foco',kind:'light',illumination:'bright',source,scope:{kind:'circle',x:300,y:300,radiusFeet:10},active:true,duration:{kind:'until-ended'}}];
+    snapshot.fog=[{x:295,y:295,width:10,height:10}];
+    expect(color(await pixels(),300,281)).toEqual([255,0,0,255]);
+    snapshot.vision=rememberExploration(snapshot.vision,snapshot.tokens,snapshot.profiles,snapshot.fog);
+    snapshot.vision=JSON.parse(JSON.stringify(snapshot.vision));snapshot.vision.effects=[];snapshot.fog=[];snapshot.tokens[0].x=650;
+    const ctx=await pixels();
+    const dim=color(ctx,300,281);expect(dim[0]).toBeGreaterThan(9);expect(dim[0]).toBeLessThan(90);
+    expect(color(ctx,300,270)).toEqual([9,12,16,255]); // Fuera del cono, aunque está dentro del círculo de luz.
+    expect(color(ctx,300,300)).toEqual([9,12,16,255]); // El fog original no se inventa como terreno explorado.
+    expect(color(ctx,300,401)[0]).toBeGreaterThan(9); // Franja del arco que no ocupaba una casilla entera.
+    expect(color(ctx,300,404)).toEqual([9,12,16,255]); // Fuera del radio real, sin expansión al cuadrado.
+    expect(load.calls.allArgs().flat()).not.toContain('secreta');
+  });
+  it('solapar contornos recordados no acumula oscuridad ni descubre tokens',async()=>{
+    snapshot.vision.environment.illumination='darkness';snapshot.vision.exploration=[{tokenId:'hero',cells:[],areas:[{x:350,y:300,radius:100},{x:400,y:300,radius:100}]}];
+    const ctx=await pixels();expect(color(ctx,350,300)).toEqual(color(ctx,280,300));expect(color(ctx,350,300)[0]).toBeGreaterThan(60);
+    expect(load.calls.allArgs().flat()).not.toContain('secreta');
+  });
+
 });

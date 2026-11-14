@@ -638,20 +638,20 @@ describe('Multiselección de fichas en VTT', () => {
   });
   it('la exploración se conserva al mover y recargar, sin compartirla con otra campaña', async () => {
     const view = confirmedPreview(); actorFor('A', 'player:hero'); view.setPreviewEnvironment('illumination', 'darkness');
-    expect(view.vision().exploration.find((m: any) => m.tokenId === 'A').cells).toContain(62);
+    expect(view.vision().exploration.find((m: any) => m.tokenId === 'A').areas).toContain(jasmine.objectContaining({x:GRID*2.5,y:GRID*2.5}));
     board.tokens.update((tokens) => tokens.map((t) => t.instanceId === 'A' ? { ...t, x: GRID * 6 } : t)); view.persist();
-    const cells = view.vision().exploration.find((m: any) => m.tokenId === 'A').cells;
-    expect(cells).toContain(62); expect(cells).toContain(66);
+    const areas = structuredClone(view.vision().exploration.find((m: any) => m.tokenId === 'A').areas);
+    expect(areas).toContain(jasmine.objectContaining({x:GRID*2.5,y:GRID*2.5}));expect(areas.at(-1).x).toBeCloseTo(GRID*6.5,8);expect(areas.at(-1).y).toBeCloseTo(GRID*2.5,8);
     routeParams.next(params('other-selection-test')); fixture.detectChanges(); await fixture.whenStable();
     expect(view.vision().exploration ?? []).toEqual([]);
     routeParams.next(params()); fixture.detectChanges(); await fixture.whenStable();
-    expect(view.vision().exploration.find((m: any) => m.tokenId === 'A').cells).toEqual(cells);
+    expect(view.vision().exploration.find((m: any) => m.tokenId === 'A').areas).toEqual(areas);
   });
   it('un arrastre provisional y cancelado no explora su destino aunque se guarde otra acción', () => {
     const view = confirmedPreview(); actorFor('A', 'player:hero'); view.setPreviewEnvironment('illumination', 'darkness');
     pointer(button('A'), 'pointerdown', GRID * 2 + 10, GRID * 2 + 10);
     pointer(map, 'pointermove', 600, 600); view.persist();
-    expect(view.vision().exploration.find((m: any) => m.tokenId === 'A').cells).toEqual([62]);
+    expect(view.vision().exploration.find((m: any) => m.tokenId === 'A').areas).toEqual([{x:GRID*2.5,y:GRID*2.5,radius:GRID/2}]);
     pointer(map, 'pointercancel', 600, 600);
     expect(board.tokens()[0].x).toBe(GRID * 2);
   });
@@ -660,14 +660,14 @@ describe('Multiselección de fichas en VTT', () => {
     spyOn(sheets, 'saveVisionProfile').and.callFake(async (_campaign, _actor, profile) => {
       (sheets.visionProfile as jasmine.Spy).and.returnValue(profile);
     });
-    expect(view.vision().exploration.find((m: any) => m.tokenId === 'A').cells).not.toContain(70);
+    expect(Math.max(...view.vision().exploration.find((m: any) => m.tokenId === 'A').areas.map((a:any)=>a.radius))).toBeLessThan(GRID*8);
     const saved = JSON.parse(localStorage.getItem(key())!); saved.vision.environment.illumination = 'dim';
     localStorage.setItem(key(), JSON.stringify(saved));
     await view.saveSense('A', 'normal', '60', false, 'Ampliación sintética confirmada');
-    expect(view.vision().exploration.find((m: any) => m.tokenId === 'A').cells).toContain(70);
+    expect(Math.max(...view.vision().exploration.find((m: any) => m.tokenId === 'A').areas.map((a:any)=>a.radius))).toBeGreaterThan(GRID*8);
     expect(JSON.parse(localStorage.getItem(key())!).vision.environment.illumination).toBe('dim');
     await view.saveSense('A', 'normal', '10', false, 'Fin de ampliación sintética');
-    expect(view.vision().exploration.find((m: any) => m.tokenId === 'A').cells).toContain(70);
+    expect(Math.max(...view.vision().exploration.find((m: any) => m.tokenId === 'A').areas.map((a:any)=>a.radius))).toBeGreaterThan(GRID*8);
     expect(view.encounterShared()).toBeFalse();
   });
   it('coloca un foco desde la barra con radio explícito y coordenadas libres al aplicar zoom', () => {

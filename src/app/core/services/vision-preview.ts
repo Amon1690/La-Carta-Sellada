@@ -1,5 +1,5 @@
 import type { BoardVisionState, VisionEffect, VisionProfile, VisionSense } from '../models/vision';
-import { effectDisks, isVisionDoor, visionCenter as center } from './vision-geometry';
+import { effectDisks, isVisionDoor, obstacleShadows, visionCenter as center } from './vision-geometry';
 import { activeVisionEffects, evaluateVision, segmentsIntersect } from './vision-engine';
 export { effectDisks } from './vision-geometry';
 
@@ -58,14 +58,7 @@ export function personalSight(state: BoardVisionState, tokens: readonly PreviewT
   const extent = Math.hypot(width, height) * 4;
   const insideWall = (origin: { x: number; y: number }, channel: 'blocksSight' | 'blocksEffect'): boolean =>
     (state.obstacles ?? []).some((o) => o[channel] && !(isVisionDoor(o) && o.open) && segmentsIntersect(origin, origin, o.start, o.end));
-  const wallShadows = (origin: { x: number; y: number }, channel: 'blocksSight' | 'blocksEffect'): SightPolygon[] =>
-    (state.obstacles ?? []).filter((o) => o[channel] && !(isVisionDoor(o) && o.open)).map((o) => {
-      const far = (p: { x: number; y: number }) => {
-        const d = Math.hypot(p.x - origin.x, p.y - origin.y);
-        return { x: p.x + (p.x - origin.x) / (d || 1) * extent, y: p.y + (p.y - origin.y) / (d || 1) * extent };
-      };
-      return [o.start, o.end, far(o.end), far(o.start)];
-    });
+  const wallShadows = (origin: { x: number; y: number }, channel: 'blocksSight' | 'blocksEffect'): SightPolygon[] => obstacleShadows(state.obstacles ?? [], origin, channel, width, height);
   for (const sense of senses) {
     if (sense.rangeFeet === 0 || sense.sense === 'tremorsense' || ((blinded || token.conditions === undefined) && sense.sense !== 'blindsight')) continue;
     const circle: SightCircle = { id: observerId, sense: sense.sense, ...center(token, grid), radius: sense.rangeFeet === null ? Math.hypot(width, height) : sense.rangeFeet * .3048 / 1.5 * grid };
