@@ -67,7 +67,7 @@
                       <details>
                         <summary>{{ reference.name }} · Pág. {{ reference.sourcePage }}</summary>
                         @if (reference.requiresSourceCheck) {<p>La extracción mezcla columnas de la fuente. Coteja la tabla o los perfiles en el manual antes de aplicar sus valores; esta referencia no activa efectos ni crea criaturas.</p>}
-                        <p>{{ reference.description }}</p>
+                        <p class="reference-content">{{ reference.description }}</p>
                       </details>
                     }
                     @if (feature.options?.length) {

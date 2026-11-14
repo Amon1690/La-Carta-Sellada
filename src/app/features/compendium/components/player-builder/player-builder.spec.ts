@@ -20,6 +20,48 @@ describe('Editor guiado de PJ', () => {
 });
 
 describe('Editor de conjuros de la ficha guiada', () => {
+  for (const removedIndex of [0, 1]) {
+    it(`retira el ritual ${removedIndex + 1} sin conservar un aviso de exceso incorrecto`, async () => {
+      TestBed.configureTestingModule({providers: [provideZonelessChangeDetection()]});
+      const build = warrior();
+      Object.assign(build, {classId: 'mago', subclass: 'Adivino', level: 4, featIds: ['lanzador-ritual'], ritualSpellIds: ['alarma', 'detectar-magia', 'identificar'], ritualAbility: 'intelligence'});
+      const sheet = {...calculateCharacter(build, rules).stats, id: 'erwan', name: 'Erwan', level: 4, build} as PlayerOption;
+      const fixture = TestBed.createComponent(PlayerBuilder);
+      fixture.componentRef.setInput('rules', rules);
+      fixture.componentRef.setInput('sheet', sheet);
+      fixture.detectChanges(); await fixture.whenStable();
+      const select = fixture.nativeElement.querySelector(`[name="build-ritual-${removedIndex}"]`) as HTMLSelectElement;
+      select.value = ''; select.dispatchEvent(new Event('change'));
+      fixture.detectChanges(); await fixture.whenStable(); fixture.detectChanges();
+      expect(fixture.nativeElement.textContent).not.toContain('Excede la capacidad actual');
+      const component = fixture.componentInstance as unknown as {build: CharacterBuild};
+      expect(component.build.ritualSpellIds).toEqual(['alarma', 'detectar-magia', 'identificar'].filter((_, i) => i !== removedIndex));
+      expect(sheet.build!.ritualSpellIds).toEqual(['alarma', 'detectar-magia', 'identificar']);
+    });
+  }
+  it('no marca exceso por huecos en una selección antigua con solo dos rituales', async () => {
+    TestBed.configureTestingModule({providers: [provideZonelessChangeDetection()]});
+    const build = warrior();
+    Object.assign(build, {classId: 'mago', subclass: 'Adivino', level: 4, featIds: ['lanzador-ritual'], ritualSpellIds: ['', 'detectar-magia', 'identificar'], ritualAbility: 'intelligence'});
+    const fixture = TestBed.createComponent(PlayerBuilder);
+    fixture.componentRef.setInput('rules', rules);
+    fixture.componentRef.setInput('sheet', {...calculateCharacter(build, rules).stats, id:'erwan', name:'Erwan', build});
+    fixture.detectChanges(); await fixture.whenStable();
+    expect(fixture.nativeElement.textContent).not.toContain('Excede la capacidad actual');
+    expect((fixture.nativeElement.querySelector('[name="build-ritual-2"]') as HTMLSelectElement).value).toBe('identificar');
+  });
+  it('permite retirar un ritual conservado que excede la capacidad tras bajar nivel', async () => {
+    TestBed.configureTestingModule({providers:[provideZonelessChangeDetection()]});
+    const b=warrior();b.classId='mago';b.subclass='Adivino';b.featIds=['lanzador-ritual'];b.ritualSpellIds=['alarma','detectar-magia','identificar'];b.ritualAbility='intelligence';
+    const sheet={...calculateCharacter(b,rules).stats,id:'erwan',name:'Erwan',level:5,build:b} as PlayerOption;
+    const fixture=TestBed.createComponent(PlayerBuilder);fixture.componentRef.setInput('rules',rules);fixture.componentRef.setInput('sheet',sheet);fixture.detectChanges();await fixture.whenStable();
+    const level=fixture.nativeElement.querySelector('[name="build-level"]') as HTMLInputElement;level.value='4';level.dispatchEvent(new Event('input'));fixture.detectChanges();await fixture.whenStable();fixture.detectChanges();
+    const excess=fixture.nativeElement.querySelector('[name="build-ritual-2"]') as HTMLSelectElement;
+    expect(excess).withContext(JSON.stringify((fixture.componentInstance as unknown as {build:CharacterBuild}).build)).not.toBeNull();if(!excess)return;
+    excess.value='';excess.dispatchEvent(new Event('change'));fixture.detectChanges();await fixture.whenStable();fixture.detectChanges();
+    const component=fixture.componentInstance as unknown as {build:CharacterBuild};
+    expect(component.build.ritualSpellIds).toEqual(['alarma','detectar-magia']);expect(sheet.build!.ritualSpellIds!.length).toBe(3);
+  });
   it('libera las casillas cuando la subclase convierte elecciones anteriores en conjuros automáticos', async () => {
     TestBed.configureTestingModule({providers: [provideZonelessChangeDetection()]});
     const build = warrior();

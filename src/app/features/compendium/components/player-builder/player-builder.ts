@@ -4,7 +4,7 @@ import { GameStatBlock, PlayerOption } from '../../../../core/models/campaign';
 import { Ability, CharacterBuild } from '../../../../core/models/character-build';
 import { RuleSpell, RulesCompendium } from '../../../../core/models/rules';
 import { CHARACTER_BACKGROUNDS, CHARACTER_ORIGINS } from '../../../../core/data/character-origins';
-import { ABILITIES, CLASS_RULES, CharacterCalculation, availableSpells, alwaysPreparedSpellIds, calculateCharacter, featLevels, initialBuild, magicProgression, normalizeBuildChoices, originMagic } from '../../../../core/services/character-builder';
+import { ABILITIES, CLASS_RULES, CharacterCalculation, availableSpells, alwaysPreparedSpellIds, calculateCharacter, featLevels, initialBuild, magicProgression, normalizeBuildChoices, originMagic, ritualChoiceLimits } from '../../../../core/services/character-builder';
 export interface PlayerBuilderValue {
     build: CharacterBuild;
     calculation: CharacterCalculation;
@@ -89,7 +89,17 @@ export class PlayerBuilder implements OnChanges {
     protected featName(id: string): string { return this.rules.feats.find((f) => f.id === id)?.name ?? id; }
     protected automaticSpellNames(): string { return alwaysPreparedSpellIds(this.build).map((id) => this.spellName(id)).join(' · '); }
     protected ritualOptions(): RuleSpell[] { return this.rules.spells.filter((s) => s.level === 1 && /ritual/i.test(s.castingTime)); }
-    protected ritualChoice(index: number, id: string): void { this.build.ritualSpellIds ??= []; this.build.ritualSpellIds[index] = id; this.changed(); }
+    protected ritualLimits() { return ritualChoiceLimits(this.build); }
+    protected ritualRows(): number[] { return this.rows(Math.max(this.ritualLimits().maximum, this.build.ritualSpellIds?.length ?? 0)); }
+    protected ritualExcess(index: number): boolean {
+        return !!this.build.ritualSpellIds?.[index] && this.build.ritualSpellIds.slice(0, index + 1).filter(Boolean).length > this.ritualLimits().maximum;
+    }
+    protected ritualChoice(index: number, id: string): void {
+        this.build.ritualSpellIds ??= [];
+        this.build.ritualSpellIds[index] = id;
+        if (!id) this.build.ritualSpellIds = this.build.ritualSpellIds.filter(Boolean);
+        this.changed();
+    }
     protected hasRitualCaster(): boolean { return this.build.featIds.includes('lanzador-ritual'); }
     protected hasLance(): boolean { return this.build.equipment.some((item) => item.id === 'lanza-de-caballeria'); }
     protected skillNames(ids: string[]): string { return ids.map((id) => this.rules.skills.find((s) => s.id === id)?.name ?? id).join(', '); }

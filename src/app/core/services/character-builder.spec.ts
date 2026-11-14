@@ -8,6 +8,42 @@ import { deriveCombat, rollDice } from './combat-rules';
 import { CHARACTER_BACKGROUNDS } from '../data/character-origins';
 import { rules, warrior } from './character-builder.fixture';
 describe('Ficha de personaje guiada 2024', () => {
+    it('conserva el coste y nivel de una versión aumentada revisada al editar la ficha', () => {
+        const b = warrior(); b.classId='mago'; b.subclass='Adivino'; b.preparedIds=['proyectil-magico']; b.spellbookIds=[...b.preparedIds];
+        const original={...calculateCharacter(b,rules).stats,build:b,level:5} as PlayerOption;
+        const missile=original.combat!.actions.find((a)=>a.name==='Proyectil mágico')!;
+        Object.assign(missile,{spellLevel:2,cost:{resourceId:'builder:slot:2',amount:1},reviewed:true,resourceConfirmed:true,damage:[{dice:'4d4+4',type:'fuerza'}]});
+        const next=calculateCharacter(b,rules,original).stats.combat!.actions.find((a)=>a.source===missile.source)!;
+        expect(next.cost).toEqual(missile.cost);expect(next.spellLevel).toBe(2);expect(next.damage).toEqual(missile.damage);expect(next.reviewed).toBeTrue();
+        b.level=2;
+        const lower=calculateCharacter(b,rules,original).stats.combat!.actions.find((a)=>a.source===missile.source)!;
+        expect(lower.reviewed).toBeFalse();expect(lower.resourceConfirmed).toBeFalse();
+    });
+    it('permite conservar dos rituales adquiridos a nivel cuatro sin forzar el tercero opcional', () => {
+        const b=warrior();b.classId='mago';b.subclass='Adivino';b.featIds=['lanzador-ritual'];b.ritualSpellIds=['alarma','identificar'];b.ritualAbility='intelligence';
+        expect(calculateCharacter(b,rules).errors.some((e)=>e.startsWith('Lanzador ritual:'))).toBeFalse();
+        b.featIds=['','lanzador-ritual'];b.level=8;
+        expect(calculateCharacter(b,rules).errors.some((e)=>e.startsWith('Lanzador ritual:'))).toBeTrue();
+    });
+    it('conserva recursos manuales de un conjuro y el espacio aumentado de una reacción', () => {
+        const b = warrior(); b.classId='mago'; b.subclass='Adivino'; b.preparedIds=['proyectil-magico','escudo']; b.spellbookIds=[...b.preparedIds];
+        const original={...calculateCharacter(b,rules).stats,build:b,level:5} as PlayerOption;
+        const action=original.combat!.actions.find((a)=>a.name==='Proyectil mágico')!;
+        original.combat!.resources.push({id:'varita',name:'Varita',kind:'charges',maximum:7});
+        Object.assign(action,{cost:{resourceId:'varita',amount:2},reviewed:true});
+        const shield=original.combat!.reactions.find((r)=>r.name==='Escudo')!;
+        Object.assign(shield,{spellLevel:2,cost:{resourceId:'builder:slot:2',amount:1}});
+        const profile=calculateCharacter(b,rules,original).stats.combat!;
+        expect(profile.actions.find((a)=>a.source===action.source)!.cost).toEqual({resourceId:'varita',amount:2});
+        expect(profile.reactions.find((r)=>r.source===shield.source)!.cost).toEqual(shield.cost);
+        expect(profile.reactions.find((r)=>r.source===shield.source)!.spellLevel).toBe(2);
+    });
+    it('Resiliente rechaza competencias previas y conserva una elección legal anterior a rasgos posteriores', () => {
+        const b=warrior();b.featIds=['resiliente'];b.resilientAbility='strength';
+        expect(calculateCharacter(b,rules).errors.join(' ')).toContain('Resiliente:');
+        b.classId='picaro';b.level=15;b.subclass='Ladrón';b.resilientAbility='wisdom';
+        expect(calculateCharacter(b,rules).errors.some((e)=>e.startsWith('Resiliente:'))).toBeFalse();
+    });
     it('solo permite lanza de caballería y escudo a la vez si va montado, y Duelo no se acumula con otra arma', () => {
         const catalog = structuredClone(rules);
         catalog.equipment.find((item) => item.id === 'lanza-de-caballeria')!.properties.push('a dos manos (salvo montado)');
@@ -75,7 +111,7 @@ describe('Ficha de personaje guiada 2024', () => {
     });
     it('exige las elecciones de Lanzador ritual y mantiene un único uso compartido de Ritual rápido', () => {
         const build = warrior(); build.classId = 'mago'; build.subclass = 'Adivino'; build.featIds = ['lanzador-ritual'];
-        expect(calculateCharacter(build, rules).errors.join(' ')).toContain('Lanzador ritual: elige 3');
+        expect(calculateCharacter(build, rules).errors.join(' ')).toContain('Lanzador ritual: elige entre 2 y 3');
         build.ritualSpellIds = ['alarma','detectar-magia','identificar']; build.ritualAbility = 'intelligence';
         const result = calculateCharacter(build, rules);
         expect(result.errors.some((e) => e.startsWith('Lanzador ritual:'))).toBeFalse();

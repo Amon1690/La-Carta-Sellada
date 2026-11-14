@@ -58,9 +58,9 @@
       @if(automaticSpellNames()){<p>Siempre preparados por clase o juramento: {{automaticSpellNames()}}. No consumen las elecciones de preparados.</p>}
       @if(hasRitualCaster()){
         <fieldset [disabled]="busy"><legend>Lanzador ritual</legend>
-          <p class="wide">Elige {{calculation.stats.proficiencyBonus}} rituales de nivel 1. Siempre están preparados y comparten un uso de Ritual rápido por descanso largo.</p>
+          <p class="wide">Elige {{ritualLimits().minimum}} rituales de nivel 1 al adquirir la dote. Puedes añadir más al aumentar competencia, hasta {{ritualLimits().maximum}} en tu nivel actual. Siempre están preparados y comparten un uso de Ritual rápido por descanso largo.</p>
           <label>Característica de Lanzador ritual <select name="build-ritual-ability" [(ngModel)]="build.ritualAbility" (ngModelChange)="changed()"><option value="">Selecciona la característica aumentada por la dote</option><option value="intelligence">Inteligencia</option><option value="wisdom">Sabiduría</option><option value="charisma">Carisma</option></select></label>
-          @for(i of rows(calculation.stats.proficiencyBonus);track i){<label>Ritual de nivel 1 {{i+1}} <select [name]="'build-ritual-'+i" [ngModel]="build.ritualSpellIds?.[i] ?? ''" (ngModelChange)="ritualChoice(i,$event)"><option value="">Selecciona un ritual</option>@for(spell of ritualOptions();track spell.id){<option [value]="spell.id">{{spell.name}}</option>}</select></label>}
+          @for(i of ritualRows();track i){<label>Ritual de nivel 1 {{i+1}} @if(ritualExcess(i)){<small>Excede la capacidad actual; retíralo para guardar.</small>}<select [name]="'build-ritual-'+i" [attr.name]="'build-ritual-'+i" [ngModel]="build.ritualSpellIds?.[i] ?? ''" (ngModelChange)="ritualChoice(i,$event)"><option value="">Sin seleccionar</option>@for(spell of ritualOptions();track spell.id){<option [value]="spell.id">{{spell.name}}</option>}</select></label>}
         </fieldset>
       }
       @if(hasLance()){<label class="check"><input type="checkbox" name="build-mounted" [(ngModel)]="build.mounted" (ngModelChange)="changed()" />Va montado (permite usar la lanza de caballería con una mano)</label>}
