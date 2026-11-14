@@ -1,6 +1,6 @@
 import { AbilityScores, GameStatBlock, PlayerOption } from '../models/campaign';
 import { Ability, CharacterBuild } from '../models/character-build';
-import { CombatAction, CombatProfile, CombatResource } from '../models/combat';
+import { CombatAction, CombatCost, CombatProfile, CombatReaction, CombatResource } from '../models/combat';
 import { RulesCompendium, RuleEquipment, RuleSpell } from '../models/rules';
 import { CHARACTER_BACKGROUNDS, CHARACTER_ORIGINS } from '../data/character-origins';
 import { deriveCombat, normalizeCombat } from './combat-rules';
@@ -83,6 +83,21 @@ export function magicProgression(build: CharacterBuild): {
     return { prepared, cantrips, slots: [...slots], maximum: slots.length, ability: third || id === 'mago' ? 'intelligence' : ['clerigo', 'druida', 'explorador'].includes(id) ? 'wisdom' : 'charisma', classId: third ? 'mago' : id, pact: id === 'brujo' };
 }
 export const featLevels = (classId: string): number[] => [4, 8, 12, 16, ...(classId === 'guerrero' ? [6, 14] : classId === 'picaro' ? [10] : []), 19].sort((a, b) => a - b);
+export function ritualChoiceLimits(build: CharacterBuild): { minimum:number; maximum:number } {
+    const acquired = featLevels(build.classId)[build.featIds.indexOf('lanzador-ritual')] ?? build.level;
+    const bonus = (level:number):number => 2 + Math.floor((Math.max(1, Math.min(20,level)) - 1) / 4);
+    return {minimum:bonus(acquired),maximum:bonus(build.level)};
+}
+
+function retainedCasting(saved:CombatAction|CombatReaction|undefined, spell:RuleSpell, cost:CombatCost|undefined, resources:CombatResource[]): {cost?:CombatCost; spellLevel:number; valid:boolean} {
+    if (!saved) return {cost,spellLevel:spell.level,valid:true};
+    const level = saved.spellLevel ?? spell.level;
+    const pool = resources.find((r)=>r.id===saved.cost?.resourceId);
+    const valid = Number.isInteger(level) && level>=spell.level && level<=9 && (saved.cost
+        ? !!pool && Number.isInteger(saved.cost.amount) && saved.cost.amount>=1 && saved.cost.amount<=pool.maximum && (pool.kind!=='slot' || (pool.level??0)>=level)
+        : spell.level===0 || cost===undefined);
+    return valid ? {cost:saved.cost ? {...saved.cost}:undefined,spellLevel:level,valid:true} : {cost,spellLevel:spell.level,valid:false};
+}
 const aliases: Record<string, string> = { humana: 'humano', elfica: 'elfo', elfico: 'elfo', elfa: 'elfo', enana: 'enano', gnoma: 'gnomo', mediana: 'mediano', orca: 'orco', draconida: 'draconido', paladina: 'paladin', barda: 'bardo', guerrera: 'guerrero', maga: 'mago', exploradora: 'explorador', picara: 'picaro', hechicera: 'hechicero', cleriga: 'clerigo', animadora: 'animador', artesana: 'artesano', charlatana: 'charlatan', guardiana: 'guardia', ermitana: 'ermitano', sabio: 'erudito', mercader: 'comerciante' };
 export const canonicalChoice = (text: string): string => n(text) === 'erudita' ? 'erudito' : aliases[n(text)] ?? n(text);
 /** Compatibilidad con el identificador que produjo el OCR del catálogo anterior. */
@@ -208,6 +223,12 @@ export function calculateCharacter(build: CharacterBuild, rules: RulesCompendium
         errors.push('Tu clase y nivel todavía no conceden estilo de combate.');
     if (build.featIds.some((id) => rules.feats.find((f) => f.id === id)?.category === 'Dote de don épico') && level < 19)
         errors.push('Los dones épicos requieren nivel 19.');
+    const resilientIndex=build.featIds.indexOf('resiliente');
+    if (resilientIndex>=0) {
+        const acquired=featLevels(build.classId)[resilientIndex]??level;
+        const previousSaves=[...(config?.saves??[]),...(build.classId==='monje'&&acquired>=14?ABILITIES.map((a)=>a.id):[]),...(build.classId==='picaro'&&acquired>=15?['wisdom','charisma']:[])];
+        if(previousSaves.includes(build.resilientAbility)) errors.push('Resiliente: elige una salvación en la que no tuvieras competencia al adquirir la dote.');
+    }
     const training = new Set(config?.armor ?? []);
     if (build.classId === 'clerigo' && build.divineOrder === 'protector')
         training.add('pesada');
@@ -414,9 +435,9 @@ export function calculateCharacter(build: CharacterBuild, rules: RulesCompendium
         }
     }
     if (feats.includes('lanzador-ritual')) {
-        const choices = build.ritualSpellIds ?? [];
-        if (choices.length !== proficiency || new Set(choices).size !== choices.length || choices.some((id) => !rules.spells.some((s) => s.id === id && s.level === 1 && /ritual/i.test(s.castingTime))) || !['intelligence', 'wisdom', 'charisma'].includes(build.ritualAbility ?? ''))
-            errors.push(`Lanzador ritual: elige ${proficiency} rituales distintos de nivel 1 y su característica mágica; no se deducen del libro.`);
+        const choices = (build.ritualSpellIds ?? []).filter(Boolean), limits=ritualChoiceLimits(build);
+        if (choices.length < limits.minimum || choices.length > limits.maximum || new Set(choices).size !== choices.length || choices.some((id) => !rules.spells.some((s) => s.id === id && s.level === 1 && /ritual/i.test(s.castingTime))) || !['intelligence', 'wisdom', 'charisma'].includes(build.ritualAbility ?? ''))
+            errors.push(`Lanzador ritual: elige ${limits.minimum===limits.maximum?limits.minimum:`entre ${limits.minimum} y ${limits.maximum}`} rituales distintos de nivel 1 y su característica mágica; no se deducen del libro.`);
         else for (const id of choices) grant(rules.spells.find((s) => s.id === id)!.name, build.ritualAbility!, 0, 'ritual');
         const quick: CombatResource = { id: 'builder:feat:ritual-quick', name: 'Ritual rápido', maximum: 1, kind: 'uses' };
         for (const id of new Set([...classSpells, ...granted])) {
@@ -487,6 +508,7 @@ export function calculateCharacter(build: CharacterBuild, rules: RulesCompendium
         }
         return sources.map((source) => ({ spell, ...source }));
     });
+    const castingResources = [...resources, ...(original?.combat?.resources ?? []).filter((r) => !r.id.startsWith('builder:'))];
     const spellActions: CombatAction[] = [], spellReactions = derived.reactions.filter((r) => !r.spellLevel);
     const seen = new Set<string>();
     for (const cast of casts) {
@@ -501,17 +523,19 @@ export function calculateCharacter(build: CharacterBuild, rules: RulesCompendium
         const reaction = derived.reactions.find((r) => n(r.name) === n(spell.name));
         if (reaction) {
             const source = reaction.source + suffix, saved = original?.combat?.reactions.find((r) => r.source === source);
-            spellReactions.push({ ...reaction, ...saved, source, name, spellLevel: spell.level, cost, resourceConfirmed: spell.level === 0 || !!cost, reviewed: n(spell.name) === 'escudo' ? true : !changedMagic && !!saved?.reviewed });
+            const retained=retainedCasting(saved,spell,cost,castingResources);
+            spellReactions.push({ ...reaction, ...saved, source, name, spellLevel:retained.spellLevel,cost:retained.cost, resourceConfirmed:retained.valid&&(spell.level===0||!!retained.cost), reviewed:retained.valid&&(n(spell.name)==='escudo'||!changedMagic&&!!saved?.reviewed) });
         }
         else {
             const action = derived.actions.find((a) => a.kind === 'spell' && n(a.name) === n(spell.name));
             if (!action)
                 continue;
             const source = action.source + suffix, saved = original?.combat?.actions.find((a) => a.source === source);
-            spellActions.push({ ...action, ...saved, source, name, spellLevel: resource?.kind === 'slot' ? resource.level : spell.level, cost, bonus: proficiency + modifier(abilities[ability]), dc: 8 + proficiency + modifier(abilities[ability]), resourceConfirmed: spell.level === 0 || !!cost, reviewed: !changedMagic && !!saved?.reviewed });
+            const retained=retainedCasting(saved,spell,cost,castingResources);
+            spellActions.push({ ...action, ...saved, source, name, spellLevel:saved&&retained.valid?retained.spellLevel:resource?.kind==='slot'?resource.level:spell.level, cost:retained.cost, bonus: proficiency + modifier(abilities[ability]), dc: 8 + proficiency + modifier(abilities[ability]), resourceConfirmed:retained.valid&&(spell.level===0||!!retained.cost), reviewed:retained.valid&&!changedMagic&&!!saved?.reviewed });
         }
     }
-    const profile: CombatProfile = { actions: [...actions, ...spellActions], reactions: spellReactions, resources: [...resources, ...(original?.combat?.resources ?? []).filter((r) => !r.id.startsWith('builder:'))], attacksPerTurn: build.classId === 'guerrero' && level >= 20 ? 4 : build.classId === 'guerrero' && level >= 11 ? 3 : ['barbaro', 'guerrero', 'monje', 'paladin', 'explorador'].includes(build.classId) && level >= 5 ? 2 : 1 };
+    const profile: CombatProfile = { actions: [...actions, ...spellActions], reactions: spellReactions, resources: castingResources, attacksPerTurn: build.classId === 'guerrero' && level >= 20 ? 4 : build.classId === 'guerrero' && level >= 11 ? 3 : ['barbaro', 'guerrero', 'monje', 'paladin', 'explorador'].includes(build.classId) && level >= 5 ? 2 : 1 };
     stats.combat = profile;
     for (const { item } of equipped) {
         const category = n(item.category);

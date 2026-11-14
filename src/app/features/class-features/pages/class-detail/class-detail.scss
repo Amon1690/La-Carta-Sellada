@@ -173,6 +173,10 @@ h2 {
   color: var(--accent-gold);
 }
 
+.reference-content {
+  white-space: pre-line;
+}
+
 @media (max-width: 700px) {
   header {
     align-items: start;

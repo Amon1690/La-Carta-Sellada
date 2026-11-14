@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { repairSpellPages, cleanRuleDescription, SPELLS_PER_LEVEL, SUBCLASS_HEADINGS, SUBCLASS_END_PAGES } from './rules-source-repairs.mjs';
 import { completeEquipment } from './rules-equipment-supplement.mjs';
+import { repairSpellContent, repairClassContent, confirmedClassReferences } from './rules-content-repairs.mjs';
 
 const input = process.argv[2] ?? '.tmp/manual-raw.txt';
 const output = process.argv[3] ?? 'public/data/rules.json';
@@ -201,6 +202,7 @@ function parseSpells() {
   }
   const teleport = spells.find((spell) => spell.id === 'circulo-de-teletransportacion');
   if (teleport) teleport.castingTime = '1 minuto';
+  repairSpellContent(spells, pages);
   return spells.sort((a, b) => a.level - b.level || a.name.localeCompare(b.name, 'es'));
 }
 
@@ -709,8 +711,7 @@ function parseSubclasses(classId) {
     if (referenceSpec) {
       const target = features.find((f) => f.id === referenceSpec.target);
       if (!target || referenceStart < 0) throw new Error(`No se puede situar la referencia de ${name}.`);
-      target.references = [{id:slug(referenceSpec.name),name:referenceSpec.name,sourcePage:referenceSpec.page - 2,requiresSourceCheck:true,
-        description: cleanRuleDescription(section.slice(referenceStart).map((r) => clean(r.line)).filter((line) => line && !/^\d+$/.test(line) && !/^CAPÍTULO\b/.test(line)).join(' '))}];
+      target.references = confirmedClassReferences[slug(name)];
     }
     if (classId === 'guerrero' && slug(name) === 'maestro-del-combate') {
       features.find((f) => f.id === '3-supremacia-en-combate').options = featureOptions(122, 123, 'OPCIONES DE MANIOBRAS', 20, true);
@@ -731,6 +732,7 @@ const result = {
     ? JSON.parse(fs.readFileSync(output, 'utf8')).creatures ?? []
     : [],
 };
+repairClassContent(result);
 
 const counts = SPELLS_PER_LEVEL.map((_, level) => result.spells.filter((spell) => spell.level === level).length);
 if (JSON.stringify(counts) !== JSON.stringify(SPELLS_PER_LEVEL) || result.feats.length !== 75 || result.skills.length !== 18 || result.classes.some((cls) => cls.subclasses.length !== 4)) {
