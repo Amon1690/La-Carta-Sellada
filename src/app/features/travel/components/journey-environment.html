@@ -1,0 +1,15 @@
+<details>
+  <summary>Hora y condiciones del mundo</summary>
+  <p>Valores confirmados por dirección para futuros encuentros de este grupo. El texto del clima de una jornada se conserva por separado; no determina la visibilidad. No se consulta el reloj ni el clima reales.</p>
+  <div class="pair">
+    <label>Día del mundo<input type="number" min="0" max="1000000" [(ngModel)]="day" /></label>
+    <label>Hora del mundo<input type="time" [(ngModel)]="time" /></label>
+  </div>
+  <label>Momento del día<select [(ngModel)]="draft.timeOfDay"><option value="unknown">Sin confirmar</option><option value="dawn">Amanecer</option><option value="day">Día</option><option value="dusk">Anochecer</option><option value="night">Noche</option></select></label>
+  <label>Iluminación del encuentro<select [(ngModel)]="draft.illumination"><option value="unknown">Sin confirmar</option><option value="bright">Luz intensa</option><option value="dim">Penumbra</option><option value="darkness">Oscuridad</option></select></label>
+  <label>Clima confirmado<select [(ngModel)]="draft.weather"><option value="unknown">Sin confirmar</option><option value="clear">Despejado</option><option value="rain">Lluvia</option><option value="snow">Nieve</option><option value="fog">Niebla</option><option value="other">Otro</option></select></label>
+  <label>Oscurecimiento confirmado<select [(ngModel)]="draft.obscurement"><option value="unknown">Sin confirmar</option><option value="none">Ninguno</option><option value="light">Ligero</option><option value="heavy">Fuerte</option></select></label>
+  <label>Procedencia de las condiciones<input maxlength="1000" [(ngModel)]="reference" /></label>
+  <button type="button" (click)="save()">Guardar condiciones del grupo</button>
+  @if (message) { <p role="status">{{ message }}</p> }
+</details>
