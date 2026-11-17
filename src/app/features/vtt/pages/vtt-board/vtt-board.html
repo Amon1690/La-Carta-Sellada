@@ -123,6 +123,14 @@
             >
               <img class="map-image" [src]="boardVm.entry.mapUrl" [alt]="'Mapa de ' + boardVm.entry.name" draggable="false" />
               <app-weather-overlay [weather]="vision().environment.weather" />
+              @if (!visionPreview() && areaSelection(); as area) {
+                @if (area.origin; as origin) {
+                  <svg class="attack-area-layer" [attr.viewBox]="'0 0 ' + mapWidth + ' ' + mapHeight" aria-label="Área del ataque">
+                    <circle [attr.cx]="origin.x" [attr.cy]="origin.y" [attr.r]="areaRadiusPixels(area.action.area!.radius)" />
+                    <path [attr.d]="'M '+(origin.x-8)+' '+origin.y+' h 16 M '+origin.x+' '+(origin.y-8)+' v 16'" />
+                  </svg>
+                }
+              }
 
               @if (layers().grid) {
                 <div
@@ -251,6 +259,7 @@
                     type="button"
                     class="vtt-token"
                     [class.attack-target]="targeting() && attackTargetId() === token.instanceId"
+                    [class.area-affected]="areaSelection() && isAreaAffected(token.instanceId)"
                     [class.selected]="isTokenSelected(token.instanceId)"
                     [class.active-turn]="activeTurnId() === token.instanceId"
                     [class.hidden-token]="token.hidden"
@@ -553,7 +562,20 @@
             }
 
             @if (sidebarTab() === 'turns') {
-              <app-vtt-attack [combat]="combat" [actorId]="attackingId()" [targetId]="attackTargetId()" (cancel)="cancelAttack()" (rolled)="attackRolled()" (decision)="showCombatDecision()" (prepare)="prepareAttack($event)" (multiple)="multipleAttack($event)" />
+              @if (areaSelection(); as area) {
+                <section class="area-attack-controls" aria-label="Ataque de área">
+                  <h2>{{ area.action.name }} · radio {{ area.action.area!.radius }} m</h2>
+                  <p>Señala una casilla para centrar el área. Esc cancela.</p>
+                  @if (area.origin) { <p>Tokens afectados: {{ areaTargets().length }}. Incluye aliados y lanzador si están dentro.</p><ul>@for (target of areaTargets(); track target.id) { <li>{{ target.name }}</li> }</ul> }
+                  @if (areaProblem(); as problem) { <p role="status">{{ problem }}</p> }
+                  <label><input type="checkbox" [checked]="areaConfirmed()" (change)="areaConfirmed.set($any($event.target).checked)" /> He revisado el área, la cobertura y los efectos particulares de las fichas.</label>
+                  <label><input type="checkbox" [checked]="areaManual()" (change)="areaManual.set($any($event.target).checked)" /> Resolver manualmente defensas o efectos distintos en cada criatura</label>
+                  <p>Una tirada de daño y una salvación por criatura. Los efectos especiales y las defensas diferentes se resuelven antes de aplicar PG.</p>
+                  <button type="button" class="combat-launch" [disabled]="!areaConfirmed() || !!areaProblem()" (click)="launchArea()">Lanzar al área</button>
+                  <button type="button" class="combat-launch" (click)="cancelAttack()">Cancelar área</button>
+                </section>
+              }
+              @if (!areaSelection()) { <app-vtt-attack [combat]="combat" [actorId]="attackingId()" [targetId]="attackTargetId()" (cancel)="cancelAttack()" (rolled)="attackRolled()" (decision)="showCombatDecision()" (prepare)="prepareAttack($event)" (multiple)="multipleAttack($event)" (area)="beginArea($event)" /> }
               @if (combat.state().log.length) { <p class="combat-feedback token-inspector" role="status">{{ combat.state().log.at(-1) }}</p><details class="combat-log"><summary>Última acción y registro</summary><ol>@for (line of combat.state().log.slice().reverse(); track $index) { <li>{{ line }}</li> }</ol></details> }
               <section class="turn-panel">
                 @if (combatMessage() || combat.error()) { <p role="alert">{{ combatMessage() || combat.error() }}</p> }

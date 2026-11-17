@@ -919,4 +919,22 @@ describe('Multiselección de fichas en VTT', () => {
     expect(signature()).not.toBe(dark);
   });
 
+
+  it('centra el área en una casilla con zoom, dibuja la plantilla y cancela con Escape sin dados',()=>{
+    const view=fixture.componentInstance as any;
+    actorFor('A','generic:guardia');actorFor('B','generic:guardia');actorFor('C','generic:guardia');
+    board.activeTurnId.set('A');view.combat.start('A');
+    const area={...view.combat.find('A').actions[0],resolution:'save',saveAbility:'dexterity',dc:12,area:{radius:1.5},reviewed:true};
+    view.beginArea({owner:view.combat.find('A'),action:area});rectangle(GRID*2.2,GRID*2.2,GRID*2.2,GRID*2.2);
+    expect(view.areaSelection().origin.x).toBeCloseTo(GRID*2.5,8);expect(view.areaSelection().origin.y).toBeCloseTo(GRID*2.5,8);
+    expect(fixture.nativeElement.querySelector('.attack-area-layer circle').getAttribute('r')).toBe(String(GRID));
+    expect(view.areaTargets().map((t:any)=>t.id)).toEqual(['A']);expect(fixture.nativeElement.querySelector('.area-affected')).not.toBeNull();
+    map.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));fixture.detectChanges();expect(view.areaSelection()).toBeUndefined();expect(view.combat.state().pending).toBeUndefined();
+  });
+  it('invalida el lanzamiento si cambian las posiciones después de señalar la casilla',()=>{
+    const view=fixture.componentInstance as any;actorFor('A','generic:guardia');board.activeTurnId.set('A');view.combat.start('A');
+    const area={...view.combat.find('A').actions[0],resolution:'save',saveAbility:'dexterity',dc:12,area:{radius:1.5},reviewed:true};
+    view.beginArea({owner:view.combat.find('A'),action:area});rectangle(GRID*2.2,GRID*2.2,GRID*2.2,GRID*2.2);view.areaConfirmed.set(true);
+    const begin=spyOn(view.combat,'begin');board.tokens.update(ts=>ts.map(t=>t.instanceId==='B'?{...t,x:t.x+GRID}:t));view.launchArea();expect(begin).not.toHaveBeenCalled();expect(view.combatMessage()).toContain('Vuelve a señalar');
+  });
 });

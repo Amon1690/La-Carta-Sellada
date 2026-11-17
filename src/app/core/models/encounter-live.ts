@@ -12,7 +12,7 @@ export interface LiveBoardState {
   vision?: BoardVisionState; combat?: unknown; activeTurnId?: string; zoom: number;
 }
 export interface PlayerTarget { id: string; name: string; x: number; y: number; size: number; }
-export interface PlayerAttack { source: string; name: string; targetIds: string[]; }
+export interface PlayerAttack { source: string; name: string; targetIds: string[]; area?: { radius: number; cells: number[] }; }
 export interface PlayerControls {
   position: { x: number; y: number; size: number }; canMove: boolean; canAttack: boolean;
   cells: number[]; targets: PlayerTarget[]; attacks: PlayerAttack[];

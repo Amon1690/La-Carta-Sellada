@@ -1,3 +1,4 @@
+import { AreaPoint, areaRadiusPixels, areaReachesToken, originDistance, tokenCentre } from '../../../../core/services/combat-area';
 import { AsyncPipe } from '@angular/common';
 import {
   Component,
@@ -16,13 +17,13 @@ import { HttpErrorResponse } from '@angular/common/http';
 
 import { Campaign } from '../../../../core/models/campaign';
 import { BoardVisionState, VisionEffect, VisionObstacle, VisionProfile, VisionSense } from '../../../../core/models/vision';
-import { isVisionDoor } from '../../../../core/services/vision-geometry';
+import { obstacleShadows, isVisionDoor } from '../../../../core/services/vision-geometry';
 import { advanceVisionEffects, endVisionConcentration, endVisionEffect } from '../../../../core/services/vision-effects';
 import { assertBoardVision, emptyBoardVision, withoutRemovedObservers } from '../../../../core/services/vision-state';
 import { previewSight, previewTokenVisible } from '../../../../core/services/vision-preview';
 import { canOrientStep, orientedTokenVisible } from '../../../../core/services/token-orientation';
 import { explorationAreas, explorationRects, mergeExploration, rememberExploration } from '../../../../core/services/vision-exploration';
-import { evaluateVision } from '../../../../core/services/vision-engine';
+import { segmentsIntersect, evaluateVision } from '../../../../core/services/vision-engine';
 import { ENCOUNTER_PUBLISHER, SharingSnapshot } from '../../../../core/services/encounter-sharing';
 import { CampaignDataService } from '../../../../core/services/campaign-data';
 import { CharacterSheetsService } from '../../../../core/services/character-sheets';
@@ -213,6 +214,11 @@ export class VttBoard {
   protected readonly combatMessage = signal('');
   protected readonly attackingId = signal<string | undefined>(undefined);
   protected readonly attackTargetId = signal<string | undefined>(undefined);
+  protected readonly areaSelection = signal<{ ownerId: string; action: CombatAction; origin?: AreaPoint; revision?: string } | undefined>(undefined);
+  protected readonly areaConfirmed = signal(false);
+  protected readonly areaManual = signal(false);
+  protected readonly areaRadiusPixels = areaRadiusPixels;
+  protected readonly areaTargets = computed(() => { const a = this.areaSelection(); return a?.origin ? this.combat.areaTargets(a.action, a.origin) : []; });
   protected readonly conditionLabels = Object.entries(CONDITION_LABELS) as [CombatCondition, string][];
   protected readonly targeting = computed(() => !this.visionPreview() && !!this.attackingId() && this.combat.canAttack(this.attackingId()!));
   private readonly rules = signal<RulesCompendium | undefined>(undefined);
@@ -249,6 +255,10 @@ export class VttBoard {
   }, () => {
     const { exploration: _memory, ...vision } = this.vision();
     return [this.storageKey, vision, [...this.tokenVisionProfiles()]];
+  }, (from, to, space, radius) => {
+    const obstacles = this.vision().obstacles;
+    if(obstacles && space && radius!==undefined)return areaReachesToken(space,from,radius,obstacleShadows(obstacles,from,'blocksEffect'));
+    return obstacles === undefined ? undefined : !obstacles.some(o => o.blocksEffect && !(isVisionDoor(o) && o.open) && segmentsIntersect(from, to, o.start, o.end));
   });
   private readonly openedSheetTokenId = signal<string | undefined>(undefined);
   private readonly sheetRevision = signal(0);
@@ -499,11 +509,21 @@ export class VttBoard {
       }
       const targets = visible.filter((item) => item.instanceId !== token.instanceId).map((item) => ({ id: item.instanceId, name: item.name, x: item.x, y: item.y, size: item.size }));
       const attacks = canAttack && owner ? owner.actions.filter((action) => !actionProblem(action) && this.combat.available(owner, action.cost) >= (action.cost?.amount ?? 0) &&
-        !(action.kind === 'spell' && action.resolution === 'attack' && !action.attackType)).map((action) => ({ source: action.source, name: action.name,
+        !(action.kind === 'spell' && action.resolution === 'attack' && !action.attackType)).map((action) => {
+        if (action.area) {
+          const cells: number[] = [];
+          for (let cell=0;cell<600;cell++) {
+            const x=cell%30*this.gridSize,y=Math.floor(cell/30)*this.gridSize,origin={x:x+this.gridSize/2,y:y+this.gridSize/2};
+            if (originDistance(owner,origin)<=action.range!+.001 && this.combat.areaLineOfEffect?.(tokenCentre(owner),origin)===true &&
+              previewTokenVisible({...token,x,y,size:1},geometry.circles,this.fogRects(),this.gridSize)) cells.push(cell);
+          }
+          return {source:action.source,name:action.name,targetIds:[],area:{radius:action.area.radius,cells}};
+        }
+        return { source: action.source, name: action.name,
           targetIds: this.combat.targets(owner, action).filter((actor) => targets.some((target) => target.id === actor.id)).filter((target) => {
             const info = attackSituation(owner, target, action, this.combatants(), { ...normalAttackFacts(), reviewed: true }, this.combat.sight);
             return !info.blocked && !info.doubts.length && !info.threatUnknown && !info.spellTypeUnknown;
-          }).map((actor) => actor.id) })) : [];
+          }).map((actor) => actor.id) }; }) : [];
       result[token.instanceId] = { position: { x: token.x, y: token.y, size: token.size }, canMove, canAttack, cells, targets, attacks };
     }
     return result;
@@ -522,6 +542,13 @@ export class VttBoard {
         const cell = command.cell;
         this.tokens.update((tokens) => tokens.map((token) => token.instanceId === command.observerId ? { ...token, x: cell % 30 * this.gridSize, y: Math.floor(cell / 30) * this.gridSize } : token));
         receipt = { id: command.id, status: 'applied', message: 'Token movido.' };
+      } else if (command.cell !== undefined) {
+        const owner=this.combat.find(command.observerId),action=owner?.actions.find(a=>a.source===command.source);
+        if(!owner||!action?.area||!controls?.canAttack||!controls.attacks.some(a=>a.source===action.source&&a.area?.cells.includes(command.cell!))) throw new Error('Área no permitida.');
+        const origin={x:(command.cell%30+.5)*this.gridSize,y:(Math.floor(command.cell/30)+.5)*this.gridSize};
+        this.combat.begin(action.source,this.combat.areaTargets(action,origin).map(t=>t.id),{advantage:false,disadvantage:false,armorAdjustment:0,damageFactor:1,confirmed:true},undefined,origin);
+        this.combat.settleAutomatic();
+        receipt={id:command.id,status:'applied',message:'Lanzamiento de área procesado. El director resolverá las decisiones pendientes.'};
       } else {
         const owner = this.combat.find(command.observerId), target = this.combat.find(command.targetId);
         const action = owner?.actions.find((action) => action.source === command.source);
@@ -917,6 +944,7 @@ export class VttBoard {
   protected selectToken(instanceId: string, event: MouseEvent): void {
     event.stopPropagation();
     if (this.visionPreview()) return;
+    if (this.areaSelection()) return;
     if (this.targeting()) {
       if (instanceId === this.attackingId()) { this.combatMessage.set('Elige otra ficha como objetivo'); return; }
       const target = this.combat.find(instanceId);
@@ -970,6 +998,7 @@ export class VttBoard {
   }
 
   protected tokenPointerDown(token: BoardToken, event: PointerEvent): void {
+    if (this.areaSelection()) { event.stopPropagation(); this.placeArea(event); return; }
     if (this.visionPreview()) return;
     if (this.targeting()) { event.stopPropagation(); return; }
     if (this.combat.busy()) { event.stopPropagation(); return; }
@@ -1101,12 +1130,41 @@ export class VttBoard {
     this.cancelInteraction(); this.closeTokenSheet(); this.mode.set('select'); this.sidebarTab.set('turns');
     this.combatMessage.set(''); this.attackTargetId.set(undefined); this.attackingId.set(id); this.showLatestCombat();
   }
-  protected cancelAttack(): void { this.attackingId.set(undefined); this.attackTargetId.set(undefined); }
+  protected cancelAttack(): void { this.attackingId.set(undefined); this.attackTargetId.set(undefined); this.areaSelection.set(undefined); this.areaConfirmed.set(false); }
+  protected beginArea(event: { owner: Combatant; action: CombatAction }): void {
+    if (this.visionPreview() || !event.action.area || !this.combat.canAttack(event.owner.id)) return;
+    this.cancelInteraction(); this.combatPanel?.close(); this.attackingId.set(event.owner.id); this.attackTargetId.set(undefined);
+    this.areaManual.set(false); this.areaConfirmed.set(false); this.areaSelection.set({ ownerId: event.owner.id, action: structuredClone(event.action) }); this.combatMessage.set('');
+  }
+  private areaRevision(): string { return JSON.stringify([this.combat.situationRevision?.(), this.combatants()]); }
+  private placeArea(event: PointerEvent): void {
+    if (event.button !== 0 || this.visionPreview() || this.combat.busy()) return;
+    const area = this.areaSelection(), point = this.boardPoint(event); if (!area || !point) return;
+    event.preventDefault();
+    const origin = { x: Math.min(this.mapWidth-this.gridSize/2, Math.floor(point.x/this.gridSize)*this.gridSize+this.gridSize/2), y: Math.min(this.mapHeight-this.gridSize/2, Math.floor(point.y/this.gridSize)*this.gridSize+this.gridSize/2) };
+    this.areaConfirmed.set(false); this.areaSelection.set({ ...area, origin, revision: this.areaRevision() }); this.combatMessage.set('');
+  }
+  protected isAreaAffected(id: string): boolean { return this.areaTargets().some(t => t.id === id); }
+  protected areaProblem(): string | undefined {
+    const a = this.areaSelection(), actor = a && this.combat.find(a.ownerId);
+    if (!a || !actor || !a.origin) return 'Señala una casilla en el mapa.';
+    return this.combat.areaProblem(actor, a.action, a.origin);
+  }
+  protected launchArea(): void {
+    const a = this.areaSelection(); if (!a?.origin || !this.areaConfirmed()) return;
+    try {
+      if (a.revision !== this.areaRevision()) throw new Error('Han cambiado las fichas o el entorno. Vuelve a señalar la casilla y revisa el área.');
+      this.combat.begin(a.action.source, this.areaTargets().map(t => t.id), { advantage: false, disadvantage: false, armorAdjustment: 0, damageFactor: 1, confirmed: true }, undefined, a.origin);
+      if(this.areaManual())this.combat.requestManualResolution(true,true);
+      this.cancelAttack(); this.combat.settleAutomatic(); if (this.combat.state().pending) this.showCombatDecision(); this.showLatestCombat();
+    } catch (e) { this.combatMessage.set(e instanceof Error ? e.message : 'No se pudo lanzar el área.'); }
+  }
   protected showLatestCombat(): void { requestAnimationFrame(() => this.sideContent?.nativeElement.scrollTo({ top: 0 })); }
   protected attackRolled(): void { this.attackTargetId.set(undefined); this.showLatestCombat(); }
   protected showCombatDecision(): void { this.combatPanel?.resume(true); }
   protected prepareAttack(event: { owner: Combatant; action: CombatAction }): void { this.combatPanel?.prepareEntry(event.owner, event.action); }
   protected multipleAttack(event: { owner: Combatant; action: CombatAction }): void {
+    if (event.action.area) { this.beginArea(event); return; }
     this.combatPanel?.open(event.owner.id); this.combatPanel?.choose(event.action);
     if (this.combatPanel && this.attackTargetId()) this.combatPanel.targetIds[0] = this.attackTargetId()!;
   }
@@ -1209,6 +1267,7 @@ export class VttBoard {
   }
 
   protected boardPointerDown(event: PointerEvent): void {
+    if (this.areaSelection()) { this.placeArea(event); return; }
     if (this.targeting()) return;
     if (this.combat.busy()) return;
     if (event.button !== 0 || this.interactionPointerId !== undefined) return;

@@ -474,3 +474,18 @@ test('un jugador no modifica fichas de otra campaña y el director conserva el c
   assert.equal((await f.request('/api/campaigns/one/sheets', { cookie: director, method: 'PUT', data: snapshot })).status, 200);
   assert.equal((await f.request('/api/campaigns/one/sheets', { cookie, method: 'PUT', data: { edited: { hero: sheet('hero') }, created: [], revision: 3 } })).status, 403);
 });
+
+import { authorizeCommand as authorizeAreaCommand, validControls as validAreaControls } from './encounters.mjs';
+test('el ataque circular conserva turno/propiedad y solo acepta casillas publicadas, sin objetivos ocultos',()=>{
+ const controls={position:{x:0,y:0,size:1},canMove:true,canAttack:true,cells:[],targets:[],attacks:[{source:'blast',name:'Explosión sintética',targetIds:[],area:{radius:6,cells:[31,32]}}]};
+ const board={revision:3,sheetRevision:0,views:[{instanceId:'hero',actorId:'sheet',audience:['u'],vision:null,controls}],state:{activeTurnId:'hero',tokens:[{instanceId:'hero',hp:20,hidden:false,conditions:[]}],combat:{started:true,turnId:'hero'}}};
+ const sheets=new Map([['sheet',{playerIds:['u'],vision:null}]]),input={id:'area',revision:3,observerId:'hero',type:'attack',source:'blast',cell:31};
+ assert.equal(validAreaControls(controls),true);const result=authorizeAreaCommand(input,board,{id:'u'},sheets,true,1000);assert.equal(result.command.cell,31);assert.equal(result.command.targetId,undefined);
+ for(const bad of [{...input,cell:0},{...input,cell:31,targetId:'secret'},{...input,cell:undefined,targetId:'secret'}])assert.throws(()=>authorizeAreaCommand(bad,board,{id:'u'},sheets,true,1000),e=>e.status===400);
+ assert.throws(()=>authorizeAreaCommand(input,board,{id:'other'},sheets,true,1000),e=>e.status===403);
+ board.receipts=[{id:'area',userId:'u',status:'applied',message:'Procesado'}];assert.equal(authorizeAreaCommand(input,board,{id:'u'},sheets,true,1000).receipt.status,'applied');
+});
+test('rechaza radios y casillas no válidos en controles de área',()=>{
+ const base={position:{x:0,y:0,size:1},canMove:true,canAttack:true,cells:[],targets:[],attacks:[]};
+ for(const area of [{radius:0,cells:[1]},{radius:Infinity,cells:[1]},{radius:6,cells:[600]},{radius:6,cells:['1']}])assert.equal(validAreaControls({...base,attacks:[{source:'blast',name:'Blast',targetIds:[],area}]}),false);
+});

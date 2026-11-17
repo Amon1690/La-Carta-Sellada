@@ -56,6 +56,8 @@ export class VttCombatPanel implements AfterViewInit {
     this.resourceConfirmed = entry.resourceConfirmed; this.dataConfirmed = entry.reviewed;
     this.resourceChanged();
   }
+  responseActions(): CombatAction[] { return this.editingOwner()?.actions.filter(a=>!a.area) ?? []; }
+  setArea(enabled: boolean): void { if (this.actionDraft) this.actionDraft.area = enabled ? { radius: this.actionDraft.area?.radius ?? 0 } : null; }
   resourceChanged(): void {
     const owner = this.editingOwner(), resource = owner?.resources.find((r) => r.id === this.resourceId);
     this.resourceName = resource?.name ?? ''; this.resourceMaximum = resource?.maximum;

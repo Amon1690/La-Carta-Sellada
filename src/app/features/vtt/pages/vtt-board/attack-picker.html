@@ -4,16 +4,16 @@
     <section class="attack-picker" [inert]="submitting()" aria-label="Elegir ataque en el mapa">
       <header><b>{{ attacker.name }} · Atacar</b><button type="button" (click)="cancel.emit()">Cancelar</button></header>
       @if (error()) { <p role="alert">{{ error() }}</p> }
-      @if (target(); as victim) {
-        <h3>Objetivo: {{ victim.name }}</h3><p>{{ distance(attacker, victim).toFixed(1) }} m · Clica otra ficha para cambiar.</p>
-        <label class="check"><input type="checkbox" [(ngModel)]="forceReview" /> Revisar situación antes de este ataque</label>
         @for (action of choices(); track action.source) {
           <article>
-            <button type="button" [disabled]="!!problem(action)" (click)="choose(action)">{{ action.name }} · {{ label(action) }}</button>
+            <button type="button" [disabled]="!!problem(action)" (click)="choose(action)">{{ action.name }} · {{ action.area ? 'Señalar área · radio ' + action.area.radius + ' m' : label(action) }}</button>
             <small>{{ action.range ?? '?' }} m · @for (damage of action.damage; track $index) { {{ damage.dice }} {{ damage.type }} }{{ resourceLabel(action, attacker) }}</small>
             @if (problem(action); as issue) { <small>{{ issue }}</small>@if (issue !== 'Fuera de alcance' && issue !== 'Recurso agotado') { <button type="button" class="secondary" (click)="prepare.emit({owner: attacker, action: action})">Completar datos</button> } }
           </article>
         } @empty { <p>La ficha no tiene ataques registrados.</p> }
+      @if (target(); as victim) {
+        <h3>Objetivo: {{ victim.name }}</h3><p>{{ distance(attacker, victim).toFixed(1) }} m · Clica otra ficha para cambiar.</p>
+        <label class="check"><input type="checkbox" [(ngModel)]="forceReview" /> Revisar situación antes de este ataque</label>
         @if (selected(); as action) {
           @if (situation(); as info) {
             <div class="situation">

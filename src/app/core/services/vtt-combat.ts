@@ -1,3 +1,4 @@
+import { AreaPoint, originDistance, tokenCentre, tokensInArea, validArea, validAreaPoint } from './combat-area';
 import { signal } from '@angular/core';
 import type { SightAssessment } from './vision-preview';
 import { CombatAction, Combatant, CombatCost, CombatNarrativeMessage, CombatPending, CombatProfile, CombatReaction, CombatResolution, CombatResource, CombatRoll, CombatState } from '../models/combat';
@@ -20,7 +21,8 @@ export class VttCombat {
     private readonly die: (sides: number) => number = (sides) => Math.floor(Math.random() * sides) + 1,
     readonly sight?: (observerId: string, targetId: string) => SightAssessment | undefined,
     private readonly narrate?: (result: CombatResolution) => CombatNarrativeMessage[],
-    readonly situationRevision?: () => unknown) {}
+    readonly situationRevision?: () => unknown,
+    readonly areaLineOfEffect?: (from: AreaPoint, to: AreaPoint, space?: Combatant, radius?: number) => boolean | undefined) {}
 
   find(id: string | undefined): Combatant | undefined { return this.combatants().find((a) => a.id === id); }
   busy(): boolean { return this.saving() || !!this.state().pending || this.invalid !== undefined; }
@@ -89,10 +91,24 @@ export class VttCombat {
     const max = action.longRange ?? action.range ?? -1;
     return this.combatants().filter((t) => t.id !== actor.id && t.maxHp > 0 && t.armorClass !== undefined && combatDistance(actor, t) <= max + 0.001);
   }
+  areaTargets(action: CombatAction, origin: AreaPoint): Combatant[] {
+    return action.area ? tokensInArea(this.combatants(), origin, action.area.radius).filter(t => this.areaLineOfEffect?.(origin, tokenCentre(t), t, action.area!.radius) !== false) : [];
+  }
+  areaProblem(actor: Combatant, action: CombatAction, origin: AreaPoint): string | undefined {
+    if (!validAreaPoint(origin) || !validArea(action.area)) return 'Indica una casilla y un radio válido.';
+    if (originDistance(actor, origin) > (action.range ?? -1) + .001) return 'La casilla está fuera del alcance del lanzamiento.';
+    if (this.areaLineOfEffect?.(tokenCentre(actor), origin) === false) return 'Un obstáculo bloquea el lanzamiento hasta esa casilla.';
+    const targets = this.areaTargets(action, origin);
+    if (!targets.length) return 'No hay tokens afectados en esta área.';
+    if (targets.length > 400) return 'El área supera el límite de 400 tokens.';
+    if (targets.some(t => t.armorClass === undefined || t.maxHp <= 0)) return 'Completa las fichas de todos los tokens afectados antes de lanzar.';
+    return undefined;
+  }
   configure(ownerId: string, entry: CombatAction | CombatReaction, resource?: CombatResource, remaining?: number): void | Promise<void> {
     const owner = this.find(ownerId); if (!owner) throw new Error('Ficha no disponible');
     const problem = 'resolution' in entry ? actionProblem(entry) : reactionProblem(entry);
     if (problem) throw new Error(problem);
+    if ('effect' in entry && entry.effect === 'counter' && owner.actions.find(a=>a.source===entry.actionSource)?.area) throw new Error('Elige una respuesta sin área; las áreas requieren señalar su origen.');
     if (resource && (!resource.id || !resource.name.trim() || !Number.isInteger(resource.maximum) || resource.maximum < 1 || resource.maximum > 999 || !Number.isInteger(remaining) || remaining! < 0 || remaining! > resource.maximum)) throw new Error('Completa capacidad y disponibilidad del recurso');
     const profile = structuredClone(owner.profile);
     profile.resources = resource ? [...profile.resources.filter((r) => r.id !== resource.id), resource] : profile.resources;
@@ -116,7 +132,7 @@ export class VttCombat {
       finish(); this.saving.set(false);
     } catch (error) { this.saving.set(false); throw error; }
   }
-  begin(source: string, targetIds: string[], context: AttackContext, contexts?: ReadonlyMap<string, AttackContext>): void {
+  begin(source: string, targetIds: string[], context: AttackContext, contexts?: ReadonlyMap<string, AttackContext>, origin?: AreaPoint): void {
     const actor = this.find(this.activeId());
     if (!actor || !this.canAttack(actor.id)) throw new Error('Solo puede atacar el token del turno activo después de iniciar el combate');
     const action = actor.actions.find((a) => a.source === source);
@@ -124,22 +140,29 @@ export class VttCombat {
     const problem = actionProblem(action); if (problem) throw new Error(problem);
     if (!context.confirmed || !Number.isFinite(context.armorAdjustment) || ![0, 0.5, 1, 2].includes(context.damageFactor)) throw new Error('Revisa visibilidad, cobertura, resistencias y efectos de las fichas');
     if (action.kind === 'spell' && this.state().usedAttacks > 0) throw new Error('La acción de este turno ya comenzó con un ataque de arma');
-    if (!targetIds.length || targetIds.length > action.targets || (!action.repeatTargets && new Set(targetIds).size !== targetIds.length)) throw new Error('Número de objetivos o impactos inválido');
-    const legal = new Set(this.targets(actor, action).map((t) => t.id));
+    if (action.area) {
+      if (!origin) throw new Error('Señala la casilla de origen del área.');
+      const problem = this.areaProblem(actor, action, origin); if (problem) throw new Error(problem);
+      const expected = this.areaTargets(action, origin).map(t => t.id);
+      if (expected.length !== targetIds.length || expected.some(id => !targetIds.includes(id))) throw new Error('Han cambiado los tokens del área; vuelve a revisarla.');
+    } else if (origin) throw new Error('La acción no tiene un área configurada.');
+    if (!targetIds.length || targetIds.length > (action.area ? 400 : action.targets) || (!action.repeatTargets && new Set(targetIds).size !== targetIds.length)) throw new Error('Número de objetivos o impactos inválido');
+    const legal = new Set((action.area ? this.areaTargets(action, origin!) : this.targets(actor, action)).map((t) => t.id));
     if (targetIds.some((id) => !legal.has(id))) throw new Error('Algún objetivo no tiene ficha válida o está fuera del alcance');
-    if (targetIds.some((id) => this.sight?.(actor.id, id)?.lineOfEffect === false)) throw new Error('Un obstáculo confirmado bloquea la línea de efecto; no se han gastado recursos.');
+    if (!action.area && targetIds.some((id) => this.sight?.(actor.id, id)?.lineOfEffect === false)) throw new Error('Un obstáculo confirmado bloquea la línea de efecto; no se han gastado recursos.');
     if (this.available(actor, action.cost) < (action.cost?.amount ?? 0)) throw new Error('Recursos insuficientes');
     const resourceProblem = this.costProblem(actor, action.cost, action.spellLevel, true); if (resourceProblem) throw new Error(resourceProblem);
     if (contexts && targetIds.some(id => !validTargetContext(contexts.get(id)))) throw new Error('Falta un contexto revisado por objetivo');
-    this.context = { ...context };
+    this.context = { ...context, ...(action.area ? { rangeResolved: true } : {}) };
     this.spend(actor, action.cost);
     this.state.update((s) => ({ ...s, usedAttacks: s.usedAttacks + (action.kind === 'spell' ? 0 : 1), spellUsed: s.spellUsed || action.kind === 'spell',
-      context: { ...context }, queue: targetIds.map((targetId, index) => ({ attackerId: actor.id, action: structuredClone(action), targetId, castApproved: index > 0, ...(contexts ? { context: { ...contexts.get(targetId)! } } : {}) })) }));
+      areaCast: action.area ? { origin: { ...origin! } } : undefined,
+      context: { ...this.context }, queue: targetIds.map((targetId, index) => ({ attackerId: actor.id, action: structuredClone(action), targetId, castApproved: index > 0, ...(contexts ? { context: { ...contexts.get(targetId)! } } : {}) })) }));
     this.next();
   }
   private next(hp?: { id: string; hp: number }): void {
     const [job, ...queue] = this.state().queue;
-    if (!job) { this.state.update((s) => ({ ...s, pending: undefined, queue: [] })); this.commit(hp); return; }
+    if (!job) { this.state.update((s) => ({ ...s, pending: undefined, queue: [], areaCast: undefined })); this.commit(hp); return; }
     const actor = this.find(job.attackerId), target = this.find(job.targetId);
     if (!actor || !target || target.armorClass === undefined) throw new Error('Falta la ficha de una acción pendiente');
     let context: Omit<AttackContext, 'confirmed'> = job.reactionAttack ? { advantage: false, disadvantage: false, armorAdjustment: 0, damageFactor: 1 } : job.context ?? this.context;
@@ -152,13 +175,10 @@ export class VttCombat {
     const roll = !casting && job.action.resolution === 'attack' ? this.attackRoll(job.action.bonus!, context.advantage, context.disadvantage || (!context.rangeResolved && long)) : undefined;
     const save = !casting && job.action.resolution === 'save' ? this.attackRoll(target.saves[job.action.saveAbility!], false, job.action.saveAbility === 'dexterity' && !!target.conditions?.includes('restrained')) : undefined;
     const factor = (save && save.total >= job.action.dc! ? job.action.halfOnSave ? 0.5 : 0 : 1) * context.damageFactor;
-    const damage = (casting ? [] : job.action.damage).map((part) => {
-      const rolled = rollDice(part.dice, this.die, roll?.natural === 20 && part.critical !== false);
-      return { type: part.type, rolled: rolled.total, dice: rolled.dice, bonus: rolled.bonus };
-    });
+    const damage = casting ? [] : this.rollDamage(job.action, roll);
     const pending: CombatPending = { context: { ...context }, phase: response ? 'response' : casting ? 'casting' : 'defense', attackerId: actor.id, targetId: target.id, action: job.action, roll, save,
       baseAc: target.armorClass + context.armorAdjustment, extraAc: 0, damage, factor, reduction: 0,
-      cancelled: false, redirected: false, manual: !!job.action.effectOnly || !!job.action.manualEffects, effectsConfirmed: false, reactions: [] };
+      cancelled: false, redirected: false, manual: !!job.action.effectOnly || !!job.action.manualEffects || !!this.state().areaCast?.manual, effectsConfirmed: false, reactions: [] };
     this.state.update((s) => ({ ...s, pending, queue })); this.commit(hp);
   }
   armor(p = this.state().pending): number { return p ? p.baseAc + p.extraAc + (this.state().armorEffects[p.targetId] ?? 0) : 0; }
@@ -206,6 +226,7 @@ export class VttCombat {
     const redirected = r.effect === 'redirect' ? this.find(redirectId) : undefined;
     const counter = r.effect === 'counter' ? owner.actions.find((a) => a.source === r.actionSource) : undefined;
     if (r.effect === 'redirect' && (!redirected || redirected.id === p.targetId || redirected.armorClass === undefined || combatDistance(owner, redirected) > r.range + 0.001)) throw new Error('Elige un objetivo válido para redirigir');
+    if (r.effect === 'counter' && counter?.area) throw new Error('Un ataque de respuesta de área necesita elegir un origen; no se han gastado recursos.');
     if (r.effect === 'counter' && (!counter || actionProblem(counter) || !this.targets(owner, counter).some((t) => t.id === attacker.id) || this.available(owner, counter.cost) < (counter.cost?.amount ?? 0))) throw new Error('Configura un ataque de respuesta válido, con alcance y recursos disponibles');
     this.checkCombinedCosts(owner, [r.cost, counter?.cost]);
     this.spend(owner, r.cost);
@@ -253,7 +274,8 @@ export class VttCombat {
     if (!effectsConfirmed) throw new Error('Confirma los efectos adicionales de las fichas antes de aplicar el resultado');
     if (p.phase === 'casting' && !p.cancelled) {
       const actor = this.find(p.attackerId); if (!actor) throw new Error('No se encuentra al lanzador');
-      this.state.update((s) => ({ ...s, pending: this.rollDefense(p, p.context ?? this.context) })); this.commit(); return;
+      const rolled = this.rollDefense(p, p.context ?? this.context);
+      this.state.update((s) => ({ ...s, pending: rolled })); this.commit(); return;
     }
     const manual = p.manual || p.manualRequested || (new Set(p.damage.map((d) => d.type)).size > 1 && (p.factor !== 1 || p.reduction > 0)) || manualDamage !== undefined;
     if (manual && (!Number.isInteger(manualDamage) || manualDamage! < 0 || manualDamage! > 10000 || !manualNote.trim())) throw new Error('Indica el daño final y cómo se resolvieron las defensas o efectos especiales');
@@ -272,9 +294,16 @@ export class VttCombat {
     const long = combatDistance(actor, target) > p.action.range! + .001;
     const roll = p.action.resolution === 'attack' ? this.attackRoll(p.action.bonus!, context.advantage, context.disadvantage || (!context.rangeResolved && long)) : undefined;
     const save = p.action.resolution === 'save' ? this.attackRoll(target.saves[p.action.saveAbility!], false, p.action.saveAbility === 'dexterity' && !!target.conditions?.includes('restrained')) : undefined;
-    const damage = p.action.damage.map((part) => { const d = rollDice(part.dice, this.die, roll?.natural === 20 && part.critical !== false); return { type: part.type, rolled: d.total, dice: d.dice, bonus: d.bonus }; });
+    const damage = this.rollDamage(p.action, roll);
     const factor = (save && save.total >= p.action.dc! ? p.action.halfOnSave ? .5 : 0 : 1) * context.damageFactor;
     return { ...p, context: { ...context }, phase: 'defense', roll, save, damage, factor };
+  }
+  private rollDamage(action: CombatAction, roll?: CombatRoll): CombatPending['damage'] {
+    const previous = action.area && this.state().areaCast?.damage;
+    if (previous) return structuredClone(previous);
+    const damage = action.damage.map(part => { const d = rollDice(part.dice, this.die, roll?.natural === 20 && part.critical !== false); return { type: part.type, rolled: d.total, dice: d.dice, bonus: d.bonus }; });
+    if (action.area && this.state().areaCast) this.state.update(s => ({ ...s, areaCast: { ...s.areaCast!, damage: structuredClone(damage) } }));
+    return damage;
   }
   cancelResponse(): void {
     const p = this.state().pending; if (!p || p.phase !== 'response') return;
@@ -288,7 +317,8 @@ export class VttCombat {
     const reviewed = { ...p, context: { ...context }, baseAc: target.armorClass + context.armorAdjustment };
     this.state.update((s) => ({ ...s, pending: p.action.kind === 'spell' ? { ...reviewed, phase: 'casting' } : this.rollDefense(reviewed, context) })); this.commit();
   }
-  requestManualResolution(requested: boolean): void {
+  requestManualResolution(requested: boolean, entireArea = false): void {
+    if (entireArea && this.state().areaCast) this.state.update(s=>({...s,areaCast:{...s.areaCast!,manual:requested}}));
     if (!this.state().pending) return;
     this.state.update((s) => ({ ...s, pending: { ...s.pending!, manualRequested: requested } })); this.commit();
   }
@@ -355,7 +385,9 @@ export function validState(value: unknown): value is CombatState {
   if (Object.values(s.armorEffects).some((v) => !Number.isFinite(v) || v < 0) || Object.values(s.resources).some((pool) => !pool || Object.values(pool).some((v) => !Number.isInteger(v) || v < 0 || v > 999))) return false;
   if (s.queue.some((q) => !q || typeof q.attackerId !== 'string' || typeof q.targetId !== 'string' || !q.action || actionProblem(q.action) || q.context !== undefined && !validTargetContext(q.context))) return false;
   if (s.queue.length > 400 || s.log.length > 200) return false;
+  if (s.areaCast !== undefined && (!s.areaCast || !validAreaPoint(s.areaCast.origin) || (s.areaCast.manual !== undefined && typeof s.areaCast.manual !== 'boolean') || (s.areaCast.damage !== undefined && (!Array.isArray(s.areaCast.damage) || s.areaCast.damage.some(d => !d || typeof d.type !== 'string' || !Number.isFinite(d.rolled) || d.rolled < 0 || !Number.isFinite(d.bonus) || !Array.isArray(d.dice) || d.dice.some(n => !Number.isInteger(n) || n < 1 || n > 100)))))) return false;
   const p = s.pending;
+  if ((p?.action?.area || s.queue.some(q => q.action?.area)) && !s.areaCast) return false;
   if (p && (typeof p.attackerId !== 'string' || typeof p.targetId !== 'string' || !p.action || actionProblem(p.action) || !Number.isFinite(p.baseAc) || !Number.isFinite(p.extraAc) || !Number.isFinite(p.factor) || !Number.isFinite(p.reduction) || !Array.isArray(p.reactions) || !Array.isArray(p.damage) || p.damage.some((d) => !Number.isFinite(d.rolled) || !Number.isFinite(d.bonus) || !Array.isArray(d.dice)) || (p.roll && (!Number.isFinite(p.roll.total) || !Number.isInteger(p.roll.natural) || p.roll.natural < 1 || p.roll.natural > 20 || !Array.isArray(p.roll.dice))) || (p.save && !Number.isFinite(p.save.total)))) return false;
   if (p && p.manualRequested !== undefined && typeof p.manualRequested !== 'boolean') return false;
   if (p && (p.phase !== undefined && !['casting', 'defense', 'response'].includes(p.phase))) return false;

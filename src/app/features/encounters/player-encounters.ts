@@ -1,3 +1,4 @@
+import { areaRadiusPixels } from '../../core/services/combat-area';
 import { AsyncPipe, DatePipe } from '@angular/common';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { afterEveryRender, Component, ElementRef, HostListener, inject, signal, ViewChild } from '@angular/core';
@@ -23,6 +24,8 @@ export class PlayerEncounters {
   protected readonly moving = signal(false);
   protected readonly attacking = signal(false);
   protected readonly targetId = signal('');
+  protected readonly areaCell = signal<number | undefined>(undefined);
+  protected readonly areaRadiusPixels = areaRadiusPixels;
   protected readonly logOpen = signal(true);
   @ViewChild('combatLog') private combatLog?: ElementRef<HTMLElement>;
   private scrollLog = false;
@@ -43,7 +46,7 @@ export class PlayerEncounters {
     switchMap(([params, query]) => {
       const campaign = params.get('campaignId') ?? '', board = query.get('encuentro'), observer = query.get('personaje');
       let previous: EncounterView | undefined;
-      this.moving.set(false); this.attacking.set(false); this.targetId.set(''); this.scrollLog = true; this.actionMessage.set(''); this.waitingId.set(''); this.attackSource.set(''); this.drag = undefined; this.pendingRequest = undefined;
+      this.moving.set(false); this.attacking.set(false); this.areaCell.set(undefined); this.targetId.set(''); this.scrollLog = true; this.actionMessage.set(''); this.waitingId.set(''); this.attackSource.set(''); this.drag = undefined; this.pendingRequest = undefined;
       return merge(timer(0, 1000), this.refresh).pipe(
         exhaustMap(() => this.http.get<SharedEncounter[]>(this.sharing.url(campaign)).pipe(
           switchMap((items) => {
@@ -85,7 +88,7 @@ export class PlayerEncounters {
     return detail.controls?.targets.filter((target) => attack?.targetIds.includes(target.id)) ?? [];
   }
   protected busy(): boolean { return this.sending() || !!this.waitingId(); }
-  protected async sendAction(detail: EncounterView, action: { type: 'move'; cell: number } | { type: 'attack'; source: string; targetId: string }): Promise<void> {
+  protected async sendAction(detail: EncounterView, action: { type: 'move'; cell: number } | { type: 'attack'; source: string; targetId?: string; cell?: number }): Promise<void> {
     if (this.busy()) return;
     const campaign = this.route.snapshot.paramMap.get('campaignId') ?? '';
     const id = crypto.randomUUID(); this.waitingId.set(id); this.sending.set(true); this.moving.set(false);
@@ -114,6 +117,10 @@ export class PlayerEncounters {
     const action = this.selectedAttack(detail);
     if (action && targetId) void this.sendAction(detail, { type: 'attack', source: action.source, targetId });
   }
+  protected launchArea(detail: EncounterView): void {
+    const attack=this.selectedAttack(detail),cell=this.areaCell();
+    if(attack?.area&&cell!==undefined&&attack.area.cells.includes(cell))void this.sendAction(detail,{type:'attack',source:attack.source,cell});
+  }
   private moveAt(event: PointerEvent | MouseEvent, board: HTMLElement, detail: EncounterView): void {
     if (!detail.controls?.canMove || this.busy()) return;
     const bounds = board.getBoundingClientRect();
@@ -124,8 +131,15 @@ export class PlayerEncounters {
   }
   protected boardClick(event: MouseEvent, detail: EncounterView): void {
     if (this.moving()) this.moveAt(event, event.currentTarget as HTMLElement, detail);
+    else if(this.attacking()&&this.selectedAttack(detail)?.area&&!this.busy()) {
+      const bounds=(event.currentTarget as HTMLElement).closest<HTMLElement>('.player-board')!.getBoundingClientRect(),column=Math.floor((event.clientX-bounds.left)/bounds.width*30),row=Math.floor((event.clientY-bounds.top)/bounds.height*20),cell=row*30+column;
+      if(column>=0&&column<30&&row>=0&&row<20&&this.selectedAttack(detail)!.area!.cells.includes(cell)){this.areaCell.set(cell);this.actionMessage.set('');}
+      else {this.areaCell.set(undefined);this.actionMessage.set('Elige una casilla marcada dentro del alcance y de tu visión.');}
+    }
   }
+  protected ownClick(event: MouseEvent, detail: EncounterView): void { event.stopPropagation(); if(this.attacking()&&this.selectedAttack(detail)?.area) this.boardClick(event,detail); else {this.moving.set(!this.moving());this.attacking.set(false);} }
   protected startDrag(event: PointerEvent, detail: EncounterView): void {
+    if(this.attacking()&&this.selectedAttack(detail)?.area)return;
     if (!detail.controls?.canMove || this.busy() || event.button !== 0) return;
     const board = (event.currentTarget as HTMLElement).closest<HTMLElement>('.player-board');
     if (board) this.drag = { detail, board, x: event.clientX, y: event.clientY };

@@ -8,6 +8,7 @@ export function validControls(value) {
     Array.isArray(value.cells) && value.cells.length <= 600 && value.cells.every((cell) => Number.isInteger(cell) && cell >= 0 && cell < 600) &&
     Array.isArray(value.targets) && value.targets.length <= 500 && value.targets.every((target) => text(target.id, 300) && text(target.name) && finite(target.x, 0, 1536) && finite(target.y, 0, 1024) && finite(target.size, .1, 30)) &&
     Array.isArray(value.attacks) && value.attacks.length <= 200 && value.attacks.every((attack) => text(attack.source, 20000) && text(attack.name) &&
+      (attack.area === undefined || attack.area && finite(attack.area.radius,.000001,10000) && Array.isArray(attack.area.cells) && attack.area.cells.length<=600 && attack.area.cells.every(cell=>Number.isInteger(cell)&&cell>=0&&cell<600)) &&
       Array.isArray(attack.targetIds) && attack.targetIds.length <= 500 && attack.targetIds.every((id) => value.targets.some((target) => target.id === id)));
 }
 export function validLiveState(value) {
@@ -63,9 +64,11 @@ export function authorizeCommand(input, board, user, sheets, online, now, sheetR
   if (input.type === 'move' ? !controls?.canMove : !controls?.canAttack) fail(403, 'Solo puedes actuar con tu token durante su turno y sin decisiones pendientes.');
   if (input.type === 'move') {
     if (!Number.isInteger(input.cell) || !controls.cells.includes(input.cell) || input.source !== undefined || input.targetId !== undefined) fail(400, 'Elige una casilla visible permitida.');
-  } else if (input.cell !== undefined || !controls.attacks.some((attack) => attack.source === input.source && attack.targetIds.includes(input.targetId))) fail(400, 'Elige un ataque preparado y un objetivo visible permitido.');
+  } else if (input.cell !== undefined) {
+    if (!Number.isInteger(input.cell) || input.targetId !== undefined || !controls.attacks.some(attack=>attack.source===input.source&&attack.area?.cells.includes(input.cell))) fail(400,'Elige una casilla permitida para el área preparada.');
+  } else if (!controls.attacks.some(attack=>!attack.area&&attack.source===input.source&&attack.targetIds.includes(input.targetId))) fail(400, 'Elige un ataque preparado y un objetivo visible permitido.');
   return { command: { id: input.id, userId: user.id, observerId: input.observerId, type: input.type, expiresAt: now + 15000, sheetRevision: board.sheetRevision,
-    ...(input.type === 'move' ? { cell: input.cell } : { source: input.source, targetId: input.targetId }) } };
+    ...(input.type === 'move' ? { cell: input.cell } : input.cell !== undefined ? { source: input.source, cell: input.cell } : { source: input.source, targetId: input.targetId }) } };
 }
 
 export function encounterSheets(collection) {

@@ -1,3 +1,4 @@
+import { validArea, withCircularArea } from './combat-area';
 import { CombatAction, CombatDamage, CombatProfile, CombatReaction, Combatant, SaveAbility } from '../models/combat';
 import { GameStatBlock } from '../models/campaign';
 import { RulesCompendium } from '../models/rules';
@@ -27,6 +28,7 @@ export function combatDistance(a: Pick<Combatant, 'x' | 'y' | 'size'>, b: Pick<C
 export function actionProblem(action: CombatAction): string | undefined {
   if (!action || typeof action.source !== 'string' || typeof action.name !== 'string' || !['melee', 'ranged', 'spell'].includes(action.kind) || !['attack', 'save', 'automatic'].includes(action.resolution) || !Array.isArray(action.damage)) return 'Datos de ataque incompletos';
   if (action.attackType !== undefined && !['melee', 'ranged'].includes(action.attackType)) return 'Confirma el tipo de ataque del conjuro';
+  if (action.area != null && (!validArea(action.area) || action.resolution === 'attack' || action.repeatTargets)) return 'Confirma el radio del área y su resolución por salvación o efecto automático';
   if (!action.reviewed) return 'Revisa los datos y efectos de esta opción';
   if (!Number.isFinite(action.range) || action.range! < 0 || action.range! > 10000) return 'Falta un alcance válido en metros';
   if (action.longRange !== undefined && (!Number.isFinite(action.longRange) || action.longRange < action.range!)) return 'El alcance largo no puede ser inferior al normal';
@@ -70,7 +72,7 @@ export function deriveCombat(stats: GameStatBlock | undefined, rules?: RulesComp
   // Guided sheets already supply distinct casting modes (slots / origin uses).
   // Their stable sources also keep an edited weapon from reusing an old bonus.
   if (stats && 'build' in stats && (stats.build as { version?: number } | undefined)?.version === 1) {
-    return { actions: profile.actions, reactions: profile.reactions, resources: profile.resources,
+    return { actions: profile.actions.map(withCircularArea), reactions: profile.reactions, resources: profile.resources,
       notes: [...stats.features, ...stats.equipment.map((s) => `Equipo: ${s}`)],
       attacksPerTurn: profile.attacksPerTurn ?? 1, saves, profile };
   }
@@ -131,7 +133,7 @@ export function deriveCombat(stats: GameStatBlock | undefined, rules?: RulesComp
   const multiple = (stats?.attacks ?? []).find((s) => /ataque m[úu]ltiple/i.test(s));
   const count = multiple?.match(/(dos|tres|cuatro|\d) ataques/i)?.[1];
   const inferred = count === 'dos' ? 2 : count === 'tres' ? 3 : count === 'cuatro' ? 4 : Number(count ?? 1);
-  return { actions, reactions, resources: profile.resources, notes, attacksPerTurn: profile.attacksPerTurn ?? inferred, saves, profile };
+  return { actions: actions.map(withCircularArea), reactions, resources: profile.resources, notes, attacksPerTurn: profile.attacksPerTurn ?? inferred, saves, profile };
 }
 function unknownReaction(source: string, name: string): CombatReaction {
   return { source, name, trigger: 'hit', protectOthers: false, range: 0, meleeOnly: false,

@@ -15,6 +15,8 @@ export interface CombatAction {
   attackType?: 'melee' | 'ranged';
   effectOnly?: boolean;
   manualEffects?: boolean;
+  /** Radio en metros; null conserva una elección explícita sin plantilla circular. */
+  area?: { radius: number } | null;
 }
 export interface CombatReaction {
   source: string; name: string; trigger: 'hit' | 'damage' | 'miss' | 'spell'; protectOthers: boolean;
@@ -56,5 +58,6 @@ export interface CombatState {
   log: string[]; narrative?: CombatNarrativeEvent[]; pending?: CombatPending;
   context?: { advantage: boolean; disadvantage: boolean; armorAdjustment: number; damageFactor: number; rangeResolved?: boolean; confirmed: boolean };
   slotsSpent: string[];
+  areaCast?: { origin: { x: number; y: number }; damage?: CombatPending['damage']; manual?: boolean };
   queue: { attackerId: string; action: CombatAction; targetId: string; reactionAttack?: boolean; castApproved?: boolean; context?: NonNullable<CombatState['context']> }[];
 }
