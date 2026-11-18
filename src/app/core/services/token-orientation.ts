@@ -54,12 +54,12 @@ export function orientedTokenVisible(token: PreviewToken, context: TokenOrientat
   });
 }
 
-/** Un paso, también diagonal, sin conceder alcance ni desplazar fichas ajenas. */
+/** Un paso horizontal o vertical, sin conceder alcance ni desplazar fichas ajenas. */
 export function canOrientStep(observerId: string, x: number, y: number, context: TokenOrientation): boolean {
   const observer = context.tokens.find((token) => token.instanceId === observerId);
   if (!observer || observer.hidden || !context.observerIds.includes(observerId)) return false;
   const cell = (n: number) => Math.floor(n / context.grid + 1e-9);
-  if (Math.max(Math.abs(cell(x) - cell(observer.x)), Math.abs(cell(y) - cell(observer.y))) > 1) return false;
+  if (Math.abs(cell(x) - cell(observer.x)) + Math.abs(cell(y) - cell(observer.y)) > 1) return false;
   let instanceId = '__orientation_step__';
   while (context.tokens.some((token) => token.instanceId === instanceId)) instanceId += '_';
   const target: PreviewToken = { instanceId, x, y, size: observer.size, hidden: false, conditions: [] };

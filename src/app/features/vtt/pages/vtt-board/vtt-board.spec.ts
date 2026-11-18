@@ -108,6 +108,7 @@ describe('Multiselección de fichas en VTT', () => {
     expect(view.encounterShared()).toBeFalse();
   });
   it('procesa un movimiento de jugador solo en el turno activo y publica el acuse', () => {
+    sheets.savePlayer({ ...playerSheet(), id: 'hero', speed: '9 m' }, 'create');
     const view = confirmedPreview(); actorFor('A', 'player:hero');
     board.activeTurnId.set('A'); view.combat.start('A');
     view.acceptRemoteEncounter({ shared: true, revision: 3, state: view.captureBoardState(), pendingCommand: {
@@ -115,6 +116,28 @@ describe('Multiselección de fichas en VTT', () => {
     } }, false);
     expect(board.tokens()[0].x).toBe(GRID * 3); expect(view.pendingAck.status).toBe('applied');
     expect(view.pendingAck.id).toBe('player-move');
+  });
+  it('descuenta pasos de jugador y rechaza rutas obsoletas sin gastar movimiento', () => {
+    sheets.savePlayer({ ...playerSheet(), id: 'hero', speed: '3 m' }, 'create');
+    const view = confirmedPreview(); actorFor('A', 'player:hero'); board.activeTurnId.set('A'); view.combat.start('A');
+    const command = { id:'step', observerId:'A', userId:'u', type:'move', cell:63, sheetRevision:0, expiresAt:Date.now()+15000 };
+    view.applyPlayerCommand({...command,path:[90,63]});expect(view.pendingAck.status).toBe('rejected');expect(view.combat.state().movement.spent).toBe(0);
+    view.applyPlayerCommand(command);expect(view.pendingAck.status).toBe('applied');expect(view.combat.state().movement.spent).toBe(1.5);
+    view.applyPlayerCommand({...command,id:'back',cell:62});expect(view.combat.state().movement.spent).toBe(3);expect(view.playerControls(view.tokens()).A.canMove).toBeFalse();
+    view.applyPlayerCommand({...command,id:'extra'});expect(view.pendingAck.status).toBe('rejected');expect(view.combat.state().movement.spent).toBe(3);
+  });
+  it('recuerda lo visto en cada paso de la ruta antes de guardar el destino', () => {
+    sheets.savePlayer({ ...playerSheet(), id:'hero', speed:'9 m' },'create');const view=confirmedPreview();actorFor('A','player:hero');board.activeTurnId.set('A');view.combat.start('A');
+    (sheets.visionProfile as jasmine.Spy).and.returnValue({version:1,senses:[{sense:'normal',rangeFeet:30,source:{kind:'director',reference:'Recorrido de prueba'}}]});view.sheetRevision.update((n:number)=>n+1);
+    view.vision.update((v:any)=>({...v,exploration:[]}));const route=view.playerControls(view.tokens()).A.movement.routes.find((r:any)=>r.cell===122);expect(route.path.length).toBe(2);
+    view.applyPlayerCommand({id:'walk',observerId:'A',userId:'u',type:'move',cell:122,path:route.path,sheetRevision:0,expiresAt:Date.now()+15000});expect(view.pendingAck.status).toBe('applied');
+    const areas=view.vision().exploration.find((m:any)=>m.tokenId==='A').areas;for(const step of route.path)expect(areas.some((a:any)=>Math.abs(a.x-(step%30+.5)*GRID)<.001&&Math.abs(a.y-(Math.floor(step/30)+.5)*GRID)<.001)).toBeTrue();
+  });
+  it('un token oculto no cambia los destinos públicos y se valida en privado sin gastar', () => {
+    sheets.savePlayer({ ...playerSheet(), id:'hero', speed:'9 m' },'create');const view=confirmedPreview();actorFor('A','player:hero');board.activeTurnId.set('A');view.combat.start('A');
+    const before=view.playerControls(view.tokens()).A;view.tokens.update((ts:any[])=>ts.map(t=>t.instanceId==='B'?{...t,x:GRID*3,y:GRID*2,hidden:true}:t));const after=view.playerControls(view.tokens()).A;
+    expect(after.cells).toEqual(before.cells);expect(after.movement.routes).toEqual(before.movement.routes);
+    view.applyPlayerCommand({id:'blocked',observerId:'A',userId:'u',type:'move',cell:63,sheetRevision:0,expiresAt:Date.now()+15000});expect(view.pendingAck.status).toBe('rejected');expect(view.combat.state().movement.spent).toBe(0);expect(board.tokens()[0].x).toBe(GRID*2);
   });
   it('no resuelve automáticamente un ataque si falta confirmar la visión del objetivo', () => {
     const view = confirmedPreview(); actorFor('A', 'generic:guardia-veterano'); actorFor('B', 'generic:guardia');
@@ -613,11 +636,12 @@ describe('Multiselección de fichas en VTT', () => {
     expect(view.displayedTokens().map((t: Token) => t.instanceId)).toEqual(['A']);
   });
   it('el jugador puede dar un paso en oscuridad solo en su turno y con validación de la casilla', () => {
+    sheets.savePlayer({ ...playerSheet(), id: 'hero', speed: '9 m' }, 'create');
     const view = confirmedPreview(); actorFor('A', 'player:hero'); view.setPreviewEnvironment('illumination', 'darkness');
-    view.tokens.update((tokens: any[]) => tokens.map((t) => t.instanceId === 'B' ? { ...t, x: GRID * 3 } : t));
+    view.tokens.update((tokens: any[]) => tokens.map((t) => t.instanceId === 'B' ? { ...t, x: GRID * 3, y: GRID * 4 } : t));
     board.activeTurnId.set('A'); view.combat.start('A');
     const controls = view.playerControls(view.tokens()).A;
-    expect(controls.canMove).toBeTrue(); expect(controls.cells).toContain(63); expect(controls.cells).toContain(93);
+    expect(controls.canMove).toBeTrue(); expect(controls.cells).toContain(63); expect(controls.cells).toContain(92); expect(controls.cells).not.toContain(93);
     expect(controls.cells).not.toContain(64); expect(controls.targets).toEqual([]);
     view.applyPlayerCommand({ id: 'dark-step', observerId: 'A', userId: 'u', type: 'move', cell: 63, sheetRevision: 0, expiresAt: Date.now() + 15000 });
     expect(board.tokens()[0].x).toBe(GRID * 3); expect(view.pendingAck.status).toBe('applied');

@@ -59,13 +59,18 @@ async function liveEncounterFixture(t) {
   const f = await encounterFixture(t);
   const tokens = f.snapshot.views.map((view, i) => ({ instanceId: view.instanceId, actorId: `player:${view.actorId}`, name: `Visible ${i}`, image: '', x: i * 51.2 + 51.2, y: 51.2,
     size: 1, hp: 30, maxHp: 30, initiative: 10 - i, conditions: [], side: i ? 'enemy' : 'party', hidden: false }));
-  const controls = (token) => ({ position: { x: token.x, y: token.y, size: 1 }, canMove: true, canAttack: true, cells: [31, 32, 33],
-    targets: [{ id: 'other-instance', name: 'Objetivo visible', x: 102.4, y: 51.2, size: 1 }], attacks: [{ source: 'sword', name: 'Espada preparada', targetIds: ['other-instance'] }] });
+  const controls = (token) => {
+    const start=Math.round(token.y/51.2)*30+Math.round(token.x/51.2),cells=[31,32,33].filter(c=>c!==start);
+    const routes=cells.map(cell=>({cell,path:Array.from({length:Math.abs(cell-start)},(_,i)=>start+Math.sign(cell-start)*(i+1)),cost:Math.abs(cell-start)*1.5}));
+    return { position:{x:token.x,y:token.y,size:1},canMove:true,canAttack:true,cells,
+      movement:{active:true,speed:9,spent:0,remaining:9,actionUsed:false,bonusUsed:false,disengaged:false,message:'',options:['dash','disengage'],routes},
+      targets:[{id:'other-instance',name:'Objetivo visible',x:102.4,y:51.2,size:1}],attacks:[{source:'sword',name:'Espada preparada',targetIds:['other-instance']}] };
+  };
   const liveSnapshot = { ...f.snapshot, revision: 1, weather: 'rain', state: { tokens, fogRects: [], layers: { grid: false, fog: true, tokens: true, labels: true }, zoom: .65,
     activeTurnId: 'hero-instance', combat: { started: true, turnId: 'hero-instance' } }, views: f.snapshot.views.map((view, i) => ({ ...view, pending: false, controls: controls(tokens[i]) })) };
   assert.equal((await f.request(f.url, { cookie: f.director, method: 'PUT', data: liveSnapshot })).status, 200);
   await f.request(f.url, { cookie: f.director });
-  return { ...f, liveSnapshot, revision: 2, action: (data, cookie = f.cookie) => f.request(`${f.url}/actions`, { cookie, method: 'POST', data }) };
+  return { ...f, controls, liveSnapshot, revision: 2, action: (data, cookie = f.cookie) => f.request(`${f.url}/actions`, { cookie, method: 'POST', data }) };
 }
 
 test('registro del jugador: solo relato del observador y audiencia original, sin registro privado ni eventos ajenos', async (t) => {
@@ -109,7 +114,7 @@ test('acciones de jugador: sesión, propiedad, turno, casillas visibles e idempo
   assert.equal(player.actionPending, true); assert.equal(player.controls.canMove, false);
   for (const key of ['state', 'pendingCommand', 'receipts', 'audience', 'tokens', 'combat']) assert.equal(player[key], undefined);
   assert.equal((await f.request(f.url, { cookie: f.director, method: 'PUT', data: { ...f.liveSnapshot, revision: 3 } })).status, 409);
-  const updated = structuredClone(f.liveSnapshot); updated.revision = 3; updated.state.tokens[0].x = 102.4; updated.views[0].controls.position.x = 102.4;
+  const updated = structuredClone(f.liveSnapshot); updated.revision = 3; updated.state.tokens[0].x = 102.4; updated.views[0].controls = f.controls(updated.state.tokens[0]);
   updated.ack = { id: move.id, status: 'applied', message: 'Token movido.' };
   const writes = await Promise.all([f.request(f.url, { cookie: f.director, method: 'PUT', data: updated }), f.request(f.url, { cookie: f.director, method: 'PUT', data: updated })]);
   assert.deepEqual(writes.map((item) => item.status).sort(), [200, 409]);
@@ -488,4 +493,34 @@ test('el ataque circular conserva turno/propiedad y solo acepta casillas publica
 test('rechaza radios y casillas no válidos en controles de área',()=>{
  const base={position:{x:0,y:0,size:1},canMove:true,canAttack:true,cells:[],targets:[],attacks:[]};
  for(const area of [{radius:0,cells:[1]},{radius:Infinity,cells:[1]},{radius:6,cells:[600]},{radius:6,cells:['1']}])assert.equal(validAreaControls({...base,attacks:[{source:'blast',name:'Blast',targetIds:[],area}]}),false);
+});
+
+test('movimiento y acciones de turno usan las rutas publicadas y mantienen propiedad/reintentos',()=>{
+ const movement={active:true,speed:9,spent:3,remaining:6,actionUsed:false,bonusUsed:false,disengaged:false,message:'',options:['dash','bonus-dash'],routes:[{cell:2,path:[1,2],cost:3}]};
+ const controls={position:{x:0,y:0,size:1},canMove:true,canAttack:true,cells:[2],targets:[],attacks:[],movement};
+ const board={revision:3,sheetRevision:0,views:[{instanceId:'hero',actorId:'sheet',audience:['u'],vision:null,controls}],state:{activeTurnId:'hero',tokens:[{instanceId:'hero',hp:20,hidden:false,conditions:[]}],combat:{started:true,turnId:'hero'}}};
+ const sheets=new Map([['sheet',{playerIds:['u'],vision:null}]]),input={id:'move',revision:3,observerId:'hero',type:'move',cell:2};
+ assert.equal(validAreaControls(controls),true);assert.deepEqual(authorizeAreaCommand(input,board,{id:'u'},sheets,true,1000).command.path,[1,2]);
+ assert.throws(()=>authorizeAreaCommand({...input,path:[2]},board,{id:'u'},sheets,true,1000),e=>e.status===400);
+ const dash={id:'dash',revision:3,observerId:'hero',type:'turn',source:'bonus-dash'};assert.equal(authorizeAreaCommand(dash,board,{id:'u'},sheets,true,1000).command.source,'bonus-dash');
+ assert.throws(()=>authorizeAreaCommand({...dash,source:'bonus-disengage'},board,{id:'u'},sheets,true,1000),e=>e.status===403);
+ assert.throws(()=>authorizeAreaCommand(dash,board,{id:'other'},sheets,true,1000),e=>e.status===403);
+ assert.throws(()=>authorizeAreaCommand({...dash,cell:1},board,{id:'u'},sheets,true,1000),e=>e.status===400);
+ board.receipts=[{id:'dash',userId:'u',status:'applied',message:'Aplicado'}];assert.equal(authorizeAreaCommand(dash,board,{id:'u'},sheets,true,1000).receipt.status,'applied');
+ assert.equal(validAreaControls({...controls,movement:{...movement,routes:[{cell:2,path:[1,2],cost:9}]}}),false);
+});
+
+test('las rutas publicadas solo admiten pasos horizontales o verticales y no saltan filas',()=>{
+ const base={position:{x:0,y:0,size:1},canMove:true,canAttack:false,cells:[31],targets:[],attacks:[]},movement={active:true,speed:9,spent:0,remaining:9,actionUsed:false,bonusUsed:false,disengaged:false,message:'',options:[],routes:[{cell:31,path:[1,31],cost:3}]};
+ assert.equal(validAreaControls({...base,movement}),true);
+ for(const path of [[31],[1,32,31],[29,30,31]])assert.equal(validAreaControls({...base,movement:{...movement,routes:[{cell:31,path,cost:4.5}]}}),false);
+});
+
+test('no ejecuta rutas diagonales almacenadas ni controles antiguos sin registro de movimiento',()=>{
+ const movement={active:true,speed:9,spent:0,remaining:9,actionUsed:false,bonusUsed:false,disengaged:false,message:'',options:[],routes:[{cell:31,path:[31],cost:1.5}]};
+ const controls={position:{x:0,y:0,size:1},canMove:true,canAttack:false,cells:[31],targets:[],attacks:[],movement};
+ const board={revision:3,sheetRevision:0,views:[{instanceId:'hero',actorId:'sheet',audience:['u'],vision:null,controls}],state:{activeTurnId:'hero',tokens:[{instanceId:'hero',hp:20,hidden:false,conditions:[]}],combat:{started:true,turnId:'hero'}}};
+ const sheets=new Map([['sheet',{playerIds:['u'],vision:null}]]),input={id:'stale',revision:3,observerId:'hero',type:'move',cell:31};
+ assert.throws(()=>authorizeAreaCommand(input,board,{id:'u'},sheets,true,1000),e=>e.status===409);delete controls.movement;
+ assert.throws(()=>authorizeAreaCommand(input,board,{id:'u'},sheets,true,1000),e=>e.status===409);
 });

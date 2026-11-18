@@ -123,4 +123,16 @@ describe('Encuentro del jugador sincronizado', () => {
    fixture.nativeElement.querySelector('.own-token').dispatchEvent(new MouseEvent('click',{bubbles:true,clientX:76.8,clientY:76.8}));fixture.detectChanges();expect(view.areaCell()).toBe(31);expect(view.moving()).toBeFalse();
    map.dispatchEvent(new MouseEvent('click',{bubbles:true,clientX:180,clientY:80}));fixture.detectChanges();expect(view.areaCell()).toBeUndefined();expect(button('Confirmar ataque de área').disabled).toBeTrue();
  });
+  it('fija el destino elegido mientras el ratón va al botón de confirmar y muestra su coste', () => {
+    const next=detail();next.controls!.movement={active:true,speed:9,spent:0,remaining:9,actionUsed:false,bonusUsed:false,disengaged:false,message:'',options:['dash'],routes:[{cell:32,path:[32],cost:1.5}]};
+    jasmine.clock().tick(1000);flushView(next);const view=fixture.componentInstance as any,send=spyOn(view,'sendAction').and.resolveTo(),board=fixture.nativeElement.querySelector('.player-board');
+    spyOn(board,'getBoundingClientRect').and.returnValue({left:0,top:0,width:1536,height:1024});
+    button('Mover tu token').click();view.moveAt({clientX:125,clientY:75},board,next);fixture.detectChanges();
+    view.previewMove({currentTarget:board,clientX:500,clientY:500},next);fixture.detectChanges();expect(view.moveCell()).toBe(32);expect(fixture.nativeElement.textContent).toContain('Recorrido: 1.5 m');
+    button('Confirmar movimiento').click();expect(send).toHaveBeenCalledWith(next,{type:'move',cell:32});
+  });
+  it('cancelar con el token o pasar a Atacar elimina la ruta pendiente', () => {
+    const view=fixture.componentInstance as any;view.moving.set(true);view.moveCell.set(32);view.ownClick({stopPropagation(){}},detail());expect(view.moveCell()).toBeUndefined();expect(view.moving()).toBeFalse();
+    view.moving.set(true);view.moveCell.set(32);view.toggleAttack();expect(view.moveCell()).toBeUndefined();expect(view.moving()).toBeFalse();expect(view.attacking()).toBeTrue();
+  });
 });

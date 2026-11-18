@@ -31,7 +31,10 @@ export interface CombatProfile {
   actions: CombatAction[]; reactions: CombatReaction[]; resources: CombatResource[];
   attacksPerTurn?: number;
 }
+export type TurnAction = 'dash' | 'disengage' | 'bonus-dash' | 'bonus-disengage' | 'stand';
+export interface TurnMovement { spent: number; dashes: number; action?: 'attack' | 'spell' | 'dash' | 'disengage'; bonus?: 'dash' | 'disengage'; disengaged: boolean; }
 export interface Combatant {
+  movement?: { speed?: number; bonusDash: boolean; bonusDisengage: boolean };
   id: string; actorId: string; name: string; x: number; y: number; size: number;
   hp: number; maxHp: number; armorClass?: number;
   conditions?: CombatCondition[]; side?: CombatSide;
@@ -54,6 +57,8 @@ export interface CombatNarrativeEvent { id: string; messages: CombatNarrativeMes
 export interface CombatState {
   version: 1; started: boolean; round: number; turnId?: string;
   usedAttacks: number; spellUsed: boolean; reactionUsed: string[];
+  /** Ausente en combates antiguos: no concede movimiento retroactivo. */
+  movement?: TurnMovement;
   armorEffects: Record<string, number>; resources: Record<string, Record<string, number>>;
   log: string[]; narrative?: CombatNarrativeEvent[]; pending?: CombatPending;
   context?: { advantage: boolean; disadvantage: boolean; armorAdjustment: number; damageFactor: number; rangeResolved?: boolean; confirmed: boolean };

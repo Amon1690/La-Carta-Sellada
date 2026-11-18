@@ -30,6 +30,8 @@ import { CharacterSheetsService } from '../../../../core/services/character-shee
 import { RulesDataService } from '../../../../core/services/rules-data';
 import { RulesCompendium } from '../../../../core/models/rules';
 import { CombatAction, CombatCondition, CombatSide, Combatant } from '../../../../core/models/combat';
+import { movementRoutes, turnActionLabels } from '../../../../core/services/combat-movement';
+import type { TurnAction } from '../../../../core/models/combat';
 import { actionProblem, deriveCombat } from '../../../../core/services/combat-rules';
 import { attackSituation, normalAttackFacts } from '../../../../core/services/attack-situation';
 import { CommandReceipt, DirectorEncounter, EncounterCommand, LiveBoardState, PlayerControls } from '../../../../core/models/encounter-live';
@@ -489,6 +491,12 @@ export class VttBoard {
       fogRects: this.fogRects(), layers: this.layers(), zoom: this.zoom(), activeTurnId: this.activeTurnId() });
   }
 
+  protected readonly turnActionLabels = turnActionLabels;
+  protected takeMovementAction(id: string, action: TurnAction, persist = true): void {
+    this.combat.takeTurnAction(id, action, false);
+    if (action === 'stand') this.tokens.update(tokens => tokens.map(t => t.instanceId === id ? { ...t, conditions: t.conditions?.filter(c => c !== 'prone') } : t));
+    if (persist) this.persist();
+  }
   private playerControls(tokens: BoardToken[]): Record<string, PlayerControls> {
     const result: Record<string, PlayerControls> = {};
     const profiles = this.tokenVisionProfiles();
@@ -497,16 +505,19 @@ export class VttBoard {
       const geometry = previewSight(state, tokens, profiles, this.gridSize, this.mapWidth, this.mapHeight);
       const orientation = { state, tokens, profiles, observerIds: [token.instanceId], circles: geometry.circles, fog: this.fogRects(), grid: this.gridSize };
       const visible = token.hidden ? [] : tokens.filter((item) => previewTokenVisible(item, geometry.circles, this.fogRects(), this.gridSize));
-      const canMove = !this.tokenDrag && !token.hidden && !geometry.pending && this.vision().enabled && this.combat.state().started &&
-        this.combat.state().turnId === token.instanceId && this.activeTurnId() === token.instanceId && !this.combat.busy() && token.hp > 0 && !token.conditions?.includes('incapacitated');
+      const canAct = !this.tokenDrag && !token.hidden && !geometry.pending && this.vision().enabled && this.combat.state().started &&
+        this.combat.state().turnId === token.instanceId && this.activeTurnId() === token.instanceId && !this.combat.busy() && token.hp > 0;
       const owner = this.combat.find(token.instanceId);
-      const canAttack = canMove && this.combat.canAttack(token.instanceId);
+      const canAttack = canAct && this.combat.canAttack(token.instanceId);
+      const movement = this.combat.movementStatus(token.instanceId);
       const cells: number[] = [];
-      if (canMove) for (let row = 0; row < 20; row++) for (let column = 0; column < 30; column++) {
+      if (canAct) for (let row = 0; row < 20; row++) for (let column = 0; column < 30; column++) {
         const x = column * this.gridSize, y = row * this.gridSize;
         if (x + token.size * this.gridSize > this.mapWidth + .001 || y + token.size * this.gridSize > this.mapHeight + .001) continue;
         if (previewTokenVisible({ ...token, x, y }, geometry.circles, this.fogRects(), this.gridSize) || canOrientStep(token.instanceId, x, y, orientation)) cells.push(row * 30 + column);
       }
+      const routes = canAct && owner && movement.remaining !== undefined ? movementRoutes(owner, this.combatants().filter(a => a.id === owner.id || visible.some(t => t.instanceId === a.id)), this.vision().obstacles, cells, movement.remaining, this.gridSize) : [];
+      const canMove = canAct && routes.length > 0;
       const targets = visible.filter((item) => item.instanceId !== token.instanceId).map((item) => ({ id: item.instanceId, name: item.name, x: item.x, y: item.y, size: item.size }));
       const attacks = canAttack && owner ? owner.actions.filter((action) => !actionProblem(action) && this.combat.available(owner, action.cost) >= (action.cost?.amount ?? 0) &&
         !(action.kind === 'spell' && action.resolution === 'attack' && !action.attackType)).map((action) => {
@@ -524,7 +535,7 @@ export class VttBoard {
             const info = attackSituation(owner, target, action, this.combatants(), { ...normalAttackFacts(), reviewed: true }, this.combat.sight);
             return !info.blocked && !info.doubts.length && !info.threatUnknown && !info.spellTypeUnknown;
           }).map((actor) => actor.id) }; }) : [];
-      result[token.instanceId] = { position: { x: token.x, y: token.y, size: token.size }, canMove, canAttack, cells, targets, attacks };
+      result[token.instanceId] = { position: { x: token.x, y: token.y, size: token.size }, canMove, canAttack, cells: routes.map(r => r.cell), targets, attacks, movement: { ...movement, active: canAct, options: canAct ? movement.options : [], routes } };
     }
     return result;
   }
@@ -539,9 +550,26 @@ export class VttBoard {
       const controls = this.playerControls(this.tokens())[command.observerId];
       if (command.type === 'move') {
         if (!controls?.canMove || command.cell === undefined || !controls.cells.includes(command.cell)) throw new Error('Movimiento no permitido.');
+        const route = controls.movement?.routes.find(r => r.cell === command.cell);
+        if (!route || command.path && JSON.stringify(route.path) !== JSON.stringify(command.path)) throw new Error('El recorrido ha cambiado.');
+        const actor = this.combat.find(command.observerId);
+        const checked = actor && movementRoutes(actor, this.combatants(), this.vision().obstacles, route.path, route.cost, this.gridSize).find(r => r.cell === route.cell);
+        if (!checked || checked.cost !== route.cost || JSON.stringify(checked.path) !== JSON.stringify(route.path)) throw new Error('No se puede completar el movimiento.');
+        this.combat.spendMovement(command.observerId, route.cost, false);
+        let memory = this.vision();
+        const profiles = this.tokenVisionProfiles();
+        for (const step of route.path) {
+          const passing = this.tokens().map(t => t.instanceId === command.observerId ? { ...t, x: step % 30 * this.gridSize, y: Math.floor(step / 30) * this.gridSize } : t);
+          memory = rememberExploration(memory, passing, profiles, this.fogRects(), this.gridSize);
+        }
+        this.vision.set(memory);
         const cell = command.cell;
         this.tokens.update((tokens) => tokens.map((token) => token.instanceId === command.observerId ? { ...token, x: cell % 30 * this.gridSize, y: Math.floor(cell / 30) * this.gridSize } : token));
         receipt = { id: command.id, status: 'applied', message: 'Token movido.' };
+      } else if (command.type === 'turn') {
+        if (!controls?.movement?.options.includes(command.source as TurnAction)) throw new Error('Acción no disponible.');
+        this.takeMovementAction(command.observerId, command.source as TurnAction, false);
+        receipt = { id: command.id, status: 'applied', message: turnActionLabels[command.source as TurnAction] + '.' };
       } else if (command.cell !== undefined) {
         const owner=this.combat.find(command.observerId),action=owner?.actions.find(a=>a.source===command.source);
         if(!owner||!action?.area||!controls?.canAttack||!controls.attacks.some(a=>a.source===action.source&&a.area?.cells.includes(command.cell!))) throw new Error('Área no permitida.');
@@ -730,7 +758,7 @@ export class VttBoard {
     const mode = this.mode() as 'wall' | 'door' | 'window';
     const kind = mode === 'door' && this.doorHasWindow() ? 'door-window' : mode;
     const obstacle: VisionObstacle = { id: this.newId('obstacle'), name: `${kind === 'wall' ? 'Pared' : kind === 'window' ? 'Ventana' : kind === 'door-window' ? 'Puerta con ventana' : 'Puerta'} ${(this.vision().obstacles?.length ?? 0) + 1}`,
-      kind, start: { ...this.drawStart }, end, blocksSight: kind === 'wall' || kind === 'door', blocksEffect: true,
+      kind, start: { ...this.drawStart }, end, blocksSight: kind === 'wall' || kind === 'door', blocksEffect: true, blocksMovement: true,
       source: { kind: 'director', reference: 'Trazado sobre el mapa declarado por dirección' }, ...(mode === 'door' ? { open: false } : {}) };
     try { this.setBoardVision({ ...this.vision(), obstacles: [...(this.vision().obstacles ?? []), obstacle] }); this.visionMessage.set(`${this.obstacleLabel(obstacle)} guardada.`); }
     catch { this.visionMessage.set('No se pudo guardar el trazado. Conserva el guardado original y revisa el límite de obstáculos.'); }

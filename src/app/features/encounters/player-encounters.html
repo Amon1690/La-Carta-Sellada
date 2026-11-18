@@ -1,7 +1,7 @@
 @if (vm$ | async; as vm) {
   @if (vm.detail; as detail) {
     <section class="encounter-stage" [attr.aria-label]="detail.title">
-      <div class="map-viewport"><div class="player-board" [class.moving]="moving()" (click)="boardClick($event, detail)">
+      <div class="map-viewport"><div class="player-board" [class.moving]="moving()" (click)="boardClick($event, detail)" (pointermove)="previewMove($event, detail)">
         <img [src]="detail.image" [alt]="'Vista del personaje en ' + detail.title" width="1536" height="1024" draggable="false" />
         <app-weather-overlay [weather]="detail.weather ?? 'unknown'" />
         @if (attacking() && selectedAttack(detail)?.area; as area) {
@@ -12,6 +12,9 @@
         }
         @if (detail.controls; as controls) {
           @if (moving()) { <svg class="move-cells" viewBox="0 0 1536 1024" aria-hidden="true">@for (cell of controls.cells; track cell) { <rect [attr.x]="cell % 30 * 51.2" [attr.y]="(cell - cell % 30) / 30 * 51.2" width="51.2" height="51.2" /> }</svg> }
+          @if ((moving() || selectedRoute(detail)) && selectedRoute(detail); as route) {
+            <svg class="move-cells movement-route" viewBox="0 0 1536 1024" aria-hidden="true"><polyline [attr.points]="routePoints(detail)" fill="none" stroke="#f4ce73" stroke-width="5" /></svg>
+          }
           <button type="button" class="own-token" aria-label="Tu token: mover con las flechas o arrastrar" [disabled]="!controls.canMove || busy()"
             [style.left.%]="controls.position.x / 1536 * 100" [style.top.%]="controls.position.y / 1024 * 100"
             [style.width.%]="controls.position.size * 51.2 / 1536 * 100" [style.height.%]="controls.position.size * 51.2 / 1024 * 100"
@@ -24,10 +27,20 @@
         <label>Ver como<select [value]="detail.observerId" (change)="chooseCharacter($any($event.target).value)">
           @for (character of detail.characters; track character.instanceId) { <option [value]="character.instanceId" [selected]="character.instanceId === detail.observerId">{{ character.name }} · {{ $index + 1 }}</option> }
         </select></label>
-        <p class="turn-status" [class.active]="detail.controls?.canMove">{{ detail.controls?.canMove ? 'Es tu turno' : detail.actionPending ? 'Acción pendiente' : 'Espera tu turno' }}</p>
-        <button class="action-button" type="button" [disabled]="!detail.controls?.canMove || busy()" [attr.aria-pressed]="moving()" (click)="moving.set(!moving()); attacking.set(false)">{{ moving() ? 'Cancelar movimiento' : 'Mover tu token' }}</button>
-        <button class="action-button" type="button" [disabled]="!detail.controls?.canAttack || busy()" [attr.aria-pressed]="attacking()" (click)="attacking.set(!attacking()); moving.set(false)">Atacar</button>
-        @if (moving()) { <small>Arrastra tu token, usa las flechas o elige una casilla marcada. El director controla el recorrido y el gasto de movimiento.</small> }
+        <p class="turn-status" [class.active]="detail.controls?.movement?.active ?? detail.controls?.canMove">{{ (detail.controls?.movement?.active ?? detail.controls?.canMove) ? 'Es tu turno' : detail.actionPending ? 'Acción pendiente' : 'Espera tu turno' }}</p>
+        @if (detail.controls?.movement; as movement) {
+          <p class="movement-status" aria-live="polite">Movimiento: {{ movement.remaining === undefined ? 'sin confirmar' : movement.remaining + ' m restantes' }}<br />Gastado: {{ movement.spent }} m · velocidad: {{ movement.speed === undefined ? 'sin confirmar' : movement.speed + ' m' }}</p>
+          <small>Acción: {{ movement.actionUsed ? 'gastada' : 'disponible' }} · Adicional: {{ movement.bonusUsed ? 'gastada' : 'disponible' }}</small>
+          @if(movement.message){<p class="notice">{{ movement.message }}</p>}
+          @for(action of movement.options;track action){<button type="button" class="action-button" [disabled]="busy()" (click)="turnAction(detail,action)">{{ turnActionLabels[action] }}</button>}
+          @if(movement.disengaged){<small>Destrabado hasta el final del turno.</small>}
+        }
+        <button class="action-button" type="button" [disabled]="!detail.controls?.canMove || busy()" [attr.aria-pressed]="moving()" (click)="toggleMovement()">{{ moving() ? 'Cancelar movimiento' : 'Mover tu token' }}</button>
+        <button class="action-button" type="button" [disabled]="!detail.controls?.canAttack || busy()" [attr.aria-pressed]="attacking()" (click)="toggleAttack()">Atacar</button>
+        @if (moving()) { <small>Elige una casilla para revisar la ruta. Solo se permiten pasos horizontales y verticales. Las flechas mueven un paso.</small> }
+        @if (selectedRoute(detail); as route) {
+          <p>Recorrido: {{ route.cost }} m</p><button type="button" class="action-button" [disabled]="!detail.controls?.canMove || busy()" (click)="confirmMove(detail)">Confirmar movimiento</button>
+        }
         @if (attacking()) {
           @if (detail.controls; as controls) {
             @if (controls.attacks.length) {

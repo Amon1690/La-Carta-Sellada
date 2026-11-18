@@ -1,3 +1,5 @@
+import { effectiveSpeed, freshMovement, movementRemaining, turnActionLabels } from './combat-movement';
+import type { TurnAction } from '../models/combat';
 import { AreaPoint, originDistance, tokenCentre, tokensInArea, validArea, validAreaPoint } from './combat-area';
 import { signal } from '@angular/core';
 import type { SightAssessment } from './vision-preview';
@@ -5,7 +7,7 @@ import { CombatAction, Combatant, CombatCost, CombatNarrativeMessage, CombatPend
 import { actionProblem, combatDistance, diceParts, normalizeCombat, reactionProblem, rollDice } from './combat-rules';
 
 const fresh = (): CombatState => ({ version: 1, started: false, round: 1, usedAttacks: 0, spellUsed: false,
-  reactionUsed: [], armorEffects: {}, resources: {}, log: [], queue: [], slotsSpent: [] });
+  movement: freshMovement(), reactionUsed: [], armorEffects: {}, resources: {}, log: [], queue: [], slotsSpent: [] });
 export interface AttackContext { advantage: boolean; disadvantage: boolean; armorAdjustment: number; damageFactor: number; confirmed: boolean; rangeResolved?: boolean }
 
 /** Estado independiente por tablero. Los dados pendientes se conservan antes de aplicar daño. */
@@ -61,7 +63,7 @@ export class VttCombat {
     if (!this.state().started || (id === this.state().turnId && !nextRound)) return;
     if (this.busy()) throw new Error('Resuelve el ataque pendiente antes de cambiar de turno');
     const s = this.state(), armorEffects = { ...s.armorEffects }; delete armorEffects[id];
-    this.state.set({ ...s, turnId: id, round: s.round + (nextRound ? 1 : 0), usedAttacks: 0, spellUsed: false,
+    this.state.set({ ...s, turnId: id, round: s.round + (nextRound ? 1 : 0), usedAttacks: 0, spellUsed: false, movement: freshMovement(),
       reactionUsed: s.reactionUsed.filter((owner) => owner !== id), armorEffects,
       slotsSpent: [],
       log: this.log(`Turno de ${this.find(id)?.name ?? id}. Recupera su reacción; terminan sus efectos de Escudo.`, s.log) });
@@ -69,7 +71,44 @@ export class VttCombat {
   }
   canAttack(id: string): boolean {
     const actor = this.find(id), s = this.state();
-    return !!actor && s.started && s.turnId === id && this.activeId() === id && !this.busy() && actor.hp > 0 && !actor.conditions?.includes('incapacitated') && actor.maxHp > 0 && actor.armorClass !== undefined && !s.spellUsed && s.usedAttacks < actor.attacksPerTurn;
+    return !!actor && s.started && s.turnId === id && this.activeId() === id && !this.busy() && actor.hp > 0 && !actor.conditions?.includes('incapacitated') && actor.maxHp > 0 && actor.armorClass !== undefined && (!s.movement?.action || s.movement.action === 'attack') && !s.spellUsed && s.usedAttacks < actor.attacksPerTurn;
+  }
+  movementStatus(id: string) {
+    const actor = this.find(id), s = this.state(), isTurn = s.started && s.turnId === id, turn = isTurn ? s.movement : undefined;
+    const ownTurn = !!actor && s.started && s.turnId === id && this.activeId() === id && !this.busy() && actor.hp > 0;
+    const remaining = isTurn ? actor && movementRemaining(actor, turn) : 0;
+    const options: TurnAction[] = ownTurn ? (['dash', 'disengage', 'bonus-dash', 'bonus-disengage', 'stand'] as TurnAction[]).filter(a => this.canTurnAction(id, a)) : [];
+    return { active: ownTurn, speed: actor && effectiveSpeed(actor), spent: turn?.spent ?? 0, remaining,
+      actionUsed: isTurn && (!!turn?.action || s.usedAttacks > 0 || s.spellUsed), bonusUsed: !!turn?.bonus, disengaged: turn?.disengaged ?? false, options,
+      message: !isTurn ? '' : !turn ? 'Turno anterior sin registro de movimiento: avanza al siguiente turno.' : actor?.movement?.speed === undefined ? 'Falta confirmar la velocidad terrestre en la ficha.' : '' };
+  }
+  canTurnAction(id: string, action: TurnAction): boolean {
+    const actor = this.find(id), s = this.state(), turn = s.movement;
+    if (!actor || !turn || !s.started || s.turnId !== id || this.activeId() !== id || this.busy() || actor.hp <= 0) return false;
+    const speed = effectiveSpeed(actor);
+    if (action === 'stand') return !!actor.conditions?.includes('prone') && speed !== undefined && speed > 0 && movementRemaining(actor, turn)! + .00001 >= Math.floor(speed / .3 / 2) * .3;
+    if (actor.conditions?.includes('incapacitated')) return false;
+    if (action.includes('dash') && (speed === undefined || speed <= 0)) return false;
+    if (action.startsWith('bonus-')) return !turn.bonus && !!(action === 'bonus-dash' ? actor.movement?.bonusDash : actor.movement?.bonusDisengage);
+    return !turn.action && !s.usedAttacks && !s.spellUsed;
+  }
+  takeTurnAction(id: string, action: TurnAction, commit = true): void {
+    if (!this.canTurnAction(id, action)) throw new Error('Esta acción no está disponible en este turno.');
+    const turn = { ...this.state().movement! };
+    if (action === 'stand') turn.spent += Math.floor(effectiveSpeed(this.find(id)!)! / .3 / 2) * .3;
+    else {
+      const kind = action.includes('dash') ? 'dash' : 'disengage';
+      if (action.startsWith('bonus-')) turn.bonus = kind; else turn.action = kind;
+      if (kind === 'dash') turn.dashes++; else turn.disengaged = true;
+    }
+    this.state.update(s => ({ ...s, movement: turn, log: this.log(this.find(id)!.name + ': ' + turnActionLabels[action] + '.', s.log) }));
+    if (commit) this.commit();
+  }
+  spendMovement(id: string, cost: number, commit = true): void {
+    const status = this.movementStatus(id);
+    if (!status.active || status.remaining === undefined || !Number.isFinite(cost) || cost <= 0 || cost > status.remaining + .00001) throw new Error('No queda movimiento suficiente.');
+    this.state.update(s => ({ ...s, movement: { ...s.movement!, spent: s.movement!.spent + cost } }));
+    if (commit) this.commit();
   }
   available(owner: Combatant, cost: CombatCost | undefined): number {
     if (!cost) return Infinity;
@@ -155,7 +194,7 @@ export class VttCombat {
     if (contexts && targetIds.some(id => !validTargetContext(contexts.get(id)))) throw new Error('Falta un contexto revisado por objetivo');
     this.context = { ...context, ...(action.area ? { rangeResolved: true } : {}) };
     this.spend(actor, action.cost);
-    this.state.update((s) => ({ ...s, usedAttacks: s.usedAttacks + (action.kind === 'spell' ? 0 : 1), spellUsed: s.spellUsed || action.kind === 'spell',
+    this.state.update((s) => ({ ...s, movement: s.movement ? { ...s.movement, action: action.kind === 'spell' ? 'spell' : 'attack' } : undefined, usedAttacks: s.usedAttacks + (action.kind === 'spell' ? 0 : 1), spellUsed: s.spellUsed || action.kind === 'spell',
       areaCast: action.area ? { origin: { ...origin! } } : undefined,
       context: { ...this.context }, queue: targetIds.map((targetId, index) => ({ attackerId: actor.id, action: structuredClone(action), targetId, castApproved: index > 0, ...(contexts ? { context: { ...contexts.get(targetId)! } } : {}) })) }));
     this.next();
@@ -374,6 +413,7 @@ function isMagicMissile(action: CombatAction): boolean { return action.resolutio
 export function validState(value: unknown): value is CombatState {
   if (!value || typeof value !== 'object') return false;
   const s = value as CombatState;
+  if (s.movement !== undefined && (!s.movement || !Number.isFinite(s.movement.spent) || s.movement.spent < 0 || s.movement.spent > 100000 || !Number.isInteger(s.movement.dashes) || s.movement.dashes < 0 || s.movement.dashes > 2 || typeof s.movement.disengaged !== 'boolean' || (s.movement.action !== undefined && !['attack', 'spell', 'dash', 'disengage'].includes(s.movement.action)) || (s.movement.bonus !== undefined && !['dash', 'disengage'].includes(s.movement.bonus)) || s.movement.dashes !== Number(s.movement.action === 'dash') + Number(s.movement.bonus === 'dash') || s.movement.disengaged !== (s.movement.action === 'disengage' || s.movement.bonus === 'disengage'))) return false;
   if (s.narrative !== undefined && (!Array.isArray(s.narrative) || s.narrative.length > 200 || s.narrative.some((event) =>
     !event || typeof event.id !== 'string' || !Array.isArray(event.messages) || event.messages.some((message) =>
       !message || typeof message.observerId !== 'string' || !Array.isArray(message.audience) || message.audience.some((id) => typeof id !== 'string') ||

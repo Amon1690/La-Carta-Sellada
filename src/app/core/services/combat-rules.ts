@@ -1,3 +1,4 @@
+import { movementProfile } from './combat-movement';
 import { validArea, withCircularArea } from './combat-area';
 import { CombatAction, CombatDamage, CombatProfile, CombatReaction, Combatant, SaveAbility } from '../models/combat';
 import { GameStatBlock } from '../models/campaign';
@@ -63,7 +64,7 @@ function legacyDamage(source: string): CombatDamage[] {
   const matches = [...source.matchAll(/\((\d+d\d+(?:\s*[+-]\s*\d+)?)\)\s*(?:de\s+)?([a-záéíóúñ]+)/gi)];
   return matches.map((match) => ({ dice: match[1].replace(/\s/g, ''), type: match[2] }));
 }
-export function deriveCombat(stats: GameStatBlock | undefined, rules?: RulesCompendium): Pick<Combatant, 'actions' | 'reactions' | 'resources' | 'notes' | 'attacksPerTurn' | 'saves' | 'profile'> {
+export function deriveCombat(stats: GameStatBlock | undefined, rules?: RulesCompendium): Pick<Combatant, 'actions' | 'reactions' | 'resources' | 'notes' | 'attacksPerTurn' | 'saves' | 'profile' | 'movement'> {
   const profile = stats?.combat ?? emptyCombatProfile();
   const saves = Object.fromEntries(Object.entries(SAVE_LABELS).map(([ability, label]) => {
     const explicit = stats?.saves.find((s) => normalizeCombat(s).startsWith(normalizeCombat(label)))?.match(/[+-]\s*\d+/);
@@ -72,7 +73,7 @@ export function deriveCombat(stats: GameStatBlock | undefined, rules?: RulesComp
   // Guided sheets already supply distinct casting modes (slots / origin uses).
   // Their stable sources also keep an edited weapon from reusing an old bonus.
   if (stats && 'build' in stats && (stats.build as { version?: number } | undefined)?.version === 1) {
-    return { actions: profile.actions.map(withCircularArea), reactions: profile.reactions, resources: profile.resources,
+    return { movement: movementProfile(stats), actions: profile.actions.map(withCircularArea), reactions: profile.reactions, resources: profile.resources,
       notes: [...stats.features, ...stats.equipment.map((s) => `Equipo: ${s}`)],
       attacksPerTurn: profile.attacksPerTurn ?? 1, saves, profile };
   }
@@ -133,7 +134,7 @@ export function deriveCombat(stats: GameStatBlock | undefined, rules?: RulesComp
   const multiple = (stats?.attacks ?? []).find((s) => /ataque m[úu]ltiple/i.test(s));
   const count = multiple?.match(/(dos|tres|cuatro|\d) ataques/i)?.[1];
   const inferred = count === 'dos' ? 2 : count === 'tres' ? 3 : count === 'cuatro' ? 4 : Number(count ?? 1);
-  return { actions: actions.map(withCircularArea), reactions, resources: profile.resources, notes, attacksPerTurn: profile.attacksPerTurn ?? inferred, saves, profile };
+  return { movement: movementProfile(stats), actions: actions.map(withCircularArea), reactions, resources: profile.resources, notes, attacksPerTurn: profile.attacksPerTurn ?? inferred, saves, profile };
 }
 function unknownReaction(source: string, name: string): CombatReaction {
   return { source, name, trigger: 'hit', protectOthers: false, range: 0, meleeOnly: false,

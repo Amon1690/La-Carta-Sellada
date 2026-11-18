@@ -81,9 +81,10 @@ export function assertBoardVision(v: unknown, tokenIds: ReadonlySet<string>): as
   if (b['obstacles'] !== undefined) {
     const obstacleIds = new Set<string>();
     for (const item of list(b['obstacles'], 1000)) {
-      const obstacle = record(item, ['id', 'name', 'kind', 'start', 'end', 'source', 'blocksSight', 'blocksEffect', 'open']);
+      const obstacle = record(item, ['id', 'name', 'kind', 'start', 'end', 'source', 'blocksSight', 'blocksEffect', 'blocksMovement', 'open']);
       if (!text(obstacle['id']) || !text(obstacle['name']) || obstacleIds.has(obstacle['id']) ||
           !choice(obstacle['kind'], ['wall', 'door', 'window', 'door-window']) || typeof obstacle['blocksSight'] !== 'boolean' || typeof obstacle['blocksEffect'] !== 'boolean') fail();
+      if (obstacle['blocksMovement'] !== undefined && typeof obstacle['blocksMovement'] !== 'boolean') fail();
       obstacleIds.add(obstacle['id'] as string); source(obstacle['source']);
       const start = record(obstacle['start'], ['x', 'y']), end = record(obstacle['end'], ['x', 'y']);
       if (![start['x'], start['y'], end['x'], end['y']].every((n) => numeric(n)) ||
