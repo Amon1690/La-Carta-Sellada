@@ -45,3 +45,5 @@ small { color: var(--text-muted); font-size: .75rem; }
   .combat-feed { right: 8px; bottom: 8px; width: calc(100% - 162px); }
   .feed-lines { font-size: .75rem; max-height: 35vh; }
 }
+
+.area-template circle { fill: #ff9a3029; stroke: #ffbd64; stroke-width: 3; }

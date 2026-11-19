@@ -66,7 +66,9 @@ describe('Orientación de tokens en oscuridad', () => {
   });
   it('un paso está limitado a una casilla y a terreno explorado, incluso con tokens grandes', () => {
     context.tokens = [token('A', 2 * grid, 2 * grid, 2)];
-    expect(canOrientStep('A', 3 * grid, 3 * grid, context)).toBeTrue();
+    expect(canOrientStep('A', 3 * grid, 3 * grid, context)).toBeFalse();
+    expect(canOrientStep('A', 3 * grid, 2 * grid, context)).toBeTrue();
+    expect(canOrientStep('A', 2 * grid, 3 * grid, context)).toBeTrue();
     expect(canOrientStep('A', 4 * grid, 2 * grid, context)).toBeFalse();
     context.fog = [{ x: 4 * grid, y: 2 * grid, width: grid, height: grid }];
     expect(canOrientStep('A', 3 * grid, 2 * grid, context)).toBeFalse();

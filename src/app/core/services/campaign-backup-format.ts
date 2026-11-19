@@ -1,3 +1,4 @@
+import { validArea } from './combat-area';
 import { assertEncounterWorldReference, assertWorldEnvironment } from './encounter-environment';
 import { GENERIC_ENCOUNTERS } from '../data/generic-encounters';
 import { SheetCollection } from './remote-sheets';
@@ -48,6 +49,7 @@ function combatProfile(value: unknown): void {
     if(!text(a['source'])||!text(a['name'])||!['melee','ranged','spell'].includes(a['kind'])||!['attack','save','automatic'].includes(a['resolution'])||typeof a['reviewed']!=='boolean'||typeof a['resourceConfirmed']!=='boolean'||typeof a['halfOnSave']!=='boolean'||!integer(a['targets'],1,20)||typeof a['repeatTargets']!=='boolean'||!text(a['notes']))fail('datos de acción');
     for(const d of array(a['damage'],'daño',20)){if(!text(d?.dice)||!text(d?.type))fail('daño de acción');}
     for(const key of ['bonus','range','longRange','dc','spellLevel'])if(a[key]!==undefined&&!number(a[key],-1000,10000))fail('valor de acción');
+    if(a['area']!=null&&!validArea(a['area']))fail('radio de acción');
     if(a['saveAbility']!==undefined&&!abilities.includes(a['saveAbility']))fail('característica de salvación');
     if(a['cost']!==undefined)cost(a['cost']);
   }

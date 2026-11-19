@@ -123,6 +123,14 @@
             >
               <img class="map-image" [src]="boardVm.entry.mapUrl" [alt]="'Mapa de ' + boardVm.entry.name" draggable="false" />
               <app-weather-overlay [weather]="vision().environment.weather" />
+              @if (!visionPreview() && areaSelection(); as area) {
+                @if (area.origin; as origin) {
+                  <svg class="attack-area-layer" [attr.viewBox]="'0 0 ' + mapWidth + ' ' + mapHeight" aria-label="Área del ataque">
+                    <circle [attr.cx]="origin.x" [attr.cy]="origin.y" [attr.r]="areaRadiusPixels(area.action.area!.radius)" />
+                    <path [attr.d]="'M '+(origin.x-8)+' '+origin.y+' h 16 M '+origin.x+' '+(origin.y-8)+' v 16'" />
+                  </svg>
+                }
+              }
 
               @if (layers().grid) {
                 <div
@@ -251,6 +259,7 @@
                     type="button"
                     class="vtt-token"
                     [class.attack-target]="targeting() && attackTargetId() === token.instanceId"
+                    [class.area-affected]="areaSelection() && isAreaAffected(token.instanceId)"
                     [class.selected]="isTokenSelected(token.instanceId)"
                     [class.active-turn]="activeTurnId() === token.instanceId"
                     [class.hidden-token]="token.hidden"
@@ -553,12 +562,83 @@
             }
 
             @if (sidebarTab() === 'turns') {
-              <app-vtt-attack [combat]="combat" [actorId]="attackingId()" [targetId]="attackTargetId()" (cancel)="cancelAttack()" (rolled)="attackRolled()" (decision)="showCombatDecision()" (prepare)="prepareAttack($event)" (multiple)="multipleAttack($event)" />
+              @if (areaSelection(); as area) {
+                <section class="area-attack-controls" aria-label="Ataque de área">
+                  <h2>{{ area.action.name }} · radio {{ area.action.area!.radius }} m</h2>
+                  <p>Señala una casilla para centrar el área. Esc cancela.</p>
+                  @if (area.origin) { <p>Tokens afectados: {{ areaTargets().length }}. Incluye aliados y lanzador si están dentro.</p><ul>@for (target of areaTargets(); track target.id) { <li>{{ target.name }}</li> }</ul> }
+                  @if (areaProblem(); as problem) { <p role="status">{{ problem }}</p> }
+                  <label><input type="checkbox" [checked]="areaConfirmed()" (change)="areaConfirmed.set($any($event.target).checked)" /> He revisado el área, la cobertura y los efectos particulares de las fichas.</label>
+                  <label><input type="checkbox" [checked]="areaManual()" (change)="areaManual.set($any($event.target).checked)" /> Resolver manualmente defensas o efectos distintos en cada criatura</label>
+                  <p>Una tirada de daño y una salvación por criatura. Los efectos especiales y las defensas diferentes se resuelven antes de aplicar PG.</p>
+                  <button type="button" class="combat-launch" [disabled]="!areaConfirmed() || !!areaProblem()" (click)="launchArea()">Lanzar al área</button>
+                  <button type="button" class="combat-launch" (click)="cancelAttack()">Cancelar área</button>
+                </section>
+              }
+              @if (!areaSelection()) { <app-vtt-attack [combat]="combat" [actorId]="attackingId()" [targetId]="attackTargetId()" (cancel)="cancelAttack()" (rolled)="attackRolled()" (decision)="showCombatDecision()" (prepare)="prepareAttack($event)" (multiple)="multipleAttack($event)" (area)="beginArea($event)" /> }
               @if (combat.state().log.length) { <p class="combat-feedback token-inspector" role="status">{{ combat.state().log.at(-1) }}</p><details class="combat-log"><summary>Última acción y registro</summary><ol>@for (line of combat.state().log.slice().reverse(); track $index) { <li>{{ line }}</li> }</ol></details> }
               <section class="turn-panel">
                 @if (combatMessage() || combat.error()) { <p role="alert">{{ combatMessage() || combat.error() }}</p> }
                 @if (combat.error()) { <button type="button" class="combat-launch" (click)="resetInvalidCombat()">Restablecer solo el combate inválido</button> }
                 @if (combat.state().pending) { <button type="button" class="combat-launch" (click)="resumeCombat()">Continuar ataque pendiente</button> }
+                @for(link of combat.state().grapples ?? [];track link.id){
+                  @if(!link.ended){<p>Agarre: {{ combat.find(link.ownerId)?.name ?? 'origen sin confirmar' }} → {{ combat.find(link.targetId)?.name ?? 'objetivo sin confirmar' }} · CD de escape {{ link.escapeDc }}</p><button type="button" class="combat-launch" [disabled]="!!combat.state().pending || !!combat.state().unarmed || combat.saving()" (click)="releaseGrapple(link.id)">Confirmar fin del agarre como dirección</button>}
+                }
+                @if(combat.state().unarmed; as decision){
+                  <section class="opportunity-controls" aria-label="Decisión sin armas">
+                  <p>Decisión sin armas pendiente de efectos · {{ combat.find(decision.ownerId)?.name }} → {{ combat.find(decision.targetId)?.name }} · CD {{ decision.dc }}. El recorrido sigue en pausa.</p>
+                  <p>Opción: {{ decision.effect === 'grapple' ? 'Agarrar' : decision.effect === 'push' ? 'Empujar 1,5 m' : 'Derribar' }}. El objetivo elige Fuerza o Destreza.</p>
+                  @if(!decision.save){
+                    <label>Salvación elegida por el objetivo<select [value]="unarmedAbility()" (change)="chooseUnarmedAbility($any($event.target).value)"><option value="">Elegir</option><option value="strength">Fuerza</option><option value="dexterity">Destreza</option></select></label>
+                    <label>Bonificador confirmado<input type="number" step="1" [value]="unarmedModifier() ?? ''" (input)="setUnarmedModifier($any($event.target).value)" /></label>
+                    <label>Objetivo restringido<select [value]="unarmedRestrained() === undefined ? '' : unarmedRestrained() ? 'yes' : 'no'" (change)="unarmedRestrained.set($any($event.target).value === '' ? undefined : $any($event.target).value === 'yes'); unarmedSaveConfirmed.set(false)"><option value="">Confirmar</option><option value="no">No</option><option value="yes">Sí</option></select></label>
+                    <label><input type="checkbox" [checked]="unarmedAdvantage()" (change)="unarmedAdvantage.set($any($event.target).checked); unarmedSaveConfirmed.set(false)" /> Ventaja adicional confirmada</label>
+                    <label><input type="checkbox" [checked]="unarmedDisadvantage()" (change)="unarmedDisadvantage.set($any($event.target).checked); unarmedSaveConfirmed.set(false)" /> Desventaja adicional confirmada</label>
+                    <label><input type="checkbox" [checked]="unarmedSaveConfirmed()" (change)="unarmedSaveConfirmed.set($any($event.target).checked)" /> He revisado la salvación elegida, su bonificador y las condiciones actuales</label>
+                    <button type="button" class="combat-launch" [disabled]="!unarmedAbility() || unarmedModifier() === undefined || unarmedRestrained() === undefined || !unarmedSaveConfirmed()" (click)="rollUnarmed()">Tirar la salvación del objetivo</button>
+                  } @else {
+                    <p>Salvación de {{ decision.save.ability === 'strength' ? 'Fuerza' : 'Destreza' }}: d20 [{{ decision.save.roll.dice.join(', ') }}] + {{ decision.save.roll.bonus }} = {{ decision.save.roll.total }} · {{ decision.save.success ? 'superada' : 'fallida' }}. Esta tirada ya está guardada.</p>
+                    @if(decision.effect === 'push' && !decision.save.success){
+                      <label>Destino del empujón<select [value]="unarmedPushCell() ?? ''" (change)="unarmedPushCell.set($any($event.target).value === '' ? undefined : +$any($event.target).value); unarmedEffectsConfirmed.set(false)"><option value="">Elegir dirección ortogonal</option>@for(choice of unarmedPushChoices();track choice.cell){<option [value]="choice.cell">{{ choice.name }} · 1,5 m</option>}</select></label>
+                      @if(!unarmedPushChoices().length){<p>No hay un destino automático confirmado. Dirección debe revisar espacio, obstáculos y efectos antes de adjudicar el empujón.</p>}
+                    }
+                    <label><input type="checkbox" [checked]="unarmedEffectsConfirmed()" (change)="confirmUnarmedEffects($any($event.target).checked)" /> He revisado alcance, tamaños, mano libre cuando corresponde, destino y efectos actuales</label>
+                    <button type="button" class="combat-launch" [disabled]="!unarmedEffectsConfirmed()" (click)="finishUnarmed()">Confirmar resultado sin repetir la tirada</button>
+                  }
+                  <label><input type="checkbox" [checked]="opportunityFacts(decision.ownerId).canSee" (change)="opportunityFacts(decision.ownerId).canSee=$any($event.target).checked" /> Dirección confirma la visión personal cuando no consta automáticamente</label>
+                  <label><input type="checkbox" [checked]="opportunityFacts(decision.ownerId).lineOfEffect" (change)="opportunityFacts(decision.ownerId).lineOfEffect=$any($event.target).checked" /> Dirección confirma la línea de efecto cuando no consta automáticamente</label>
+                  <button type="button" class="combat-launch" (click)="cancelUnarmedDecision()">Cancelar decisión sin armas · conservar reacción gastada</button>
+                  </section>
+                }
+                @if(combat.state().route; as route){
+                  <section class="opportunity-controls" aria-label="Recorrido interrumpido">
+                    <h3>Recorrido en curso · {{ combat.find(route.moverId)?.name }}</h3>
+                    <p>Pasos confirmados: {{ route.next }} de {{ route.path.length }}. Las oportunidades se resuelven antes de abandonar el alcance.</p>
+                    @for(candidate of movementCandidates();track candidate.reactorId){
+                      <div class="token-inspector">
+                        <strong>{{ combat.find(candidate.reactorId)?.name }} · reacción de oportunidad</strong>
+                        @for(doubt of candidate.doubts;track doubt){<p>{{ doubt }}</p>}
+                        @if(candidate.doubts.length){
+                          <label><input type="checkbox" [checked]="opportunityFacts(candidate.reactorId).canSee" (change)="opportunityFacts(candidate.reactorId).canSee=$any($event.target).checked" /> Dirección confirma que ve personalmente al objetivo</label>
+                          <label><input type="checkbox" [checked]="opportunityFacts(candidate.reactorId).lineOfEffect" (change)="opportunityFacts(candidate.reactorId).lineOfEffect=$any($event.target).checked" /> Dirección confirma que el ataque no está bloqueado</label>
+                        }
+                        @for(attack of candidate.attacks;track attack.action.source){<button type="button" class="combat-launch" [disabled]="!!attack.problem" (click)="resolveOpportunity(candidate.reactorId,attack.action.source)">{{ attack.action.name }} · usar reacción</button>@if(attack.problem){<p>{{ attack.problem }}</p>}}
+                        @if(hasUnarmedChoice(candidate)){
+                          <label>Tamaño confirmado del reactor<select [value]="opportunityFacts(candidate.reactorId).ownerSize ?? ''" (change)="opportunityFacts(candidate.reactorId).ownerSize=$any($event.target).value || undefined"><option value="">Confirmar categoría</option>@for(size of unarmedSizes;track size[0]){<option [value]="size[0]">{{ size[1] }}</option>}</select></label>
+                          <label>Tamaño confirmado del objetivo<select [value]="opportunityFacts(candidate.reactorId).targetSize ?? ''" (change)="opportunityFacts(candidate.reactorId).targetSize=$any($event.target).value || undefined"><option value="">Confirmar categoría</option>@for(size of unarmedSizes;track size[0]){<option [value]="size[0]">{{ size[1] }}</option>}</select></label>
+                          <label><input type="checkbox" [checked]="!!opportunityFacts(candidate.reactorId).freeHand" (change)="opportunityFacts(candidate.reactorId).freeHand=$any($event.target).checked" /> Mano libre confirmada para agarrar</label>
+                          <button type="button" class="combat-launch" [disabled]="!opportunityFacts(candidate.reactorId).ownerSize || !opportunityFacts(candidate.reactorId).targetSize || !opportunityFacts(candidate.reactorId).freeHand" (click)="declareUnarmed(candidate.reactorId,'grapple')">Agarrar · reacción</button>
+                          <button type="button" class="combat-launch" [disabled]="!opportunityFacts(candidate.reactorId).ownerSize || !opportunityFacts(candidate.reactorId).targetSize" (click)="declareUnarmed(candidate.reactorId,'push')">Empujar · reacción</button>
+                          <button type="button" class="combat-launch" [disabled]="!opportunityFacts(candidate.reactorId).ownerSize || !opportunityFacts(candidate.reactorId).targetSize" (click)="declareUnarmed(candidate.reactorId,'prone')">Derribar · reacción</button>
+                        }
+                        <button type="button" class="combat-launch" (click)="resolveOpportunity(candidate.reactorId)">Dejar pasar · conservar reacción</button>
+                      </div>
+                    }
+                    <button type="button" class="combat-launch" [disabled]="!!combat.state().pending || !!combat.state().unarmed" (click)="resumeMovement()">Continuar recorrido</button>
+                    <button type="button" class="combat-launch" [disabled]="!!combat.state().pending || !!combat.state().unarmed" (click)="cancelMovement()">Cancelar recorrido restante</button>
+                  </section>
+                }
+                @if(combat.state().started){<label class="reposition-control"><input type="checkbox" [checked]="repositioning()" (change)="repositioning.set($any($event.target).checked)" /> Recolocar el próximo arrastre como dirección, sin movimiento ni oportunidades</label>}
                 <header>
                   <div><small>Combate</small><h2>Iniciativa</h2></div>
                   <div class="turn-actions">
@@ -568,6 +648,14 @@
                 </header>
                 @if (!combat.state().started) { <button type="button" class="combat-launch" [disabled]="!tokens().length || combat.busy()" (click)="startCombat()">Iniciar con esta iniciativa</button> }
                 @else { <p>Combate iniciado · ronda {{ combat.state().round }}</p><button type="button" class="combat-launch" [disabled]="combat.busy()" (click)="endCombat()">Terminar combate</button> }
+                @if (activeTurnId(); as id) {
+                  @if (combat.movementStatus(id); as movement) {
+                    <p>Movimiento: {{ movement.remaining === undefined ? 'sin confirmar' : movement.remaining + ' m restantes' }} · gastado {{ movement.spent }} m</p>
+                    @if (movement.message) { <p>{{ movement.message }}</p> }
+                    @for (action of movement.options; track action) { <button type="button" class="combat-launch" (click)="takeMovementAction(id, action)">{{ turnActionLabels[action] }}</button> }
+                    @if (movement.disengaged) { <p>Destrabado hasta el final del turno.</p> }
+                  }
+                }
                 <ol>
                   @for (token of initiativeTokens(); track token.instanceId; let position = $index) {
                     <li [class.active]="activeTurnId() === token.instanceId">

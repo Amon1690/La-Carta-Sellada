@@ -1,3 +1,6 @@
+import { unarmedPushProblem } from '../../../../core/services/combat-unarmed';
+import type { CreatureSize, UnarmedEffect, UnarmedSaveAbility } from '../../../../core/models/combat';
+import { AreaPoint, areaRadiusPixels, areaReachesToken, originDistance, tokenCentre } from '../../../../core/services/combat-area';
 import { AsyncPipe } from '@angular/common';
 import {
   Component,
@@ -16,19 +19,21 @@ import { HttpErrorResponse } from '@angular/common/http';
 
 import { Campaign } from '../../../../core/models/campaign';
 import { BoardVisionState, VisionEffect, VisionObstacle, VisionProfile, VisionSense } from '../../../../core/models/vision';
-import { isVisionDoor } from '../../../../core/services/vision-geometry';
+import { obstacleShadows, isVisionDoor } from '../../../../core/services/vision-geometry';
 import { advanceVisionEffects, endVisionConcentration, endVisionEffect } from '../../../../core/services/vision-effects';
 import { assertBoardVision, emptyBoardVision, withoutRemovedObservers } from '../../../../core/services/vision-state';
 import { previewSight, previewTokenVisible } from '../../../../core/services/vision-preview';
 import { canOrientStep, orientedTokenVisible } from '../../../../core/services/token-orientation';
 import { explorationAreas, explorationRects, mergeExploration, rememberExploration } from '../../../../core/services/vision-exploration';
-import { evaluateVision } from '../../../../core/services/vision-engine';
+import { segmentsIntersect, evaluateVision } from '../../../../core/services/vision-engine';
 import { ENCOUNTER_PUBLISHER, SharingSnapshot } from '../../../../core/services/encounter-sharing';
 import { CampaignDataService } from '../../../../core/services/campaign-data';
 import { CharacterSheetsService } from '../../../../core/services/character-sheets';
 import { RulesDataService } from '../../../../core/services/rules-data';
 import { RulesCompendium } from '../../../../core/models/rules';
 import { CombatAction, CombatCondition, CombatSide, Combatant } from '../../../../core/models/combat';
+import { movementPath, movementRoutes, turnActionLabels } from '../../../../core/services/combat-movement';
+import type { TurnAction } from '../../../../core/models/combat';
 import { actionProblem, deriveCombat } from '../../../../core/services/combat-rules';
 import { attackSituation, normalAttackFacts } from '../../../../core/services/attack-situation';
 import { CommandReceipt, DirectorEncounter, EncounterCommand, LiveBoardState, PlayerControls } from '../../../../core/models/encounter-live';
@@ -213,6 +218,11 @@ export class VttBoard {
   protected readonly combatMessage = signal('');
   protected readonly attackingId = signal<string | undefined>(undefined);
   protected readonly attackTargetId = signal<string | undefined>(undefined);
+  protected readonly areaSelection = signal<{ ownerId: string; action: CombatAction; origin?: AreaPoint; revision?: string } | undefined>(undefined);
+  protected readonly areaConfirmed = signal(false);
+  protected readonly areaManual = signal(false);
+  protected readonly areaRadiusPixels = areaRadiusPixels;
+  protected readonly areaTargets = computed(() => { const a = this.areaSelection(); return a?.origin ? this.combat.areaTargets(a.action, a.origin) : []; });
   protected readonly conditionLabels = Object.entries(CONDITION_LABELS) as [CombatCondition, string][];
   protected readonly targeting = computed(() => !this.visionPreview() && !!this.attackingId() && this.combat.canAttack(this.attackingId()!));
   private readonly rules = signal<RulesCompendium | undefined>(undefined);
@@ -228,7 +238,13 @@ export class VttBoard {
         conditions: token.conditions, side: token.side, hp: token.hp, maxHp: token.maxHp, armorClass: undefined, ...deriveCombat(undefined), notes: ['La preparación de esta ficha no es válida. Revisa los datos antes de combatir.'] }; }
     });
   });
-  protected readonly combat = new VttCombat(() => this.combatants(), () => this.activeTurnId(), (hp) => {
+  protected readonly combat = new VttCombat(() => {
+    const origins = new Map(this.tokenDrag?.origins.map(token=>[token.instanceId,token]));
+    return this.combatants().map(actor => {
+      const origin = origins.get(actor.id);
+      return origin ? {...actor,x:origin.x,y:origin.y,size:origin.size} : actor;
+    });
+  }, () => this.activeTurnId(), (hp) => {
     if (hp) this.tokens.update((tokens) => tokens.map((token) => token.instanceId === hp.id ? { ...token, hp: hp.hp } : token));
     this.persist();
   }, (id, profile) => {
@@ -249,6 +265,39 @@ export class VttBoard {
   }, () => {
     const { exploration: _memory, ...vision } = this.vision();
     return [this.storageKey, vision, [...this.tokenVisionProfiles()]];
+  }, (from, to, space, radius) => {
+    const obstacles = this.vision().obstacles;
+    if(obstacles && space && radius!==undefined)return areaReachesToken(space,from,radius,obstacleShadows(obstacles,from,'blocksEffect'));
+    return obstacles === undefined ? undefined : !obstacles.some(o => o.blocksEffect && !(isVisionDoor(o) && o.open) && segmentsIntersect(from, to, o.start, o.end));
+  }, {
+    grid: this.gridSize,
+    path: (actor, suffix, perspective) => {
+      const token = this.tokens().find(t => t.instanceId === actor.id);
+      const allowed = perspective !== 'director' && token?.actorId.startsWith('player:') ? this.movementCells(token, this.tokens()) : Array.from({ length: 600 }, (_, i) => i);
+      return movementPath(actor, this.combatants(), this.vision().obstacles, suffix, allowed, this.gridSize);
+    },
+    move: (id, to) => {
+      const tokens = this.tokens(), vision = this.vision();
+      const undo = () => { this.tokens.set(tokens); this.vision.set(vision); };
+      try { this.tokens.set(tokens.map(t => t.instanceId === id ? { ...t, ...to } : t)); this.recordExploration(this.tokens()); }
+      catch(error) { undo(); throw error; }
+      return undo;
+    },
+    unarmed: (decision,to) => {
+      const tokens = this.tokens(), vision = this.vision(), target = this.combat.find(decision.targetId), owner = this.combat.find(decision.ownerId);
+      if (!target || !owner || !decision.save || decision.save.success) throw new Error('El efecto ya no está disponible.');
+      if (decision.effect === 'push') {
+        const problem = unarmedPushProblem(owner,target,to,this.gridSize), cell = to && Math.round(to.y/this.gridSize)*30+Math.round(to.x/this.gridSize);
+        if (problem || cell === undefined || !movementPath(target,this.combatants(),this.vision().obstacles,[cell],[cell],this.gridSize)) throw new Error('El destino del empujón requiere revisión de dirección.');
+      } else if (decision.effect !== 'prone') throw new Error('Efecto de tablero no válido.');
+      const undo = () => { this.tokens.set(tokens); this.vision.set(vision); };
+      try {
+        this.tokens.set(tokens.map(token=>token.instanceId!==decision.targetId?token:decision.effect==='push'?{...token,...to!}:{...token,conditions:[...new Set([...(token.conditions??[]),'prone' as const])]}));
+        this.recordExploration(this.tokens());
+      } catch(error) { undo(); throw error; }
+      return undo;
+    },
+    canStop: actor => !this.combatants().some(other => other.id !== actor.id && actor.x < other.x + other.size * this.gridSize - .001 && actor.x + actor.size * this.gridSize > other.x + .001 && actor.y < other.y + other.size * this.gridSize - .001 && actor.y + actor.size * this.gridSize > other.y + .001),
   });
   private readonly openedSheetTokenId = signal<string | undefined>(undefined);
   private readonly sheetRevision = signal(0);
@@ -464,14 +513,15 @@ export class VttBoard {
       this.tokens.set(structuredClone(state.tokens)); this.fogRects.set(structuredClone(state.fogRects));
       this.vision.set(structuredClone(state.vision ?? emptyBoardVision()));
       this.layers.set(structuredClone(state.layers)); this.activeTurnId.set(state.activeTurnId);
-      this.combat.restore(state.combat); this.selectedTokenIds.set([]);
+      this.combat.restore(state.combat); this.resetUnarmedForm(); this.selectedTokenIds.set([]);
       this.recordExploration(this.tokens());
-      localStorage.setItem(this.storageKey, JSON.stringify({ ...state, vision: this.vision(), zoom: this.zoom() }));
+      localStorage.setItem(this.storageKey, JSON.stringify({ ...state, combat: this.combat.serialized(), vision: this.vision(), zoom: this.zoom() }));
       this.visionStorageBlocked = false; this.saveStatus.set('Sincronizado');
     } finally { this.applyingRemote = false; }
   }
 
   private captureBoardState(): StoredBoardState {
+    this.combat.reconcileGrapples();
     const origins = new Map(this.tokenDrag?.origins.map((token) => [token.instanceId, token]));
     this.recordExploration(this.tokens().map((token) => ({ ...token, ...(origins.get(token.instanceId) ?? {}) })));
     return structuredClone({ vision: this.vision(), combat: this.combat.serialized(),
@@ -479,6 +529,136 @@ export class VttBoard {
       fogRects: this.fogRects(), layers: this.layers(), zoom: this.zoom(), activeTurnId: this.activeTurnId() });
   }
 
+  protected readonly unarmedSizes = [['tiny','Diminuto'],['small','Pequeño'],['medium','Mediano'],['large','Grande'],['huge','Enorme'],['gargantuan','Gargantuesco']] as const;
+  protected readonly unarmedAbility = signal<UnarmedSaveAbility | ''>('');
+  protected readonly unarmedModifier = signal<number | undefined>(undefined);
+  protected readonly unarmedRestrained = signal<boolean | undefined>(undefined);
+  protected readonly unarmedAdvantage = signal(false);
+  protected readonly unarmedDisadvantage = signal(false);
+  protected readonly unarmedSaveConfirmed = signal(false);
+  protected readonly unarmedEffectsConfirmed = signal(false);
+  protected readonly unarmedPushCell = signal<number | undefined>(undefined);
+  private unarmedSaveKey = '';
+  private unarmedEffectKey = '';
+  private resetUnarmedForm(): void {
+    this.unarmedAbility.set(''); this.unarmedModifier.set(undefined); this.unarmedRestrained.set(undefined);
+    this.unarmedAdvantage.set(false); this.unarmedDisadvantage.set(false); this.unarmedSaveConfirmed.set(false); this.unarmedEffectsConfirmed.set(false); this.unarmedPushCell.set(undefined);
+    this.unarmedSaveKey = ''; this.unarmedEffectKey = '';
+  }
+  protected hasUnarmedChoice(candidate: { attacks: { action: CombatAction; problem?: string }[] }): boolean { return candidate.attacks.some(entry=>entry.action.source==='rule:basic-unarmed-2024'&&!entry.problem); }
+  private attemptUnarmed(action: ()=>void): void {
+    try { action(); this.combatMessage.set(''); } catch(error) { this.combatMessage.set(error instanceof Error?error.message:'No se pudo resolver la opción sin armas.'); }
+  }
+  protected declareUnarmed(ownerId: string, option: UnarmedEffect): void {
+    this.attemptUnarmed(()=>{
+      const token = this.tokens().find(t=>t.instanceId===ownerId), window = this.combat.state().route?.window;
+      if (!token || !this.currentCampaign || !window) throw new Error('Esta ventana ya no está disponible.');
+      const statistics = this.resolveTokenSheet(token,this.currentCampaign).statistics;
+      this.combat.declareUnarmedOpportunity(ownerId,option,statistics,this.opportunityFacts(ownerId),window.id); this.resetUnarmedForm();
+    });
+  }
+  protected chooseUnarmedAbility(value: string): void {
+    this.unarmedAbility.set(value==='strength'||value==='dexterity'?value:''); this.unarmedModifier.set(undefined); this.unarmedSaveConfirmed.set(false);
+    const decision = this.combat.state().unarmed, target = this.tokens().find(t=>t.instanceId===decision?.targetId), ability = this.unarmedAbility();
+    this.unarmedRestrained.set(target && Array.isArray(target.conditions)?target.conditions.includes('restrained'):undefined);
+    if (target && this.currentCampaign && ability) {
+      const statistics = this.resolveTokenSheet(target,this.currentCampaign).statistics;
+      try { if (statistics && Number.isFinite(statistics.abilities?.[ability])) this.unarmedModifier.set(deriveCombat(statistics,this.rules()).saves[ability]); } catch { this.unarmedModifier.set(undefined); }
+    }
+    this.unarmedSaveKey = this.areaRevision();
+  }
+  protected setUnarmedModifier(value: string): void { this.unarmedModifier.set(value.trim()===''?undefined:Number(value)); this.unarmedSaveConfirmed.set(false); }
+  protected rollUnarmed(): void {
+    this.attemptUnarmed(()=>{
+      const decision = this.combat.state().unarmed, ability = this.unarmedAbility(), restrained = this.unarmedRestrained();
+      if (!decision || !ability || restrained === undefined || !this.unarmedSaveConfirmed()) throw new Error('El objetivo debe elegir y confirmar su salvación y condiciones.');
+      if (this.unarmedSaveKey !== this.areaRevision()) { this.unarmedSaveConfirmed.set(false); throw new Error('Las fichas o el entorno han cambiado. Vuelve a elegir la salvación y revisa sus valores.'); }
+      this.combat.rollUnarmedOpportunity(ability,this.unarmedModifier(),{restrained,advantage:this.unarmedAdvantage(),disadvantage:this.unarmedDisadvantage()},this.opportunityFacts(decision.ownerId));
+      this.unarmedEffectsConfirmed.set(false); this.unarmedPushCell.set(undefined);
+    });
+  }
+  protected confirmUnarmedEffects(confirmed: boolean): void { this.unarmedEffectsConfirmed.set(confirmed); this.unarmedEffectKey = confirmed?this.areaRevision():''; }
+  protected unarmedPushChoices() {
+    const decision = this.combat.state().unarmed, target = decision && this.combat.find(decision.targetId), owner = decision && this.combat.find(decision.ownerId);
+    if (!decision || decision.effect!=='push' || decision.save?.success!==false || !target || !owner) return [];
+    return [{dx:1,dy:0,name:'Derecha'},{dx:-1,dy:0,name:'Izquierda'},{dx:0,dy:1,name:'Abajo'},{dx:0,dy:-1,name:'Arriba'}].flatMap(direction=>{
+      const to={x:target.x+direction.dx*this.gridSize,y:target.y+direction.dy*this.gridSize},cell=Math.round(to.y/this.gridSize)*30+Math.round(to.x/this.gridSize);
+      return !unarmedPushProblem(owner,target,to,this.gridSize)&&movementPath(target,this.combatants(),this.vision().obstacles,[cell],[cell],this.gridSize)?[{cell,name:direction.name}]:[];
+    });
+  }
+  protected finishUnarmed(): void {
+    this.attemptUnarmed(()=>{
+      const decision = this.combat.state().unarmed; if (!decision || !this.unarmedEffectsConfirmed()) throw new Error('Revisa los efectos antes de aplicarlos.');
+      if (this.unarmedEffectKey !== this.areaRevision()) { this.unarmedEffectsConfirmed.set(false); throw new Error('La situación ha cambiado. Revisa de nuevo los efectos, sin repetir la tirada.'); }
+      const cell=this.unarmedPushCell(),choice=this.unarmedPushChoices().find(choice=>choice.cell===cell);
+      if (decision.effect==='push'&&decision.save?.success===false&&!choice) throw new Error('Elige un destino permitido para el empujón.');
+      this.combat.finishUnarmedOpportunity(true,choice?{x:choice.cell%30*this.gridSize,y:Math.floor(choice.cell/30)*this.gridSize}:undefined,this.opportunityFacts(decision.ownerId)); this.resetUnarmedForm();
+    });
+  }
+  protected readonly repositioning = signal(false);
+  private opportunityFactsKey = '';
+  private readonly opportunityReviews = new Map<string, { canSee: boolean; lineOfEffect: boolean; ownerSize?: CreatureSize; targetSize?: CreatureSize; freeHand?: boolean }>();
+  protected opportunityFacts(id: string) {
+    const key = JSON.stringify([this.combat.state().route?.window?.id, this.areaRevision()]);
+    if (key !== this.opportunityFactsKey) { this.opportunityFactsKey = key; this.opportunityReviews.clear(); }
+    if (!this.opportunityReviews.has(id)) this.opportunityReviews.set(id, { canSee: false, lineOfEffect: false });
+    return this.opportunityReviews.get(id)!;
+  }
+  protected movementCandidates() {
+    if (!this.combat.state().route?.window || this.combat.state().pending) return [];
+    try { return this.combat.routeOpportunities(); } catch { return []; }
+  }
+  protected resumeMovement(): void {
+    this.combatMessage.set('');
+    try {
+      for (let steps = 0; steps < 600 && this.combat.state().route; steps++) if (this.combat.continueMove() !== 'moved') break;
+      this.combatMessage.set(this.combat.state().route ? 'Recorrido en pausa antes de abandonar un alcance. Resuelve las oportunidades o cancela el recorrido.' : 'Recorrido completado.');
+    } catch(error) { this.combatMessage.set(error instanceof Error ? error.message : 'No se pudo continuar el recorrido.'); }
+  }
+  protected releaseGrapple(id: string): void {
+    try { this.combat.releaseGrapple(id); this.combatMessage.set('Fin del agarre confirmado por dirección.'); }
+    catch(error) { this.combatMessage.set(error instanceof Error ? error.message : 'No se pudo finalizar el agarre.'); }
+  }
+  protected cancelUnarmedDecision(): void {
+    try { this.combat.cancelUnarmedOpportunity(); this.combatMessage.set('Decisión sin armas cancelada; se conserva la reacción gastada.'); }
+    catch(error) { this.combatMessage.set(error instanceof Error ? error.message : 'No se pudo cancelar la decisión.'); }
+  }
+  protected cancelMovement(): void {
+    try { this.combat.cancelMove(); this.combatMessage.set('Recorrido cancelado; se conserva el movimiento ya gastado.'); }
+    catch(error) { this.combatMessage.set(error instanceof Error ? error.message : 'No se pudo cancelar el recorrido.'); }
+  }
+  protected resolveOpportunity(reactorId: string, source?: string): void {
+    try {
+      const route = this.combat.state().route, window = route?.window;
+      if (!route || !window) throw new Error('Esta ventana ya no está disponible.');
+      if (source === undefined) this.combat.skipOpportunity(window.id, reactorId);
+      else {
+        const next = route.path[route.next], facts = this.opportunityFacts(reactorId);
+        this.combat.beginOpportunity(reactorId, source, route.moverId, { x: next % 30 * this.gridSize, y: Math.floor(next / 30) * this.gridSize }, 'speed', { canSee: facts.canSee, lineOfEffect: facts.lineOfEffect }, window.id);
+        this.showCombatDecision();
+      }
+      this.combatMessage.set('');
+    } catch(error) { this.combatMessage.set(error instanceof Error ? error.message : 'No se pudo resolver la oportunidad.'); }
+  }
+  private movementCells(token: BoardToken, tokens: BoardToken[]): number[] {
+    if (token.hidden || !this.vision().enabled) return [];
+    const state = { ...this.vision(), groups: [{ id: 'personal', name: 'Personal', observerIds: [token.instanceId] }], activeGroupId: 'personal' };
+    const profiles = this.tokenVisionProfiles(), geometry = previewSight(state, tokens, profiles, this.gridSize, this.mapWidth, this.mapHeight);
+    if (geometry.pending) return [];
+    const orientation = { state, tokens, profiles, observerIds: [token.instanceId], circles: geometry.circles, fog: this.fogRects(), grid: this.gridSize }, cells: number[] = [];
+    for (let row = 0; row < 20; row++) for (let column = 0; column < 30; column++) {
+      const x = column * this.gridSize, y = row * this.gridSize;
+      if (x + token.size * this.gridSize > this.mapWidth + .001 || y + token.size * this.gridSize > this.mapHeight + .001) continue;
+      if (previewTokenVisible({ ...token, x, y }, geometry.circles, this.fogRects(), this.gridSize) || canOrientStep(token.instanceId, x, y, orientation)) cells.push(row * 30 + column);
+    }
+    return cells;
+  }
+  protected readonly turnActionLabels = turnActionLabels;
+  protected takeMovementAction(id: string, action: TurnAction, persist = true): void {
+    this.combat.takeTurnAction(id, action, false);
+    if (action === 'stand') this.tokens.update(tokens => tokens.map(t => t.instanceId === id ? { ...t, conditions: t.conditions?.filter(c => c !== 'prone') } : t));
+    if (persist) this.persist();
+  }
   private playerControls(tokens: BoardToken[]): Record<string, PlayerControls> {
     const result: Record<string, PlayerControls> = {};
     const profiles = this.tokenVisionProfiles();
@@ -487,24 +667,37 @@ export class VttBoard {
       const geometry = previewSight(state, tokens, profiles, this.gridSize, this.mapWidth, this.mapHeight);
       const orientation = { state, tokens, profiles, observerIds: [token.instanceId], circles: geometry.circles, fog: this.fogRects(), grid: this.gridSize };
       const visible = token.hidden ? [] : tokens.filter((item) => previewTokenVisible(item, geometry.circles, this.fogRects(), this.gridSize));
-      const canMove = !this.tokenDrag && !token.hidden && !geometry.pending && this.vision().enabled && this.combat.state().started &&
-        this.combat.state().turnId === token.instanceId && this.activeTurnId() === token.instanceId && !this.combat.busy() && token.hp > 0 && !token.conditions?.includes('incapacitated');
+      const canAct = !this.tokenDrag && !token.hidden && !geometry.pending && this.vision().enabled && this.combat.state().started &&
+        this.combat.state().turnId === token.instanceId && this.activeTurnId() === token.instanceId && !this.combat.busy() && token.hp > 0;
       const owner = this.combat.find(token.instanceId);
-      const canAttack = canMove && this.combat.canAttack(token.instanceId);
+      const canAttack = canAct && this.combat.canAttack(token.instanceId);
+      const movement = this.combat.movementStatus(token.instanceId);
       const cells: number[] = [];
-      if (canMove) for (let row = 0; row < 20; row++) for (let column = 0; column < 30; column++) {
+      if (canAct) for (let row = 0; row < 20; row++) for (let column = 0; column < 30; column++) {
         const x = column * this.gridSize, y = row * this.gridSize;
         if (x + token.size * this.gridSize > this.mapWidth + .001 || y + token.size * this.gridSize > this.mapHeight + .001) continue;
         if (previewTokenVisible({ ...token, x, y }, geometry.circles, this.fogRects(), this.gridSize) || canOrientStep(token.instanceId, x, y, orientation)) cells.push(row * 30 + column);
       }
+      const routes = canAct && owner && movement.remaining !== undefined ? movementRoutes(owner, this.combatants().filter(a => a.id === owner.id || visible.some(t => t.instanceId === a.id)), this.vision().obstacles, cells, movement.remaining, this.gridSize) : [];
+      const canMove = canAct && routes.length > 0;
       const targets = visible.filter((item) => item.instanceId !== token.instanceId).map((item) => ({ id: item.instanceId, name: item.name, x: item.x, y: item.y, size: item.size }));
       const attacks = canAttack && owner ? owner.actions.filter((action) => !actionProblem(action) && this.combat.available(owner, action.cost) >= (action.cost?.amount ?? 0) &&
-        !(action.kind === 'spell' && action.resolution === 'attack' && !action.attackType)).map((action) => ({ source: action.source, name: action.name,
+        !(action.kind === 'spell' && action.resolution === 'attack' && !action.attackType)).map((action) => {
+        if (action.area) {
+          const cells: number[] = [];
+          for (let cell=0;cell<600;cell++) {
+            const x=cell%30*this.gridSize,y=Math.floor(cell/30)*this.gridSize,origin={x:x+this.gridSize/2,y:y+this.gridSize/2};
+            if (originDistance(owner,origin)<=action.range!+.001 && this.combat.areaLineOfEffect?.(tokenCentre(owner),origin)===true &&
+              previewTokenVisible({...token,x,y,size:1},geometry.circles,this.fogRects(),this.gridSize)) cells.push(cell);
+          }
+          return {source:action.source,name:action.name,targetIds:[],area:{radius:action.area.radius,cells}};
+        }
+        return { source: action.source, name: action.name,
           targetIds: this.combat.targets(owner, action).filter((actor) => targets.some((target) => target.id === actor.id)).filter((target) => {
             const info = attackSituation(owner, target, action, this.combatants(), { ...normalAttackFacts(), reviewed: true }, this.combat.sight);
             return !info.blocked && !info.doubts.length && !info.threatUnknown && !info.spellTypeUnknown;
-          }).map((actor) => actor.id) })) : [];
-      result[token.instanceId] = { position: { x: token.x, y: token.y, size: token.size }, canMove, canAttack, cells, targets, attacks };
+          }).map((actor) => actor.id) }; }) : [];
+      result[token.instanceId] = { position: { x: token.x, y: token.y, size: token.size }, canMove, canAttack, cells: routes.map(r => r.cell), targets, attacks, movement: { ...movement, active: canAct, options: canAct ? movement.options : [], routes } };
     }
     return result;
   }
@@ -519,9 +712,25 @@ export class VttBoard {
       const controls = this.playerControls(this.tokens())[command.observerId];
       if (command.type === 'move') {
         if (!controls?.canMove || command.cell === undefined || !controls.cells.includes(command.cell)) throw new Error('Movimiento no permitido.');
-        const cell = command.cell;
-        this.tokens.update((tokens) => tokens.map((token) => token.instanceId === command.observerId ? { ...token, x: cell % 30 * this.gridSize, y: Math.floor(cell / 30) * this.gridSize } : token));
-        receipt = { id: command.id, status: 'applied', message: 'Token movido.' };
+        const route = controls.movement?.routes.find(r => r.cell === command.cell);
+        if (!route || command.path && JSON.stringify(route.path) !== JSON.stringify(command.path)) throw new Error('El recorrido ha cambiado.');
+        const actor = this.combat.find(command.observerId);
+        const checked = actor && movementPath(actor, this.combatants(), this.vision().obstacles, route.path, route.path, this.gridSize);
+        if (!checked || Math.abs(checked.cost - route.cost) > .00001) throw new Error('No se puede completar el movimiento.');
+        this.combat.planMove(route.path);
+        this.resumeMovement();
+        receipt = { id: command.id, status: 'applied', message: this.combat.state().route ? 'Recorrido aceptado y pausado. Dirección resolverá las decisiones pendientes.' : 'Token movido.' };
+      } else if (command.type === 'turn') {
+        if (!controls?.movement?.options.includes(command.source as TurnAction)) throw new Error('Acción no disponible.');
+        this.takeMovementAction(command.observerId, command.source as TurnAction, false);
+        receipt = { id: command.id, status: 'applied', message: turnActionLabels[command.source as TurnAction] + '.' };
+      } else if (command.cell !== undefined) {
+        const owner=this.combat.find(command.observerId),action=owner?.actions.find(a=>a.source===command.source);
+        if(!owner||!action?.area||!controls?.canAttack||!controls.attacks.some(a=>a.source===action.source&&a.area?.cells.includes(command.cell!))) throw new Error('Área no permitida.');
+        const origin={x:(command.cell%30+.5)*this.gridSize,y:(Math.floor(command.cell/30)+.5)*this.gridSize};
+        this.combat.begin(action.source,this.combat.areaTargets(action,origin).map(t=>t.id),{advantage:false,disadvantage:false,armorAdjustment:0,damageFactor:1,confirmed:true},undefined,origin);
+        this.combat.settleAutomatic();
+        receipt={id:command.id,status:'applied',message:'Lanzamiento de área procesado. El director resolverá las decisiones pendientes.'};
       } else {
         const owner = this.combat.find(command.observerId), target = this.combat.find(command.targetId);
         const action = owner?.actions.find((action) => action.source === command.source);
@@ -703,7 +912,7 @@ export class VttBoard {
     const mode = this.mode() as 'wall' | 'door' | 'window';
     const kind = mode === 'door' && this.doorHasWindow() ? 'door-window' : mode;
     const obstacle: VisionObstacle = { id: this.newId('obstacle'), name: `${kind === 'wall' ? 'Pared' : kind === 'window' ? 'Ventana' : kind === 'door-window' ? 'Puerta con ventana' : 'Puerta'} ${(this.vision().obstacles?.length ?? 0) + 1}`,
-      kind, start: { ...this.drawStart }, end, blocksSight: kind === 'wall' || kind === 'door', blocksEffect: true,
+      kind, start: { ...this.drawStart }, end, blocksSight: kind === 'wall' || kind === 'door', blocksEffect: true, blocksMovement: true,
       source: { kind: 'director', reference: 'Trazado sobre el mapa declarado por dirección' }, ...(mode === 'door' ? { open: false } : {}) };
     try { this.setBoardVision({ ...this.vision(), obstacles: [...(this.vision().obstacles ?? []), obstacle] }); this.visionMessage.set(`${this.obstacleLabel(obstacle)} guardada.`); }
     catch { this.visionMessage.set('No se pudo guardar el trazado. Conserva el guardado original y revisa el límite de obstáculos.'); }
@@ -917,6 +1126,7 @@ export class VttBoard {
   protected selectToken(instanceId: string, event: MouseEvent): void {
     event.stopPropagation();
     if (this.visionPreview()) return;
+    if (this.areaSelection()) return;
     if (this.targeting()) {
       if (instanceId === this.attackingId()) { this.combatMessage.set('Elige otra ficha como objetivo'); return; }
       const target = this.combat.find(instanceId);
@@ -970,9 +1180,12 @@ export class VttBoard {
   }
 
   protected tokenPointerDown(token: BoardToken, event: PointerEvent): void {
+    if (this.areaSelection()) { event.stopPropagation(); this.placeArea(event); return; }
     if (this.visionPreview()) return;
     if (this.targeting()) { event.stopPropagation(); return; }
-    if (this.combat.busy()) { event.stopPropagation(); return; }
+    const combatState = this.combat.state();
+    const canRepositionRoute = this.repositioning() && !!combatState.route && !combatState.pending && !combatState.unarmed && !combatState.queue.length && !this.combat.saving() && !this.combat.error();
+    if (this.combat.busy() && !canRepositionRoute) { event.stopPropagation(); return; }
     if (this.mode() !== 'select' || event.button !== 0 || this.interactionPointerId !== undefined) return;
     event.stopPropagation();
     const point = this.boardPoint(event);
@@ -1101,12 +1314,41 @@ export class VttBoard {
     this.cancelInteraction(); this.closeTokenSheet(); this.mode.set('select'); this.sidebarTab.set('turns');
     this.combatMessage.set(''); this.attackTargetId.set(undefined); this.attackingId.set(id); this.showLatestCombat();
   }
-  protected cancelAttack(): void { this.attackingId.set(undefined); this.attackTargetId.set(undefined); }
+  protected cancelAttack(): void { this.attackingId.set(undefined); this.attackTargetId.set(undefined); this.areaSelection.set(undefined); this.areaConfirmed.set(false); }
+  protected beginArea(event: { owner: Combatant; action: CombatAction }): void {
+    if (this.visionPreview() || !event.action.area || !this.combat.canAttack(event.owner.id)) return;
+    this.cancelInteraction(); this.combatPanel?.close(); this.attackingId.set(event.owner.id); this.attackTargetId.set(undefined);
+    this.areaManual.set(false); this.areaConfirmed.set(false); this.areaSelection.set({ ownerId: event.owner.id, action: structuredClone(event.action) }); this.combatMessage.set('');
+  }
+  private areaRevision(): string { return JSON.stringify([this.combat.situationRevision?.(), this.combatants()]); }
+  private placeArea(event: PointerEvent): void {
+    if (event.button !== 0 || this.visionPreview() || this.combat.busy()) return;
+    const area = this.areaSelection(), point = this.boardPoint(event); if (!area || !point) return;
+    event.preventDefault();
+    const origin = { x: Math.min(this.mapWidth-this.gridSize/2, Math.floor(point.x/this.gridSize)*this.gridSize+this.gridSize/2), y: Math.min(this.mapHeight-this.gridSize/2, Math.floor(point.y/this.gridSize)*this.gridSize+this.gridSize/2) };
+    this.areaConfirmed.set(false); this.areaSelection.set({ ...area, origin, revision: this.areaRevision() }); this.combatMessage.set('');
+  }
+  protected isAreaAffected(id: string): boolean { return this.areaTargets().some(t => t.id === id); }
+  protected areaProblem(): string | undefined {
+    const a = this.areaSelection(), actor = a && this.combat.find(a.ownerId);
+    if (!a || !actor || !a.origin) return 'Señala una casilla en el mapa.';
+    return this.combat.areaProblem(actor, a.action, a.origin);
+  }
+  protected launchArea(): void {
+    const a = this.areaSelection(); if (!a?.origin || !this.areaConfirmed()) return;
+    try {
+      if (a.revision !== this.areaRevision()) throw new Error('Han cambiado las fichas o el entorno. Vuelve a señalar la casilla y revisa el área.');
+      this.combat.begin(a.action.source, this.areaTargets().map(t => t.id), { advantage: false, disadvantage: false, armorAdjustment: 0, damageFactor: 1, confirmed: true }, undefined, a.origin);
+      if(this.areaManual())this.combat.requestManualResolution(true,true);
+      this.cancelAttack(); this.combat.settleAutomatic(); if (this.combat.state().pending) this.showCombatDecision(); this.showLatestCombat();
+    } catch (e) { this.combatMessage.set(e instanceof Error ? e.message : 'No se pudo lanzar el área.'); }
+  }
   protected showLatestCombat(): void { requestAnimationFrame(() => this.sideContent?.nativeElement.scrollTo({ top: 0 })); }
   protected attackRolled(): void { this.attackTargetId.set(undefined); this.showLatestCombat(); }
   protected showCombatDecision(): void { this.combatPanel?.resume(true); }
   protected prepareAttack(event: { owner: Combatant; action: CombatAction }): void { this.combatPanel?.prepareEntry(event.owner, event.action); }
   protected multipleAttack(event: { owner: Combatant; action: CombatAction }): void {
+    if (event.action.area) { this.beginArea(event); return; }
     this.combatPanel?.open(event.owner.id); this.combatPanel?.choose(event.action);
     if (this.combatPanel && this.attackTargetId()) this.combatPanel.targetIds[0] = this.attackTargetId()!;
   }
@@ -1209,6 +1451,7 @@ export class VttBoard {
   }
 
   protected boardPointerDown(event: PointerEvent): void {
+    if (this.areaSelection()) { this.placeArea(event); return; }
     if (this.targeting()) return;
     if (this.combat.busy()) return;
     if (event.button !== 0 || this.interactionPointerId !== undefined) return;
@@ -1310,7 +1553,7 @@ export class VttBoard {
       this.tokenDrag = undefined;
       if (drag.moved) {
         this.lastTokenClickId = this.doubleClickTokenId = undefined;
-        this.persist();
+        this.finishDirectorDrag(drag);
       } else {
         this.doubleClickTokenId = this.lastTokenClickId === drag.clickedId ? drag.clickedId : undefined;
         this.lastTokenClickId = drag.clickedId;
@@ -1372,6 +1615,25 @@ export class VttBoard {
     this.releasePointer();
   }
 
+  private finishDirectorDrag(drag: TokenDrag): void {
+    if (!this.combat.state().started) { this.persist(); return; }
+    const destinations = this.tokens(), origins = new Map(drag.origins.map(t => [t.instanceId, t]));
+    const restore = () => this.tokens.set(destinations.map(t => ({ ...t, ...(origins.get(t.instanceId) ?? {}) })));
+    const reposition = this.repositioning(); this.repositioning.set(false);
+    if (reposition && !this.combat.state().unarmed && !this.combat.state().pending && !this.combat.state().queue.length && !this.combat.saving() && !this.combat.error()) { this.persist(); this.combatMessage.set('Recolocación de dirección aplicada sin consumir movimiento.'); return; }
+    restore();
+    try {
+      const id = this.activeTurnId(), target = destinations.find(t => t.instanceId === id);
+      if (reposition || this.combat.busy() || drag.origins.length !== 1 || drag.origins[0].instanceId !== id || !target) throw new Error('Mueve solo el token de turno; las recolocaciones requieren elegir la opción de dirección sin ataques pendientes.');
+      const actor = this.combat.find(id), remaining = actor && this.combat.movementStatus(actor.id).remaining;
+      if (!actor || remaining === undefined) throw new Error('Confirma la velocidad y el turno.');
+      const allowed = Array.from({ length: 600 }, (_, i) => i);
+      const cell = Math.round(target.y / this.gridSize) * 30 + Math.round(target.x / this.gridSize);
+      const route = movementRoutes(actor, this.combatants(), this.vision().obstacles, allowed, remaining, this.gridSize).find(r => r.cell === cell);
+      if (!route) throw new Error('El destino no tiene un recorrido permitido con el movimiento disponible.');
+      this.combat.planMove(route.path, 'director'); this.resumeMovement();
+    } catch(error) { this.combatMessage.set(error instanceof Error ? error.message : 'No se pudo mover el token.'); }
+  }
   protected boardPointerCancel(event: PointerEvent): void {
     if (event.pointerId === this.interactionPointerId) {
       this.cancelInteraction();
@@ -1793,7 +2055,7 @@ export class VttBoard {
       );
       this.zoom.set(state.zoom ?? 0.65);
       this.activeTurnId.set(state.activeTurnId);
-      this.combat.restore(state.combat);
+      this.combat.restore(state.combat); this.resetUnarmedForm();
       if (!this.visionStorageBlocked) this.recordExploration(this.tokens());
       if (this.combat.state().started || this.combat.error()) this.sidebarTab.set('turns');
       return true;
@@ -1809,6 +2071,7 @@ export class VttBoard {
       this.saveStatus.set('Visión no válida o de otra versión. Se conserva el guardado original; los cambios de este tablero no se guardarán.');
       return;
     }
+    this.combat.reconcileGrapples();
     this.saveStatus.set('Guardando');
     // Otras acciones pueden guardar durante un gesto: las posiciones provisionales
     // solo se confirman al soltar el puntero, nunca al ocultar o cambiar de turno.

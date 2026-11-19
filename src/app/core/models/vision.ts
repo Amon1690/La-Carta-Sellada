@@ -24,6 +24,8 @@ export interface VisionObstacle {
   id: string; name: string; kind: 'wall' | 'door' | 'window' | 'door-window';
   start: VisionPoint; end: VisionPoint; source: VisionSource;
   blocksSight: boolean; blocksEffect: boolean;
+  /** Los segmentos físicos anteriores bloquean el paso salvo excepción explícita. */
+  blocksMovement?: boolean;
   /** Obligatorio para puertas, incluidas las acristaladas; abierta no bloquea. */
   open?: boolean;
 }

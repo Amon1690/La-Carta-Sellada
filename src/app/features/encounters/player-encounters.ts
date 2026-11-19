@@ -1,3 +1,4 @@
+import { areaRadiusPixels } from '../../core/services/combat-area';
 import { AsyncPipe, DatePipe } from '@angular/common';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { afterEveryRender, Component, ElementRef, HostListener, inject, signal, ViewChild } from '@angular/core';
@@ -5,6 +6,8 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { catchError, combineLatest, exhaustMap, firstValueFrom, map, merge, of, startWith, Subject, switchMap, timer } from 'rxjs';
 import { accessError } from '../../core/services/access';
 import { EncounterSharingService, EncounterView, SharedEncounter } from '../../core/services/encounter-sharing';
+import { turnActionLabels, MovementRoute } from '../../core/services/combat-movement';
+import type { TurnAction } from '../../core/models/combat';
 import { PlayerAttack } from '../../core/models/encounter-live';
 import { WeatherOverlay } from '../vtt/components/weather-overlay';
 
@@ -21,8 +24,12 @@ export class PlayerEncounters {
   private readonly sharing = inject(EncounterSharingService);
   private readonly refresh = new Subject<void>();
   protected readonly moving = signal(false);
+  protected readonly moveCell = signal<number | undefined>(undefined);
+  protected readonly turnActionLabels = turnActionLabels;
   protected readonly attacking = signal(false);
   protected readonly targetId = signal('');
+  protected readonly areaCell = signal<number | undefined>(undefined);
+  protected readonly areaRadiusPixels = areaRadiusPixels;
   protected readonly logOpen = signal(true);
   @ViewChild('combatLog') private combatLog?: ElementRef<HTMLElement>;
   private scrollLog = false;
@@ -37,13 +44,14 @@ export class PlayerEncounters {
   protected readonly waitingId = signal('');
   protected readonly actionMessage = signal('');
   protected readonly attackSource = signal('');
+  private moveLocked = false;
   private drag?: { detail: EncounterView; board: HTMLElement; x: number; y: number };
   private pendingRequest?: { url: string; body: Record<string, unknown> };
   protected readonly vm$ = combineLatest([this.route.paramMap, this.route.queryParamMap]).pipe(
     switchMap(([params, query]) => {
       const campaign = params.get('campaignId') ?? '', board = query.get('encuentro'), observer = query.get('personaje');
       let previous: EncounterView | undefined;
-      this.moving.set(false); this.attacking.set(false); this.targetId.set(''); this.scrollLog = true; this.actionMessage.set(''); this.waitingId.set(''); this.attackSource.set(''); this.drag = undefined; this.pendingRequest = undefined;
+      this.moveLocked = false; this.moveCell.set(undefined); this.moving.set(false); this.attacking.set(false); this.areaCell.set(undefined); this.targetId.set(''); this.scrollLog = true; this.actionMessage.set(''); this.waitingId.set(''); this.attackSource.set(''); this.drag = undefined; this.pendingRequest = undefined;
       return merge(timer(0, 1000), this.refresh).pipe(
         exhaustMap(() => this.http.get<SharedEncounter[]>(this.sharing.url(campaign)).pipe(
           switchMap((items) => {
@@ -58,9 +66,10 @@ export class PlayerEncounters {
                 const detail = response.unchanged && previous ? { ...previous, ...response } : response;
                 const log = this.combatLog?.nativeElement;
                 if (previous?.combatLog?.at(-1)?.id !== detail.combatLog?.at(-1)?.id && (!log || log.scrollHeight - log.scrollTop - log.clientHeight < 48)) this.scrollLog = true;
+                if (previous?.revision !== detail.revision || previous?.observerId !== detail.observerId) { this.moveCell.set(undefined); this.moveLocked = false; }
                 previous = detail;
                 if (detail.receipt?.id === this.waitingId()) { this.waitingId.set(''); this.pendingRequest = undefined; this.actionMessage.set(detail.receipt.message); }
-                if (!detail.controls?.canMove) this.moving.set(false);
+                if (!detail.controls?.canMove) this.stopMovement();
                 if (!detail.controls?.canAttack) this.attacking.set(false);
                 return { items, detail, error: '', loading: false };
               })
@@ -85,10 +94,10 @@ export class PlayerEncounters {
     return detail.controls?.targets.filter((target) => attack?.targetIds.includes(target.id)) ?? [];
   }
   protected busy(): boolean { return this.sending() || !!this.waitingId(); }
-  protected async sendAction(detail: EncounterView, action: { type: 'move'; cell: number } | { type: 'attack'; source: string; targetId: string }): Promise<void> {
+  protected async sendAction(detail: EncounterView, action: { type: 'move'; cell: number } | { type: 'attack'; source: string; targetId?: string; cell?: number } | { type: 'turn'; source: TurnAction }): Promise<void> {
     if (this.busy()) return;
     const campaign = this.route.snapshot.paramMap.get('campaignId') ?? '';
-    const id = crypto.randomUUID(); this.waitingId.set(id); this.sending.set(true); this.moving.set(false);
+    const id = crypto.randomUUID(); this.waitingId.set(id); this.sending.set(true); this.stopMovement();
     this.actionMessage.set('Resolviendo la acción…');
     this.pendingRequest = { url: `${this.sharing.url(campaign, detail.id)}/actions`, body: { ...action, id, observerId: detail.observerId, revision: detail.revision ?? 0 } };
     await this.postPendingAction();
@@ -114,21 +123,53 @@ export class PlayerEncounters {
     const action = this.selectedAttack(detail);
     if (action && targetId) void this.sendAction(detail, { type: 'attack', source: action.source, targetId });
   }
+  protected launchArea(detail: EncounterView): void {
+    const attack=this.selectedAttack(detail),cell=this.areaCell();
+    if(attack?.area&&cell!==undefined&&attack.area.cells.includes(cell))void this.sendAction(detail,{type:'attack',source:attack.source,cell});
+  }
+  private stopMovement(): void { this.moving.set(false); this.moveCell.set(undefined); this.moveLocked = false; }
+  protected toggleMovement(): void { const enabled = !this.moving(); this.stopMovement(); this.moving.set(enabled); this.attacking.set(false); }
+  protected toggleAttack(): void { this.stopMovement(); this.attacking.set(!this.attacking()); }
+  protected selectedRoute(detail: EncounterView): MovementRoute | undefined {
+    return detail.controls?.movement?.routes.find(r => r.cell === this.moveCell());
+  }
+  protected routePoints(detail: EncounterView): string {
+    const route = this.selectedRoute(detail), p = detail.controls?.position;
+    return route && p ? [[p.x + p.size*25.6,p.y + p.size*25.6],...route.path.map(c => [(c%30+p.size/2)*51.2,(Math.floor(c/30)+p.size/2)*51.2])].map(p=>p.join(',')).join(' ') : '';
+  }
+  protected confirmMove(detail: EncounterView): void {
+    const route=this.selectedRoute(detail);if(route&&detail.controls?.canMove)void this.sendAction(detail,{type:'move',cell:route.cell});
+  }
+  protected turnAction(detail: EncounterView, action: TurnAction): void {
+    if(detail.controls?.movement?.options.includes(action))void this.sendAction(detail,{type:'turn',source:action});
+  }
+  protected previewMove(event: PointerEvent, detail: EncounterView): void {
+    if((!this.moving() || this.moveLocked) && !this.drag)return;
+    const board=event.currentTarget as HTMLElement,bounds=board.getBoundingClientRect(),col=Math.floor((event.clientX-bounds.left)/bounds.width*30),row=Math.floor((event.clientY-bounds.top)/bounds.height*20),cell=row*30+col;
+    if(col>=0&&col<30&&row>=0&&row<20&&detail.controls?.cells.includes(cell))this.moveCell.set(cell);else this.moveCell.set(undefined);
+  }
   private moveAt(event: PointerEvent | MouseEvent, board: HTMLElement, detail: EncounterView): void {
     if (!detail.controls?.canMove || this.busy()) return;
     const bounds = board.getBoundingClientRect();
     const column = Math.floor((event.clientX - bounds.left) / bounds.width * 30), row = Math.floor((event.clientY - bounds.top) / bounds.height * 20);
     const cell = row * 30 + column;
     if (column < 0 || column >= 30 || row < 0 || row >= 20 || !detail.controls.cells.includes(cell)) { this.actionMessage.set('Elige una casilla permitida para tu token.'); return; }
-    void this.sendAction(detail, { type: 'move', cell });
+    if(detail.controls.movement){this.moveCell.set(cell);this.moveLocked=true;this.moving.set(true);}else void this.sendAction(detail, { type: 'move', cell });
   }
   protected boardClick(event: MouseEvent, detail: EncounterView): void {
     if (this.moving()) this.moveAt(event, event.currentTarget as HTMLElement, detail);
+    else if(this.attacking()&&this.selectedAttack(detail)?.area&&!this.busy()) {
+      const bounds=(event.currentTarget as HTMLElement).closest<HTMLElement>('.player-board')!.getBoundingClientRect(),column=Math.floor((event.clientX-bounds.left)/bounds.width*30),row=Math.floor((event.clientY-bounds.top)/bounds.height*20),cell=row*30+column;
+      if(column>=0&&column<30&&row>=0&&row<20&&this.selectedAttack(detail)!.area!.cells.includes(cell)){this.areaCell.set(cell);this.actionMessage.set('');}
+      else {this.areaCell.set(undefined);this.actionMessage.set('Elige una casilla marcada dentro del alcance y de tu visión.');}
+    }
   }
+  protected ownClick(event: MouseEvent, detail: EncounterView): void { event.stopPropagation(); if(this.attacking()&&this.selectedAttack(detail)?.area) this.boardClick(event,detail); else this.toggleMovement(); }
   protected startDrag(event: PointerEvent, detail: EncounterView): void {
+    if(this.attacking()&&this.selectedAttack(detail)?.area)return;
     if (!detail.controls?.canMove || this.busy() || event.button !== 0) return;
     const board = (event.currentTarget as HTMLElement).closest<HTMLElement>('.player-board');
-    if (board) this.drag = { detail, board, x: event.clientX, y: event.clientY };
+    if (board) { this.moveLocked = false; this.drag = { detail, board, x: event.clientX, y: event.clientY }; }
   }
   @HostListener('window:pointerup', ['$event'])
   protected endDrag(event: PointerEvent): void {

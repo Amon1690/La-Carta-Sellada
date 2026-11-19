@@ -10,6 +10,7 @@ export class VttAttackPicker implements OnChanges {
   readonly combat = input.required<VttCombat>();
   readonly actorId = input<string>();
   readonly targetId = input<string>();
+  readonly area = output<{ owner: Combatant; action: CombatAction }>();
   readonly multiple = output<{ owner: Combatant; action: CombatAction }>();
   forceReview = false;
   readonly cancel = output<void>();
@@ -39,9 +40,9 @@ export class VttAttackPicker implements OnChanges {
   ngOnChanges(): void { this.source.set(''); this.error.set(''); this.customizing.set(false); this.facts = normalAttackFacts(); this.count = 1; }
   problem(action: CombatAction): string | undefined {
     const actor = this.actor(), target = this.target();
-    if (!actor || !target) return 'Elige un objetivo en el mapa';
+    if (!actor || (!action.area && !target)) return 'Elige un objetivo en el mapa';
     const invalid = actionProblem(action); if (invalid) return invalid;
-    if (!this.combat().targets(actor, action).some((t) => t.id === target.id)) return 'Fuera de alcance';
+    if (!action.area && !this.combat().targets(actor, action).some((t) => t.id === target!.id)) return 'Fuera de alcance';
     if (this.combat().available(actor, action.cost) < (action.cost?.amount ?? 0)) return 'Recurso agotado';
     return undefined;
   }
@@ -58,6 +59,7 @@ export class VttAttackPicker implements OnChanges {
   }
   choose(action: CombatAction): void {
     if (this.submitting()) return;
+    if (action.area && this.actor()) { this.area.emit({ owner: this.actor()!, action }); return; }
     this.error.set(''); this.source.set(action.source); this.count = 1; this.customizing.set(false);
     this.selectedSignature = this.signature();
     this.facts = { ...((!this.forceReview ? this.remembered.get(this.signature()) : undefined) ?? normalAttackFacts()) };

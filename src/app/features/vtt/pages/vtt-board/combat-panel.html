@@ -21,6 +21,8 @@
           }
           <label>Alcance normal (m)<input type="number" min="0" step="1.5" [(ngModel)]="d.range" /></label>
           <label>Alcance largo, si existe (m)<input type="number" min="0" step="1.5" [(ngModel)]="d.longRange" /></label>
+          <label class="check"><input type="checkbox" [ngModel]="!!d.area" (ngModelChange)="setArea($event)" /> Área circular / esfera</label>
+          @if (d.area; as area) { <label>Radio del área (m)<input type="number" min="0.1" max="10000" step="any" [(ngModel)]="area.radius" /></label><p>Señala una casilla en el mapa al atacar. Incluye todos los tokens del área, también aliados.</p> }
           <label>Máximo de objetivos o impactos<input type="number" min="1" max="20" [(ngModel)]="d.targets" /></label>
           <label class="check"><input type="checkbox" [(ngModel)]="d.repeatTargets" /> Puede dirigir varios impactos al mismo objetivo</label>
           @if (d.kind === 'spell') { @if (d.resolution === 'attack') { <label>Tipo de ataque del conjuro<select [(ngModel)]="d.attackType"><option [ngValue]="undefined">Sin confirmar</option><option value="melee">Cuerpo a cuerpo</option><option value="ranged">A distancia</option></select></label> }<label>Nivel del conjuro o de esta versión<input type="number" min="0" max="9" [(ngModel)]="d.spellLevel" /></label> }
@@ -42,7 +44,7 @@
           <label>Salvación del atacante, si la reacción la exige<select [(ngModel)]="r.saveAbility"><option [ngValue]="undefined">Ninguna</option>@for (save of saveOptions; track save[0]) { <option [value]="save[0]">{{ save[1] }}</option> }</select></label>
           <label>CD de esa reacción<input type="number" min="1" max="40" [(ngModel)]="r.dc" /></label>
           <label class="check"><input type="checkbox" [(ngModel)]="r.refundSpell" /> Al interrumpir devuelve el recurso de conjuro del atacante</label>
-          @if (r.effect === 'counter') { <label>Ataque de respuesta<select [(ngModel)]="r.actionSource"><option [ngValue]="undefined">Seleccionar</option>@for (a of editingOwner()?.actions; track a.source) { <option [value]="a.source">{{ a.name }}</option> }</select></label> }
+          @if (r.effect === 'counter') { <label>Ataque de respuesta<select [(ngModel)]="r.actionSource"><option [ngValue]="undefined">Seleccionar</option>@for (a of responseActions(); track a.source) { <option [value]="a.source">{{ a.name }}</option> }</select></label> }
         </div>
       }
       <h3>Recursos que consume</h3>

@@ -108,6 +108,7 @@ describe('Multiselección de fichas en VTT', () => {
     expect(view.encounterShared()).toBeFalse();
   });
   it('procesa un movimiento de jugador solo en el turno activo y publica el acuse', () => {
+    sheets.savePlayer({ ...playerSheet(), id: 'hero', speed: '9 m' }, 'create');
     const view = confirmedPreview(); actorFor('A', 'player:hero');
     board.activeTurnId.set('A'); view.combat.start('A');
     view.acceptRemoteEncounter({ shared: true, revision: 3, state: view.captureBoardState(), pendingCommand: {
@@ -115,6 +116,161 @@ describe('Multiselección de fichas en VTT', () => {
     } }, false);
     expect(board.tokens()[0].x).toBe(GRID * 3); expect(view.pendingAck.status).toBe('applied');
     expect(view.pendingAck.id).toBe('player-move');
+  });
+  it('descuenta pasos de jugador y rechaza rutas obsoletas sin gastar movimiento', () => {
+    sheets.savePlayer({ ...playerSheet(), id: 'hero', speed: '3 m' }, 'create');
+    const view = confirmedPreview(); actorFor('A', 'player:hero'); view.tokens.update((ts:any[])=>ts.map(t=>t.instanceId==='B'?{...t,x:GRID*20}:t)); board.activeTurnId.set('A'); view.combat.start('A');
+    const command = { id:'step', observerId:'A', userId:'u', type:'move', cell:63, sheetRevision:0, expiresAt:Date.now()+15000 };
+    view.applyPlayerCommand({...command,path:[90,63]});expect(view.pendingAck.status).toBe('rejected');expect(view.combat.state().movement.spent).toBe(0);
+    view.applyPlayerCommand(command);expect(view.pendingAck.status).toBe('applied');expect(view.combat.state().movement.spent).toBe(1.5);
+    view.applyPlayerCommand({...command,id:'back',cell:62});expect(view.combat.state().movement.spent).toBe(3);expect(view.playerControls(view.tokens()).A.canMove).toBeFalse();
+    view.applyPlayerCommand({...command,id:'extra'});expect(view.pendingAck.status).toBe('rejected');expect(view.combat.state().movement.spent).toBe(3);
+  });
+  it('recuerda lo visto en cada paso de la ruta antes de guardar el destino', () => {
+    sheets.savePlayer({ ...playerSheet(), id:'hero', speed:'9 m' },'create');const view=confirmedPreview();actorFor('A','player:hero');board.activeTurnId.set('A');view.combat.start('A');
+    (sheets.visionProfile as jasmine.Spy).and.returnValue({version:1,senses:[{sense:'normal',rangeFeet:30,source:{kind:'director',reference:'Recorrido de prueba'}}]});view.sheetRevision.update((n:number)=>n+1);
+    view.vision.update((v:any)=>({...v,exploration:[]}));const route=view.playerControls(view.tokens()).A.movement.routes.find((r:any)=>r.cell===122);expect(route.path.length).toBe(2);
+    view.applyPlayerCommand({id:'walk',observerId:'A',userId:'u',type:'move',cell:122,path:route.path,sheetRevision:0,expiresAt:Date.now()+15000});expect(view.pendingAck.status).toBe('applied');
+    const areas=view.vision().exploration.find((m:any)=>m.tokenId==='A').areas;for(const step of route.path)expect(areas.some((a:any)=>Math.abs(a.x-(step%30+.5)*GRID)<.001&&Math.abs(a.y-(Math.floor(step/30)+.5)*GRID)<.001)).toBeTrue();
+  });
+  it('un token oculto no cambia los destinos públicos y se valida en privado sin gastar', () => {
+    sheets.savePlayer({ ...playerSheet(), id:'hero', speed:'9 m' },'create');const view=confirmedPreview();actorFor('A','player:hero');board.activeTurnId.set('A');view.combat.start('A');
+    const before=view.playerControls(view.tokens()).A;view.tokens.update((ts:any[])=>ts.map(t=>t.instanceId==='B'?{...t,x:GRID*3,y:GRID*2,hidden:true}:t));const after=view.playerControls(view.tokens()).A;
+    expect(after.cells).toEqual(before.cells);expect(after.movement.routes).toEqual(before.movement.routes);
+    view.applyPlayerCommand({id:'blocked',observerId:'A',userId:'u',type:'move',cell:63,sheetRevision:0,expiresAt:Date.now()+15000});expect(view.pendingAck.status).toBe('rejected');expect(view.combat.state().movement.spent).toBe(0);expect(board.tokens()[0].x).toBe(GRID*2);
+  });
+  it('pausa antes de una oportunidad y no duplica movimiento ni ventana al restaurar', () => {
+    sheets.savePlayer({ ...playerSheet(), id:'hero', speed:'9 m' },'create');const view=confirmedPreview();actorFor('A','player:hero');
+    view.tokens.update((ts:any[])=>ts.map(t=>t.instanceId==='A'?{...t,x:GRID*3}:t));board.activeTurnId.set('A');view.combat.start('A');
+    view.applyPlayerCommand({id:'op-step',observerId:'A',userId:'u',type:'move',cell:62,sheetRevision:0,expiresAt:Date.now()+15000});
+    expect(view.pendingAck.status).toBe('applied');expect(view.pendingAck.message).toContain('pausado');expect(board.tokens()[0].x).toBe(GRID*3);expect(view.combat.state().movement.spent).toBe(0);
+    const window=view.combat.state().route.window.id,snapshot=view.captureBoardState();view.applyRemoteBoard(snapshot);view.resumeMovement();
+    expect(view.combat.state().route.window.id).toBe(window);expect(view.movementCandidates().map((c:any)=>c.reactorId)).toEqual(['B']);
+    view.resolveOpportunity('B');expect(view.combat.state().reactionUsed).toEqual([]);view.resumeMovement();
+    expect(view.combat.state().route).toBeUndefined();expect(board.tokens()[0].x).toBe(GRID*2);expect(view.combat.state().movement.spent).toBe(1.5);
+  });
+  it('una decisión sin armas guardada bloquea recolocación y se puede cancelar desde su control de dirección', () => {
+    sheets.savePlayer({ ...playerSheet(), id:'hero', speed:'9 m' },'create');const view=confirmedPreview();actorFor('A','player:hero');actorFor('B','generic:guardia');
+    view.tokens.update((ts:any[])=>ts.map(t=>t.instanceId==='A'?{...t,x:GRID*3}:t));board.activeTurnId.set('A');view.combat.start('A');view.combat.planMove([62]);view.combat.continueMove();
+    const owner=view.tokens().find((t:any)=>t.instanceId==='B'),statistics=view.resolveTokenSheet(owner,view.currentCampaign).statistics;
+    view.combat.declareUnarmedOpportunity('B','grapple',statistics,{ownerSize:'medium',targetSize:'medium',freeHand:true},view.combat.state().route.window.id);
+    view.applyRemoteBoard(view.captureBoardState());view.sidebarTab.set('turns');view.repositioning.set(true);fixture.detectChanges();
+    pointer(button('A'),'pointerdown',GRID*3+10,GRID*2+10);expect(view.tokenDrag).toBeUndefined();
+    const cancel=Array.from(fixture.nativeElement.querySelectorAll('button')).find((element:any)=>element.textContent.includes('Cancelar decisión sin armas')) as HTMLButtonElement;
+    expect(cancel).toBeDefined();cancel.click();expect(view.combat.state().unarmed).toBeUndefined();expect(view.combat.state().reactionUsed).toEqual(['B']);
+    view.repositioning.set(false);view.resumeMovement();expect(board.tokens()[0].x).toBe(GRID*2);expect(view.combat.state().movement.spent).toBe(1.5);
+  });
+  it('un cambio de turno durante un arrastre provisional no termina un agarre de la posición confirmada', () => {
+    const view=confirmedPreview();actorFor('A','generic:guardia');actorFor('B','generic:guardia');view.tokens.update((ts:any[])=>ts.map(t=>t.instanceId==='B'?{...t,x:GRID*3}:t));
+    board.activeTurnId.set('A');view.combat.start('A');view.combat.restore({...view.combat.state(),grapples:[{id:'held',ownerId:'B',targetId:'A',range:1.5,escapeDc:13}]});fixture.detectChanges();
+    pointer(button('B'),'pointerdown',GRID*3+10,GRID*2+10);pointer(map,'pointermove',GRID*10+10,GRID*2+10);expect(view.tokenDrag).toBeDefined();expect(board.tokens()[1].x).toBeGreaterThan(GRID*3);
+    view.setActiveTurn('B');expect(view.combat.state().grapples[0].ended).not.toBeTrue();
+    const stored=JSON.parse(localStorage.getItem(key())!);expect(stored.tokens[1].x).toBe(GRID*3);expect(stored.combat.grapples[0].ended).not.toBeTrue();
+    pointer(map,'pointercancel',GRID*10+10,GRID*2+10);expect(board.tokens()[1].x).toBe(GRID*3);view.applyRemoteBoard(stored);
+    expect(view.combat.state().grapples[0].ended).not.toBeTrue();expect(view.combat.find('A').movement.speed).toBe(0);
+    fixture.detectChanges();pointer(button('B'),'pointerdown',GRID*3+10,GRID*2+10);pointer(map,'pointermove',GRID*10+10,GRID*2+10);
+    view.setTokenCondition('B','incapacitated',true);expect(view.combat.state().grapples[0].ended).toBeTrue();view.setTokenCondition('B','incapacitated',false);
+    pointer(map,'pointercancel',GRID*10+10,GRID*2+10);view.applyRemoteBoard(view.captureBoardState());expect(view.combat.state().grapples[0].ended).toBeTrue();expect(view.combat.find('A').movement.speed).toBe(9);
+  });
+  it('elige derribo desde los controles de dirección, guarda la salvación y aplica sin repetirla tras recarga', () => {
+    const random=spyOn(Math,'random').and.returnValue(0);sheets.savePlayer({ ...playerSheet(), id:'hero', speed:'9 m' },'create');const view=confirmedPreview();actorFor('A','player:hero');actorFor('B','generic:guardia');view.tokens.update((ts:any[])=>ts.map(t=>t.instanceId==='A'?{...t,x:GRID*3}:t));board.activeTurnId.set('A');view.combat.start('A');view.combat.planMove([62]);view.resumeMovement();view.sidebarTab.set('turns');fixture.detectChanges();
+    const label=(text:string)=>Array.from(fixture.nativeElement.querySelectorAll('label')).find((l:any)=>l.textContent.includes(text)) as HTMLLabelElement;
+    for(const text of ['Tamaño confirmado del reactor','Tamaño confirmado del objetivo']){const select=label(text).querySelector('select')!;select.value='medium';select.dispatchEvent(new Event('change',{bubbles:true}));}fixture.detectChanges();
+    const action=(text:string)=>Array.from(fixture.nativeElement.querySelectorAll('button')).find((b:any)=>b.textContent.trim()===text) as HTMLButtonElement;
+    action('Derribar · reacción').click();fixture.detectChanges();const save=label('Salvación elegida por el objetivo').querySelector('select')!;save.value='dexterity';save.dispatchEvent(new Event('change',{bubbles:true}));fixture.detectChanges();
+    const confirm=label('He revisado la salvación elegida').querySelector('input')!;confirm.checked=true;confirm.dispatchEvent(new Event('change',{bubbles:true}));fixture.detectChanges();action('Tirar la salvación del objetivo').click();
+    expect(view.combat.state().unarmed.save.roll.dice).toEqual([1]);expect(view.combat.state().unarmed.save.success).toBeFalse();const count=random.calls.count();view.applyRemoteBoard(view.captureBoardState());fixture.detectChanges();expect(random.calls.count()).toBe(count);expect(fixture.nativeElement.textContent).toContain('Esta tirada ya está guardada');
+    const effects=label('He revisado alcance, tamaños').querySelector('input')!;effects.checked=true;effects.dispatchEvent(new Event('change',{bubbles:true}));fixture.detectChanges();action('Confirmar resultado sin repetir la tirada').click();
+    expect((board.tokens()[0] as any).conditions).toContain('prone');expect(view.combat.state().unarmed).toBeUndefined();expect(view.combat.state().movement.spent).toBe(0);expect(view.combat.state().reactionUsed).toEqual(['B']);expect(random.calls.count()).toBe(count);
+  });
+  it('reconfirma visión desconocida en una decisión sin armas tras recargar antes y después del dado', async () => {
+    const random = spyOn(Math, 'random').and.returnValue(0);
+    sheets.savePlayer({ ...playerSheet(), id: 'hero', speed: '9 m' }, 'create');
+    let view = confirmedPreview(); actorFor('A', 'player:hero'); actorFor('B', 'generic:guardia');
+    view.tokens.update((tokens: any[]) => tokens.map(t => t.instanceId === 'A' ? { ...t, x: GRID * 3 } : t));
+    view.vision.update((vision: any) => ({ ...vision, enabled: false }));
+    board.activeTurnId.set('A'); view.combat.start('A'); view.combat.planMove([62], 'director'); view.resumeMovement();
+    Object.assign(view.opportunityFacts('B'), { ownerSize: 'medium', targetSize: 'medium', freeHand: true, canSee: true, lineOfEffect: true });
+    view.declareUnarmed('B', 'grapple'); expect(view.combat.state().unarmed).toBeDefined();
+    const reload = async () => {
+      fixture.destroy(); fixture = TestBed.createComponent(VttBoard); fixture.detectChanges(); await fixture.whenStable();
+      board = fixture.componentInstance as unknown as Harness; view = fixture.componentInstance as any;
+      map = fixture.nativeElement.querySelector('.map-board'); view.sidebarTab.set('turns'); fixture.detectChanges();
+    };
+    const check = (text: string) => {
+      const label = Array.from(fixture.nativeElement.querySelectorAll('label')).find((element: any) => element.textContent.includes(text)) as HTMLLabelElement;
+      expect(label).toBeDefined(); const input = label.querySelector('input')!;
+      input.checked = true; input.dispatchEvent(new Event('change', { bubbles: true })); fixture.detectChanges();
+    };
+    await reload(); expect(view.opportunityFacts('B').canSee).toBeFalse();
+    view.chooseUnarmedAbility('dexterity'); view.unarmedSaveConfirmed.set(true);
+    const before = random.calls.count(); view.rollUnarmed(); expect(view.combat.state().unarmed.save).toBeUndefined(); expect(random.calls.count()).toBe(before);
+    check('Dirección confirma la visión personal cuando no consta automáticamente');
+    check('Dirección confirma la línea de efecto cuando no consta automáticamente');
+    view.rollUnarmed(); expect(view.combat.state().unarmed.save.roll.dice).toEqual([1]);
+    const storedSave = structuredClone(view.combat.state().unarmed.save); await reload(); expect(view.opportunityFacts('B').canSee).toBeFalse();
+    expect(view.combat.state().unarmed.save).toEqual(storedSave); const die = spyOn(view.combat, 'die').and.callThrough();
+    expect(fixture.nativeElement.textContent).toContain('Esta tirada ya está guardada');
+    check('Dirección confirma la visión personal cuando no consta automáticamente');
+    check('Dirección confirma la línea de efecto cuando no consta automáticamente');
+    check('He revisado alcance, tamaños');
+    const finish = Array.from(fixture.nativeElement.querySelectorAll('button')).find((element: any) => element.textContent.trim() === 'Confirmar resultado sin repetir la tirada') as HTMLButtonElement;
+    finish.click(); expect(view.combat.state().unarmed).toBeUndefined(); expect(view.combat.state().grapples.length).toBe(1);
+    expect(view.combat.find('A').movement.speed).toBe(0); expect(view.combat.state().reactionUsed).toEqual(['B']); expect(die).not.toHaveBeenCalled();
+  });
+  it('el empujón usa geometría privada, mueve sin gastar y no se vuelve a aplicar al restaurar', () => {
+    spyOn(Math,'random').and.returnValue(0);sheets.savePlayer({ ...playerSheet(), id:'hero', speed:'9 m' },'create');const view=confirmedPreview();actorFor('A','player:hero');actorFor('B','generic:guardia');view.tokens.update((ts:any[])=>ts.map(t=>t.instanceId==='A'?{...t,x:GRID*3}:t));board.activeTurnId.set('A');view.combat.start('A');view.combat.planMove([62]);view.resumeMovement();
+    Object.assign(view.opportunityFacts('B'),{ownerSize:'medium',targetSize:'medium'});view.declareUnarmed('B','push');view.chooseUnarmedAbility('dexterity');view.unarmedSaveConfirmed.set(true);view.rollUnarmed();expect(view.combat.state().unarmed.save.success).toBeFalse();
+    expect(view.unarmedPushChoices().map((c:any)=>c.cell)).toEqual([62]);view.unarmedPushCell.set(62);view.confirmUnarmedEffects(true);view.finishUnarmed();
+    expect(board.tokens()[0].x).toBe(GRID*2);expect(view.combat.state().movement.spent).toBe(0);expect(view.combat.state().route).toBeUndefined();const snapshot=view.captureBoardState();view.applyRemoteBoard(snapshot);view.finishUnarmed();expect(board.tokens()[0].x).toBe(GRID*2);expect(view.combat.state().reactionUsed).toEqual(['B']);
+  });
+  it('una pared o un ocupante oculto impiden elegir un empujón automático sin perder la salvación', () => {
+    spyOn(Math,'random').and.returnValue(0);sheets.savePlayer({ ...playerSheet(), id:'hero', speed:'9 m' },'create');const view=confirmedPreview();actorFor('A','player:hero');actorFor('B','generic:guardia');view.tokens.update((ts:any[])=>ts.map(t=>t.instanceId==='A'?{...t,x:GRID*3}:t));board.activeTurnId.set('A');view.combat.start('A');view.combat.planMove([62]);view.resumeMovement();
+    Object.assign(view.opportunityFacts('B'),{ownerSize:'medium',targetSize:'medium'});view.declareUnarmed('B','push');view.chooseUnarmedAbility('dexterity');view.unarmedSaveConfirmed.set(true);view.rollUnarmed();const save=structuredClone(view.combat.state().unarmed.save);
+    view.vision.update((v:any)=>({...v,obstacles:[{id:'push-wall',name:'Muro',kind:'wall',start:{x:GRID*3,y:GRID*2},end:{x:GRID*3,y:GRID*3},blocksMovement:true,blocksSight:true,blocksEffect:true,source:{kind:'director',reference:'Prueba'}}]}));expect(view.unarmedPushChoices()).toEqual([]);view.unarmedPushCell.set(62);view.confirmUnarmedEffects(true);view.finishUnarmed();expect(view.combat.state().unarmed.save).toEqual(save);expect(board.tokens()[0].x).toBe(GRID*3);
+    view.vision.update((v:any)=>({...v,obstacles:[]}));view.tokens.update((ts:any[])=>[...ts,{...ts[1],instanceId:'hidden-block',x:GRID*2,hidden:true}]);expect(view.unarmedPushChoices()).toEqual([]);expect(view.combat.state().unarmed.save).toEqual(save);expect(view.combat.state().movement.spent).toBe(0);
+  });
+  it('la pausa de un reactor oculto solo publica el estado ordinario sin datos privados de la oportunidad', () => {
+    sheets.savePlayer({ ...playerSheet(), id:'hero', speed:'9 m' },'create');const view=confirmedPreview();actorFor('A','player:hero');
+    view.tokens.update((ts:any[])=>ts.map(t=>t.instanceId==='A'?{...t,x:GRID*3}:t.instanceId==='B'?{...t,hidden:true}:t));board.activeTurnId.set('A');view.combat.start('A');
+    view.applyPlayerCommand({id:'hidden-op',observerId:'A',userId:'u',type:'move',cell:62,sheetRevision:0,expiresAt:Date.now()+15000});
+    expect(view.combat.state().route).toBeDefined();const controls=view.playerControls(view.tokens()).A;
+    expect(controls.canMove).toBeFalse();expect(controls.canAttack).toBeFalse();expect(controls.targets.some((t:any)=>t.id==='B')).toBeFalse();
+    expect(JSON.stringify(controls)).not.toContain('reactorId');expect(JSON.stringify(controls)).not.toContain('windowId');expect(controls.opportunity).toBeUndefined();
+  });
+  it('el arrastre ordinario del director restaura el origen provisional y usa el mismo presupuesto', () => {
+    sheets.savePlayer({ ...playerSheet(), id:'hero', speed:'9 m' },'create');const view=confirmedPreview();actorFor('A','player:hero');board.activeTurnId.set('A');view.combat.start('A');
+    const origin=board.tokens()[0];view.tokens.update((ts:any[])=>ts.map(t=>t.instanceId==='A'?{...t,x:GRID}:t));
+    view.finishDirectorDrag({origins:[origin]});expect(board.tokens()[0].x).toBe(GRID);expect(view.combat.state().movement.spent).toBe(1.5);
+    const second=board.tokens()[0];view.tokens.update((ts:any[])=>ts.map(t=>t.instanceId==='A'?{...t,x:GRID*8}:t));view.finishDirectorDrag({origins:[second]});
+    expect(board.tokens()[0].x).toBe(GRID);expect(view.combat.state().movement.spent).toBe(1.5);
+  });
+  it('dirección conserva movimiento reglado de PJs ocultos con visión desactivada y al restaurar', () => {
+    sheets.savePlayer({ ...playerSheet(), id:'hero', speed:'9 m' },'create');const view=fixture.componentInstance as any;actorFor('A','player:hero');
+    view.tokens.update((ts:any[])=>ts.map(t=>t.instanceId==='A'?{...t,hidden:true}:t));view.vision.update((v:any)=>({...v,enabled:false,obstacles:[]}));board.activeTurnId.set('A');view.combat.start('A');
+    const origin=board.tokens()[0];view.tokens.update((ts:any[])=>ts.map(t=>t.instanceId==='A'?{...t,x:GRID}:t));view.finishDirectorDrag({origins:[origin]});
+    expect(board.tokens()[0].x).toBe(GRID);expect(view.combat.state().movement.spent).toBe(1.5);
+    view.combat.planMove([60], 'director');const snapshot=view.captureBoardState();expect(view.combat.state().route.perspective).toBe('director');view.applyRemoteBoard(snapshot);view.resumeMovement();
+    expect(board.tokens()[0].x).toBe(0);expect(view.combat.state().movement.spent).toBe(3);expect(view.combat.state().route).toBeUndefined();
+    expect(view.playerControls(view.tokens()).A.canMove).toBeFalse();
+  });
+  it('una recolocación explícita por puntero permite resolver un recorrido bloqueado sobre un aliado tras recarga', () => {
+    sheets.savePlayer({ ...playerSheet(), id:'hero', speed:'9 m' },'create');const view=confirmedPreview();actorFor('A','player:hero');
+    view.tokens.update((ts:any[])=>ts.map(t=>t.instanceId==='B'?{...t,x:GRID*3,side:'party'}:{...t,side:'party'}));board.activeTurnId.set('A');view.combat.start('A');
+    view.combat.planMove([63,64], 'director');expect(view.combat.continueMove()).toBe('moved');expect(board.tokens()[0].x).toBe(GRID*3);
+    view.tokens.update((ts:any[])=>ts.map(t=>t.instanceId==='A'?{...t,hp:0}:t));view.applyRemoteBoard(view.captureBoardState());
+    view.resumeMovement();expect(view.combatMessage()).toContain('continuar');view.cancelMovement();expect(view.combat.state().route).toBeDefined();
+    view.repositioning.set(true);fixture.detectChanges();
+    pointer(button('A'),'pointerdown',GRID*3+10,GRID*2+10);expect(view.tokenDrag).toBeDefined();
+    pointer(map,'pointermove',GRID*3+10,GRID*3+10);pointer(map,'pointerup',GRID*3+10,GRID*3+10);
+    expect(board.tokens()[0].y).toBe(GRID*3);expect(view.repositioning()).toBeFalse();view.cancelMovement();
+    expect(view.combat.state().route).toBeUndefined();expect(view.combat.state().movement.spent).toBe(1.5);expect(board.tokens()[1].y).toBe(GRID*2);
+  });
+  it('recolocar como dirección exige elección explícita para un solo arrastre y no gasta movimiento', () => {
+    sheets.savePlayer({ ...playerSheet(), id:'hero', speed:'9 m' },'create');const view=confirmedPreview();actorFor('A','player:hero');board.activeTurnId.set('A');view.combat.start('A');
+    const origin=board.tokens()[1];view.tokens.update((ts:any[])=>ts.map(t=>t.instanceId==='B'?{...t,x:GRID*10}:t));view.finishDirectorDrag({origins:[origin]});expect(board.tokens()[1].x).toBe(origin.x);
+    view.repositioning.set(true);view.tokens.update((ts:any[])=>ts.map(t=>t.instanceId==='B'?{...t,x:GRID*10}:t));view.finishDirectorDrag({origins:[origin]});
+    expect(board.tokens()[1].x).toBe(GRID*10);expect(view.repositioning()).toBeFalse();expect(view.combat.state().movement.spent).toBe(0);expect(view.combat.state().route).toBeUndefined();
   });
   it('no resuelve automáticamente un ataque si falta confirmar la visión del objetivo', () => {
     const view = confirmedPreview(); actorFor('A', 'generic:guardia-veterano'); actorFor('B', 'generic:guardia');
@@ -613,11 +769,12 @@ describe('Multiselección de fichas en VTT', () => {
     expect(view.displayedTokens().map((t: Token) => t.instanceId)).toEqual(['A']);
   });
   it('el jugador puede dar un paso en oscuridad solo en su turno y con validación de la casilla', () => {
+    sheets.savePlayer({ ...playerSheet(), id: 'hero', speed: '9 m' }, 'create');
     const view = confirmedPreview(); actorFor('A', 'player:hero'); view.setPreviewEnvironment('illumination', 'darkness');
-    view.tokens.update((tokens: any[]) => tokens.map((t) => t.instanceId === 'B' ? { ...t, x: GRID * 3 } : t));
+    view.tokens.update((tokens: any[]) => tokens.map((t) => t.instanceId === 'B' ? { ...t, x: GRID * 3, y: GRID * 4 } : t));
     board.activeTurnId.set('A'); view.combat.start('A');
     const controls = view.playerControls(view.tokens()).A;
-    expect(controls.canMove).toBeTrue(); expect(controls.cells).toContain(63); expect(controls.cells).toContain(93);
+    expect(controls.canMove).toBeTrue(); expect(controls.cells).toContain(63); expect(controls.cells).toContain(92); expect(controls.cells).not.toContain(93);
     expect(controls.cells).not.toContain(64); expect(controls.targets).toEqual([]);
     view.applyPlayerCommand({ id: 'dark-step', observerId: 'A', userId: 'u', type: 'move', cell: 63, sheetRevision: 0, expiresAt: Date.now() + 15000 });
     expect(board.tokens()[0].x).toBe(GRID * 3); expect(view.pendingAck.status).toBe('applied');
@@ -919,4 +1076,22 @@ describe('Multiselección de fichas en VTT', () => {
     expect(signature()).not.toBe(dark);
   });
 
+
+  it('centra el área en una casilla con zoom, dibuja la plantilla y cancela con Escape sin dados',()=>{
+    const view=fixture.componentInstance as any;
+    actorFor('A','generic:guardia');actorFor('B','generic:guardia');actorFor('C','generic:guardia');
+    board.activeTurnId.set('A');view.combat.start('A');
+    const area={...view.combat.find('A').actions[0],resolution:'save',saveAbility:'dexterity',dc:12,area:{radius:1.5},reviewed:true};
+    view.beginArea({owner:view.combat.find('A'),action:area});rectangle(GRID*2.2,GRID*2.2,GRID*2.2,GRID*2.2);
+    expect(view.areaSelection().origin.x).toBeCloseTo(GRID*2.5,8);expect(view.areaSelection().origin.y).toBeCloseTo(GRID*2.5,8);
+    expect(fixture.nativeElement.querySelector('.attack-area-layer circle').getAttribute('r')).toBe(String(GRID));
+    expect(view.areaTargets().map((t:any)=>t.id)).toEqual(['A']);expect(fixture.nativeElement.querySelector('.area-affected')).not.toBeNull();
+    map.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));fixture.detectChanges();expect(view.areaSelection()).toBeUndefined();expect(view.combat.state().pending).toBeUndefined();
+  });
+  it('invalida el lanzamiento si cambian las posiciones después de señalar la casilla',()=>{
+    const view=fixture.componentInstance as any;actorFor('A','generic:guardia');board.activeTurnId.set('A');view.combat.start('A');
+    const area={...view.combat.find('A').actions[0],resolution:'save',saveAbility:'dexterity',dc:12,area:{radius:1.5},reviewed:true};
+    view.beginArea({owner:view.combat.find('A'),action:area});rectangle(GRID*2.2,GRID*2.2,GRID*2.2,GRID*2.2);view.areaConfirmed.set(true);
+    const begin=spyOn(view.combat,'begin');board.tokens.update(ts=>ts.map(t=>t.instanceId==='B'?{...t,x:t.x+GRID}:t));view.launchArea();expect(begin).not.toHaveBeenCalled();expect(view.combatMessage()).toContain('Vuelve a señalar');
+  });
 });
