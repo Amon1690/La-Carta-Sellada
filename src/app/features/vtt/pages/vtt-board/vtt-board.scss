@@ -891,3 +891,39 @@ button {
 .area-attack-controls { padding: 12px; border: 1px solid #bf8e51; border-radius: 6px; font-size: .8rem; }
 .area-attack-controls h2 { font-size: 1rem; }
 .area-attack-controls label { display: flex; align-items: flex-start; gap: 8px; }
+
+.opportunity-controls, .opportunity-controls .token-inspector {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.opportunity-controls {
+  margin-bottom: 16px;
+  font-size: .8rem;
+  line-height: 1.4;
+}
+.opportunity-controls p, .opportunity-controls h3 { margin: 0; }
+.opportunity-controls label { display: grid; gap: 4px; min-width: 0; }
+.opportunity-controls select, .opportunity-controls input[type="number"] {
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  padding: 4px 8px;
+  border: 1px solid #50535a;
+  border-radius: 4px;
+  color: #f4f0e7;
+  background: #1c1e21;
+  box-sizing: border-box;
+}
+.opportunity-controls label:has(input[type="checkbox"]) { display: flex; align-items: flex-start; gap: 8px; }
+.turn-panel .opportunity-controls input[type="checkbox"], .turn-panel .reposition-control input[type="checkbox"] {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  padding: 0;
+  accent-color: #bf9345;
+}
+.opportunity-controls .combat-launch { margin: 0; min-height: 34px; white-space: normal; }
+
+.reposition-control { display: flex; align-items: flex-start; gap: 8px; font-size: .8rem; line-height: 1.4; }

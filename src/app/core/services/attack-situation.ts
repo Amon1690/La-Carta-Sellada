@@ -46,11 +46,13 @@ export function attackSituation(actor: Combatant, target: Combatant, action: Com
   const spellTypeUnknown = roll && !type;
   const near = roster.filter((other) => other.id !== actor.id && (other.id !== target.id || targetSeesActor) && sight?.(other.id, actor.id)?.visible !== false && other.hp > 0 && !has(other, 'incapacitated') && (!has(other, 'blinded') || !!sight?.(other.id, actor.id) && sight?.(other.id, actor.id)?.visible !== false) && combatDistance(actor, other) <= 1.501);
   const threatUnknown = roll && type === 'ranged' && near.some((other) => (!actor.side || !other.side || actor.side !== 'neutral' && other.side !== 'neutral' && actor.side !== other.side) && (!other.side || !actor.side || !other.conditions || (sight?.(other.id, actor.id)?.visible === undefined && !!sight?.(other.id, actor.id))));
+  if (actor.grappleUncertain) doubts.push('Confirma los datos del agarre antes de automatizar el ataque.');
   if (!facts.reviewed) doubts.push('Revisa cobertura parcial y otros efectos de las fichas que no consten en el tablero.');
   if (!facts.reviewed && (!actor.conditions || !target.conditions)) doubts.push('No constan todas las condiciones activas de estas fichas.');
   if (spellTypeUnknown) doubts.push('¿El ataque del conjuro es cuerpo a cuerpo o a distancia?');
   if (threatUnknown && facts.nearbyThreat === undefined) doubts.push('¿Hay un enemigo a 1,5 m que pueda verte y actuar?');
   if (roll) {
+    if (actor.grappledBy?.some(id=>id!==target.id)) { disadvantage = true; reasons.push('Agarrado: desventaja al atacar a quien no te agarra.'); }
     if (range > action.range! + .001) { disadvantage = true; reasons.push('Alcance largo: desventaja'); }
     for (const condition of ['prone', 'restrained', 'poisoned'] as const) if (has(actor, condition)) { disadvantage = true; reasons.push(`${CONDITION_LABELS[condition]}: desventaja`); }
     if ((has(actor, 'blinded') && !actorSight?.visible) || !actorSeesTarget) { disadvantage = true; reasons.push('No ves al objetivo: desventaja'); }

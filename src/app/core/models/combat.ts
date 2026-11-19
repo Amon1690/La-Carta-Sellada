@@ -33,8 +33,18 @@ export interface CombatProfile {
 }
 export type TurnAction = 'dash' | 'disengage' | 'bonus-dash' | 'bonus-disengage' | 'stand';
 export interface TurnMovement { spent: number; dashes: number; action?: 'attack' | 'spell' | 'dash' | 'disengage'; bonus?: 'dash' | 'disengage'; disengaged: boolean; }
+/** Recorrido privado: cada paso se confirma junto a posición, gasto y exploración. */
+export interface CombatTurnRoute {
+  perspective?: 'personal' | 'director';
+  id: string; moverId: string; origin: number; path: number[]; stepCosts: number[];
+  next: number; spentBefore: number;
+  window?: { id: string; step: number; handled: string[] };
+}
 export interface Combatant {
+  grappledBy?: string[]; grappleUncertain?: boolean;
   movement?: { speed?: number; bonusDash: boolean; bonusDisengage: boolean };
+  /** Ataque básico derivado solo de estadísticas confirmadas; otros rasgos siguen en actions. */
+  unarmed?: CombatAction;
   id: string; actorId: string; name: string; x: number; y: number; size: number;
   hp: number; maxHp: number; armorClass?: number;
   conditions?: CombatCondition[]; side?: CombatSide;
@@ -45,6 +55,7 @@ export interface Combatant {
 export interface CombatRoll { dice: number[]; bonus: number; total: number; natural: number; advantage?: boolean; disadvantage?: boolean }
 export interface CombatPending {
   phase?: 'casting' | 'defense' | 'response';
+  opportunity?: boolean;
   context?: { advantage: boolean; disadvantage: boolean; armorAdjustment: number; damageFactor: number; rangeResolved?: boolean };
   attackerId: string; targetId: string; action: CombatAction; roll?: CombatRoll; save?: CombatRoll;
   baseAc: number; extraAc: number; damage: { type: string; rolled: number; dice: number[]; bonus: number }[];
@@ -59,10 +70,30 @@ export interface CombatState {
   usedAttacks: number; spellUsed: boolean; reactionUsed: string[];
   /** Ausente en combates antiguos: no concede movimiento retroactivo. */
   movement?: TurnMovement;
+  route?: CombatTurnRoute;
+  unarmed?: UnarmedDecision;
+  grapples?: GrappleLink[];
   armorEffects: Record<string, number>; resources: Record<string, Record<string, number>>;
   log: string[]; narrative?: CombatNarrativeEvent[]; pending?: CombatPending;
   context?: { advantage: boolean; disadvantage: boolean; armorAdjustment: number; damageFactor: number; rangeResolved?: boolean; confirmed: boolean };
   slotsSpent: string[];
   areaCast?: { origin: { x: number; y: number }; damage?: CombatPending['damage']; manual?: boolean };
-  queue: { attackerId: string; action: CombatAction; targetId: string; reactionAttack?: boolean; castApproved?: boolean; context?: NonNullable<CombatState['context']> }[];
+  queue: { attackerId: string; action: CombatAction; targetId: string; reactionAttack?: boolean; opportunity?: boolean; castApproved?: boolean; context?: NonNullable<CombatState['context']> }[];
+}
+
+export type CreatureSize = 'tiny' | 'small' | 'medium' | 'large' | 'huge' | 'gargantuan';
+export type UnarmedEffect = 'grapple' | 'push' | 'prone';
+export type UnarmedSaveAbility = 'strength' | 'dexterity';
+export interface UnarmedReview {
+  ownerSize?: CreatureSize; targetSize?: CreatureSize; freeHand?: boolean; distance?: number;
+}
+/** Declaración privada. Las variantes de clase requieren su preparación propia, no se deducen. */
+export interface UnarmedDecision {
+  rule: '2024-strength-basic'; ownerId: string; targetId: string; effect: UnarmedEffect;
+  strength: number; proficiency: number; dc: number; range: 1.5;
+  review: Required<Pick<UnarmedReview, 'ownerSize' | 'targetSize' | 'distance'>> & { freeHand?: boolean };
+  save?: { ability: UnarmedSaveAbility; roll: CombatRoll; success: boolean };
+}
+export interface GrappleLink {
+  id: string; ownerId: string; targetId: string; range: number; escapeDc: number; ended?: boolean;
 }

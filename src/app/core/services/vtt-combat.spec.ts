@@ -1,6 +1,6 @@
 import { CombatAction, Combatant, CombatReaction, CombatState } from '../models/combat';
 import { GENERIC_NPCS } from '../data/generic-npcs';
-import { actionProblem, combatDistance, deriveCombat, diceParts, reactionProblem, rollDice } from './combat-rules';
+import { actionProblem, basicUnarmedStrike, combatDistance, deriveCombat, diceParts, reactionProblem, rollDice } from './combat-rules';
 import { attackSituation, normalAttackFacts } from './attack-situation';
 import { AttackContext, VttCombat } from './vtt-combat';
 const context: AttackContext = { advantage: false, disadvantage: false, armorAdjustment: 0, damageFactor: 1, confirmed: true };
@@ -279,4 +279,32 @@ describe('Combate VTT, reglas y recuperación', () => {
     expect(engine.state().pending?.roll?.dice).toEqual([9]); expect(engine.state().pending?.roll?.disadvantage).toBeFalse();
   });
 
+  it('una oportunidad usa solo la reacción y conserva el turno, movimiento y acción del que se mueve',()=>{
+    active='apprentice';start();engine.spendMovement(active,3);engine.state.update(s=>({...s,usedAttacks:1,movement:{...s.movement!,action:'attack'}}));learner().reactions=[];
+    engine.beginOpportunity('guard',sword().source,'apprentice',{x:102.4,y:0},'speed',{canSee:true,lineOfEffect:true});
+    expect(engine.state().pending?.opportunity).toBeTrue();expect(engine.state().pending?.phase).toBe('response');expect(engine.state().queue).toEqual([]);expect(engine.state().reactionUsed).toEqual(['guard']);expect(die).not.toHaveBeenCalled();
+    engine.restore(saved);engine.settleAutomatic();expect(die).not.toHaveBeenCalled();engine.resolveResponse(context);engine.finish(true);
+    expect(engine.state().turnId).toBe('apprentice');expect(engine.state().usedAttacks).toBe(1);expect(engine.state().movement?.spent).toBe(3);expect(engine.state().movement?.action).toBe('attack');expect(engine.state().spellUsed).toBeFalse();
+    expect(()=>engine.beginOpportunity('guard',sword().source,'apprentice',{x:102.4,y:0},'speed',{canSee:true,lineOfEffect:true})).toThrow();active='guard';engine.turn('guard');expect(engine.state().reactionUsed).not.toContain('guard');
+  });
+  it('Destrabarse evita la oportunidad sin consumir reacción ni dados',()=>{
+    active='apprentice';start();engine.takeTurnAction(active,'disengage');expect(()=>engine.beginOpportunity('guard',sword().source,'apprentice',{x:102.4,y:0},'speed',{canSee:true,lineOfEffect:true})).toThrow();expect(engine.state().reactionUsed).toEqual([]);expect(die).not.toHaveBeenCalled();
+  });
+  it('requiere aclarar la visión incierta y nunca sobreescribe una ausencia de vista confirmada',()=>{
+    active='apprentice';start();expect(()=>engine.beginOpportunity('guard',sword().source,'apprentice',{x:102.4,y:0})).toThrow();expect(engine.state().reactionUsed).toEqual([]);
+    engine=new VttCombat(()=>actors,()=>active,()=>{},()=>{},die,()=>({visible:false,lineOfEffect:true,perception:'automatic-failure',reasons:[]}));engine.start(active);
+    expect(()=>engine.beginOpportunity('guard',sword().source,'apprentice',{x:102.4,y:0},'speed',{canSee:true,lineOfEffect:true})).toThrow();expect(engine.state().reactionUsed).toEqual([]);
+  });
+  it('valida la ficha del objetivo antes de gastar recurso o reacción',()=>{
+    active='apprentice';start();sword().cost={resourceId:'power',amount:1};guard().resources=[{id:'power',name:'Recurso confirmado',maximum:2}];learner().armorClass=undefined;
+    expect(()=>engine.beginOpportunity('guard',sword().source,'apprentice',{x:102.4,y:0},'speed',{canSee:true,lineOfEffect:true})).toThrowError(/ficha/);expect(engine.state().reactionUsed).toEqual([]);expect(engine.available(guard(),sword().cost)).toBe(2);expect(die).not.toHaveBeenCalled();
+  });
+  it('el golpe sin armas básico usa estadísticas reales y su daño fijo no se duplica en crítico',()=>{
+    const npc=GENERIC_NPCS[0],action=basicUnarmedStrike({...npc,features:npc.traits,abilities:{...npc.abilities,strength:16},proficiencyBonus:2})!;
+    expect(action.bonus).toBe(5);expect(action.range).toBe(1.5);expect(action.damage[0].dice).toBe('4');expect(rollDice(action.damage[0].dice,die,true).total).toBe(4);expect(die).not.toHaveBeenCalled();expect(basicUnarmedStrike(undefined)).toBeUndefined();
+  });
+  it('conserva sin sobrescribir un marcador de oportunidad inválido al restaurar',()=>{
+    active='apprentice';start();engine.beginOpportunity('guard',sword().source,'apprentice',{x:102.4,y:0},'speed',{canSee:true,lineOfEffect:true});const state=structuredClone(engine.state()),bad={...state,pending:{...state.pending!,opportunity:'invalid'}};
+    engine.restore(bad);expect(engine.serialized()).toEqual(bad);expect(engine.error()).not.toBe('');
+  });
 });

@@ -1,5 +1,11 @@
+import { unarmedPushProblem, grappleFromDecision, grappleStatus, reconcileGrappleLinks, prepareUnarmedEffect, resolveUnarmedSave, validUnarmedDecision, validGrappleLink } from './combat-unarmed';
+import type { GameStatBlock } from '../models/campaign';
+import type { UnarmedDecision, UnarmedEffect, UnarmedReview, UnarmedSaveAbility } from '../models/combat';
+import { advanceTurnRoute, createTurnRoute, handleRouteWindow, openRouteWindow, routeSpent, turnRouteProblem, validTurnRoute } from './combat-turn-route';
+import { OpportunityCause, opportunityCandidates } from './combat-opportunity';
+import type { MovementPath } from './combat-movement';
 import { effectiveSpeed, freshMovement, movementRemaining, turnActionLabels } from './combat-movement';
-import type { TurnAction } from '../models/combat';
+import type { CombatTurnRoute, TurnAction } from '../models/combat';
 import { AreaPoint, originDistance, tokenCentre, tokensInArea, validArea, validAreaPoint } from './combat-area';
 import { signal } from '@angular/core';
 import type { SightAssessment } from './vision-preview';
@@ -10,6 +16,15 @@ const fresh = (): CombatState => ({ version: 1, started: false, round: 1, usedAt
   movement: freshMovement(), reactionUsed: [], armorEffects: {}, resources: {}, log: [], queue: [], slotsSpent: [] });
 export interface AttackContext { advantage: boolean; disadvantage: boolean; armorAdjustment: number; damageFactor: number; confirmed: boolean; rangeResolved?: boolean }
 
+/** Adaptador privado: move aplica posición/exploración juntas o falla sin cambios; devuelve su reversión. */
+export interface CombatMovementBoard {
+  grid?: number;
+  path: (actor: Combatant, suffix: readonly number[], perspective?: 'personal' | 'director') => MovementPath | undefined;
+  move: (id: string, to: { x: number; y: number }) => () => void;
+  canStop: (actor: Combatant) => boolean;
+  unarmed?: (decision: UnarmedDecision, to?: { x: number; y: number }) => () => void;
+}
+
 /** Estado independiente por tablero. Los dados pendientes se conservan antes de aplicar daño. */
 export class VttCombat {
   readonly state = signal<CombatState>(fresh());
@@ -17,17 +32,42 @@ export class VttCombat {
   readonly saving = signal(false);
   private invalid?: unknown;
   private context: AttackContext = { advantage: false, disadvantage: false, armorAdjustment: 0, damageFactor: 1, confirmed: false };
-  constructor(readonly combatants: () => Combatant[], readonly activeId: () => string | undefined,
-    private readonly commit: (hp?: { id: string; hp: number }) => void,
+  constructor(private readonly sourceCombatants: () => Combatant[], readonly activeId: () => string | undefined,
+    private readonly commitBoard: (hp?: { id: string; hp: number }) => void,
     private readonly saveProfile: (id: string, profile: CombatProfile) => void | Promise<void>,
     private readonly die: (sides: number) => number = (sides) => Math.floor(Math.random() * sides) + 1,
     readonly sight?: (observerId: string, targetId: string) => SightAssessment | undefined,
     private readonly narrate?: (result: CombatResolution) => CombatNarrativeMessage[],
     readonly situationRevision?: () => unknown,
-    readonly areaLineOfEffect?: (from: AreaPoint, to: AreaPoint, space?: Combatant, radius?: number) => boolean | undefined) {}
+    readonly areaLineOfEffect?: (from: AreaPoint, to: AreaPoint, space?: Combatant, radius?: number) => boolean | undefined,
+    private readonly movementBoard?: CombatMovementBoard) {}
 
+  readonly combatants = (): Combatant[] => {
+    const roster = this.sourceCombatants(), links = this.state().grapples;
+    if (!links?.length) return roster;
+    const effects = new Map<string, { owners: string[]; unknown: boolean }>();
+    for (const link of links) {
+      const status = grappleStatus(link,roster,this.movementBoard?.grid);
+      if (status === 'ended') continue;
+      const effect = effects.get(link.targetId) ?? { owners: [], unknown: false };
+      if (status === 'active') effect.owners.push(link.ownerId); else effect.unknown = true;
+      effects.set(link.targetId,effect);
+    }
+    return roster.map(actor => {
+      const effect = effects.get(actor.id); if (!effect) return actor;
+      return { ...actor, grappledBy: effect.owners, grappleUncertain: effect.unknown,
+        movement: { ...actor.movement, speed: effect.owners.length ? 0 : undefined, bonusDash: actor.movement?.bonusDash ?? false, bonusDisengage: actor.movement?.bonusDisengage ?? false } };
+    });
+  };
+  reconcileGrapples(hp?: { id: string; hp: number }): void {
+    const s = this.state(); if (this.invalid !== undefined || !s.grapples?.length) return;
+    const roster = this.sourceCombatants().map(actor => hp?.id === actor.id ? { ...actor, hp: hp.hp } : actor);
+    const links = reconcileGrappleLinks(s.grapples,roster,this.movementBoard?.grid);
+    if (links.some((link,i)=>link.ended !== s.grapples![i].ended)) this.state.set({...s,grapples:links});
+  }
+  private commit(hp?: { id: string; hp: number }): void { this.reconcileGrapples(hp); this.commitBoard(hp); }
   find(id: string | undefined): Combatant | undefined { return this.combatants().find((a) => a.id === id); }
-  busy(): boolean { return this.saving() || !!this.state().pending || this.invalid !== undefined; }
+  busy(): boolean { return this.saving() || !!this.state().pending || !!this.state().unarmed || !!this.state().route || this.invalid !== undefined; }
   serialized(): unknown { return this.invalid !== undefined ? this.invalid : this.state(); }
   setResource(ownerId: string, resourceId: string, amount: number): void {
     const owner = this.find(ownerId), resource = owner?.resources.find((r) => r.id === resourceId);
@@ -45,18 +85,18 @@ export class VttCombat {
       this.state.set(fresh()); this.error.set('El estado de combate no es válido. Se conserva sin sobrescribir: restaura una copia o restablece el combate explícitamente.'); return;
     }
     const saved = value as CombatState;
-    this.state.set(structuredClone(saved));
+    this.state.set(structuredClone(saved)); this.reconcileGrapples();
     if (saved.context) this.context = { ...saved.context };
   }
   reset(): void { this.invalid = undefined; this.error.set(''); this.state.set(fresh()); this.commit(); }
   end(): void {
     if (this.busy()) throw new Error('Resuelve el ataque pendiente');
-    const s = this.state(); this.state.set({ ...fresh(), resources: s.resources, narrative: s.narrative, log: this.log('Combate finalizado. PG y recursos se conservan.', s.log) }); this.commit();
+    const s = this.state(); this.state.set({ ...fresh(), resources: s.resources, grapples: s.grapples, narrative: s.narrative, log: this.log('Combate finalizado. PG y recursos se conservan.', s.log) }); this.commit();
   }
   start(id: string): void {
     if (this.busy() || this.state().started || !this.find(id)) throw new Error('Resuelve primero la acción pendiente');
     const resources = this.state().resources;
-    this.state.set({ ...fresh(), started: true, turnId: id, resources, narrative: this.state().narrative, log: this.log('Combate iniciado. Los recursos disponibles se conservan.', this.state().log) });
+    this.state.set({ ...fresh(), started: true, turnId: id, resources, grapples: this.state().grapples, narrative: this.state().narrative, log: this.log('Combate iniciado. Los recursos disponibles se conservan.', this.state().log) });
     this.commit();
   }
   turn(id: string, nextRound = false): void {
@@ -71,20 +111,20 @@ export class VttCombat {
   }
   canAttack(id: string): boolean {
     const actor = this.find(id), s = this.state();
-    return !!actor && s.started && s.turnId === id && this.activeId() === id && !this.busy() && actor.hp > 0 && !actor.conditions?.includes('incapacitated') && actor.maxHp > 0 && actor.armorClass !== undefined && (!s.movement?.action || s.movement.action === 'attack') && !s.spellUsed && s.usedAttacks < actor.attacksPerTurn;
+    return !!actor && s.started && s.turnId === id && this.activeId() === id && !this.busy() && actor.hp > 0 && !actor.conditions?.includes('incapacitated') && !actor.grappleUncertain && actor.maxHp > 0 && actor.armorClass !== undefined && (!s.movement?.action || s.movement.action === 'attack') && !s.spellUsed && s.usedAttacks < actor.attacksPerTurn;
   }
   movementStatus(id: string) {
     const actor = this.find(id), s = this.state(), isTurn = s.started && s.turnId === id, turn = isTurn ? s.movement : undefined;
-    const ownTurn = !!actor && s.started && s.turnId === id && this.activeId() === id && !this.busy() && actor.hp > 0;
+    const ownTurn = !!actor && s.started && s.turnId === id && this.activeId() === id && !this.busy() && actor.hp > 0 && !actor.grappleUncertain;
     const remaining = isTurn ? actor && movementRemaining(actor, turn) : 0;
     const options: TurnAction[] = ownTurn ? (['dash', 'disengage', 'bonus-dash', 'bonus-disengage', 'stand'] as TurnAction[]).filter(a => this.canTurnAction(id, a)) : [];
     return { active: ownTurn, speed: actor && effectiveSpeed(actor), spent: turn?.spent ?? 0, remaining,
       actionUsed: isTurn && (!!turn?.action || s.usedAttacks > 0 || s.spellUsed), bonusUsed: !!turn?.bonus, disengaged: turn?.disengaged ?? false, options,
-      message: !isTurn ? '' : !turn ? 'Turno anterior sin registro de movimiento: avanza al siguiente turno.' : actor?.movement?.speed === undefined ? 'Falta confirmar la velocidad terrestre en la ficha.' : '' };
+      message: !isTurn ? '' : actor?.grappleUncertain ? 'Confirma los datos del agarre antes de actuar.' : actor?.grappledBy?.length ? 'Agarrado: velocidad 0 mientras continúe el agarre.' : !turn ? 'Turno anterior sin registro de movimiento: avanza al siguiente turno.' : actor?.movement?.speed === undefined ? 'Falta confirmar la velocidad terrestre en la ficha.' : '' };
   }
   canTurnAction(id: string, action: TurnAction): boolean {
     const actor = this.find(id), s = this.state(), turn = s.movement;
-    if (!actor || !turn || !s.started || s.turnId !== id || this.activeId() !== id || this.busy() || actor.hp <= 0) return false;
+    if (!actor || !turn || !s.started || s.turnId !== id || this.activeId() !== id || this.busy() || actor.hp <= 0 || actor.grappleUncertain) return false;
     const speed = effectiveSpeed(actor);
     if (action === 'stand') return !!actor.conditions?.includes('prone') && speed !== undefined && speed > 0 && movementRemaining(actor, turn)! + .00001 >= Math.floor(speed / .3 / 2) * .3;
     if (actor.conditions?.includes('incapacitated')) return false;
@@ -109,6 +149,58 @@ export class VttCombat {
     if (!status.active || status.remaining === undefined || !Number.isFinite(cost) || cost <= 0 || cost > status.remaining + .00001) throw new Error('No queda movimiento suficiente.');
     this.state.update(s => ({ ...s, movement: { ...s.movement!, spent: s.movement!.spent + cost } }));
     if (commit) this.commit();
+  }
+  /** Solo recibe una ruta comprobada por el tablero privado, nunca datos de geometría del jugador. */
+  planMove(path: readonly number[], perspective: 'personal' | 'director' = 'personal'): void {
+    const actor = this.find(this.state().turnId), status = actor && this.movementStatus(actor.id);
+    if (!actor || !status?.active || !this.state().movement || !this.movementBoard || this.state().queue.length || this.state().areaCast) throw new Error('Este movimiento no está disponible.');
+    const checked = this.movementBoard.path(actor, path, perspective);
+    if (!checked) throw new Error('Revisa el recorrido.');
+    const route = createTurnRoute(crypto.randomUUID(), actor, this.state().movement!, checked, this.movementBoard.grid);
+    this.state.update(s => ({ ...s, route: { ...route, perspective } })); this.commit();
+  }
+  private checkedRoute(): { route: CombatTurnRoute; actor: Combatant; path: MovementPath } {
+    const s = this.state(), route = s.route, actor = route && this.find(route.moverId);
+    if (!route || !actor || actor.grappleUncertain || !this.movementBoard || this.saving() || this.invalid !== undefined || s.pending || s.unarmed || s.queue.length || !s.started || s.turnId !== route.moverId || this.activeId() !== route.moverId) throw new Error('Resuelve primero la acción pendiente.');
+    const path = this.movementBoard.path(actor, route.path.slice(route.next), route.perspective ?? 'personal');
+    const problem = turnRouteProblem(route, actor, s.movement, path, this.movementBoard.grid);
+    if (problem) throw new Error(problem);
+    return { route, actor, path: path! };
+  }
+  /** Lista privada; la proyección de jugadores filtra propiedad, ventana y visión antes de publicar. */
+  routeOpportunities() {
+    const { route, actor } = this.checkedRoute(), next = route.path[route.next], grid = this.movementBoard!.grid ?? 51.2;
+    return opportunityCandidates(actor, { x: next % 30 * grid, y: Math.floor(next / 30) * grid }, this.combatants(), {
+      cause: 'speed', disengaged: !!this.state().movement?.disengaged, reactionUsed: new Set(this.state().reactionUsed),
+      sight: (observer, target) => this.sight?.(observer, target), available: (owner, action) => this.available(owner, action.cost), grid,
+    }).filter(candidate => !route.window?.handled.includes(candidate.reactorId));
+  }
+  /** Confirma como máximo un paso. Nunca avanza mientras hay una respuesta o reacción pendiente. */
+  continueMove(): 'window' | 'moved' | 'complete' {
+    const { route, actor, path } = this.checkedRoute(), candidates = this.routeOpportunities();
+    if (candidates.length) {
+      if (!route.window) { this.state.update(s => ({ ...s, route: openRouteWindow(route, crypto.randomUUID()) })); this.commit(); }
+      return 'window';
+    }
+    const previous = this.state(), step = advanceTurnRoute(route, actor, previous.movement!, path, [], this.movementBoard!.grid);
+    let undo: (() => void) | undefined;
+    try {
+      this.state.set({ ...previous, route: step.route, movement: step.movement });
+      undo = this.movementBoard!.move(actor.id, step.to); this.commit();
+    } catch (error) { this.state.set(previous); undo?.(); throw error; }
+    return step.route ? 'moved' : 'complete';
+  }
+  skipOpportunity(windowId: string, reactorId: string): void {
+    const { route } = this.checkedRoute();
+    if (!this.routeOpportunities().some(candidate => candidate.reactorId === reactorId)) throw new Error('Esta oportunidad ya no está disponible.');
+    const handled = handleRouteWindow(route, windowId, reactorId);
+    this.state.update(s => ({ ...s, route: handled })); this.commit();
+  }
+  cancelMove(): void {
+    const s = this.state(), actor = s.route && this.find(s.route.moverId);
+    if (!s.route || this.saving() || this.invalid !== undefined || s.pending || s.unarmed || s.queue.length) throw new Error('Resuelve primero la acción pendiente.');
+    if (!actor || !this.movementBoard?.canStop(actor)) throw new Error('No se puede terminar en una casilla ocupada; dirección debe resolver la posición.');
+    this.state.set({ ...s, route: undefined }); this.commit();
   }
   available(owner: Combatant, cost: CombatCost | undefined): number {
     if (!cost) return Infinity;
@@ -199,6 +291,93 @@ export class VttCombat {
       context: { ...this.context }, queue: targetIds.map((targetId, index) => ({ attackerId: actor.id, action: structuredClone(action), targetId, castApproved: index > 0, ...(contexts ? { context: { ...contexts.get(targetId)! } } : {}) })) }));
     this.next();
   }
+  /** Se invoca solo para una salida confirmada; la coordinación persistente de la ruta controla la ventana. */
+  beginOpportunity(ownerId: string, source: string, moverId: string, to: { x: number; y: number }, cause: OpportunityCause = 'speed', review: { canSee?: boolean; lineOfEffect?: boolean } = {}, windowId?: string): void {
+    const s = this.state(), mover = this.find(moverId), owner = this.find(ownerId);
+    if (!s.started || this.saving() || this.invalid !== undefined || s.pending || s.unarmed || s.queue.length || s.areaCast || !mover || !owner || mover.hp <= 0) throw new Error('Resuelve primero la acción pendiente.');
+    if (!Number.isFinite(mover.armorClass) || mover.maxHp <= 0) throw new Error('Completa la ficha del objetivo antes de reaccionar.');
+    let handled: CombatTurnRoute | undefined;
+    if (s.route) {
+      const { route } = this.checkedRoute(), next = route.path[route.next], grid = this.movementBoard!.grid ?? 51.2;
+      if (route.moverId !== moverId || cause !== 'speed' || !windowId || Math.abs(to.x - next % 30 * grid) > .00001 || Math.abs(to.y - Math.floor(next / 30) * grid) > .00001) throw new Error('Esta ventana ya no está disponible.');
+      handled = handleRouteWindow(route, windowId, ownerId);
+    } else if (windowId !== undefined) throw new Error('Esta ventana ya no está disponible.');
+    const candidates = opportunityCandidates(mover, to, this.combatants(), { cause, grid: this.movementBoard?.grid,
+      disengaged: s.turnId === moverId && !!s.movement?.disengaged, reactionUsed: new Set(s.reactionUsed),
+      sight: (observer, target) => { const sight = this.sight?.(observer, target); return { visible: sight?.visible ?? (review.canSee ? true : undefined), lineOfEffect: sight?.lineOfEffect ?? (review.lineOfEffect ? true : undefined), perception: sight?.perception ?? 'unknown', reasons: sight?.reasons ?? [] }; },
+      available: (actor, action) => this.available(actor, action.cost) });
+    const candidate = candidates.find(c => c.reactorId === ownerId), entry = candidate?.attacks.find(a => a.action.source === source);
+    if (!candidate || candidate.doubts.length || !entry || entry.problem) throw new Error(entry?.problem || candidate?.doubts.join(' ') || 'Esta oportunidad no está disponible.');
+    if (!owner.actions.some(a => a.source === source) && owner.unarmed?.source !== source) throw new Error('El ataque ya no está preparado.');
+    this.spend(owner, entry.action.cost);
+    this.state.update(state => ({ ...state, ...(handled ? { route: handled } : {}), reactionUsed: [...state.reactionUsed, ownerId],
+      queue: [{ attackerId: ownerId, targetId: moverId, action: entry.action, reactionAttack: true, opportunity: true }] }));
+    this.next();
+  }
+  /** Entrada exclusiva de dirección; no es una orden de jugador ni aplica efectos al tablero. */
+  declareUnarmedOpportunity(ownerId: string, option: UnarmedEffect, stats: GameStatBlock | undefined,
+    review: UnarmedReview & { canSee?: boolean; lineOfEffect?: boolean }, windowId: string): void {
+    const { route, actor: target } = this.checkedRoute(), owner = this.find(ownerId), s = this.state(), grid = this.movementBoard?.grid ?? 51.2;
+    if (!owner?.unarmed || !recordedUnarmedSpace(owner) || !recordedUnarmedSpace(target) || !Number.isFinite(grid) || grid <= 0 || owner.unarmed.source !== 'rule:basic-unarmed-2024' || !Number.isFinite(owner.hp) || owner.hp <= 0 || !Number.isFinite(target.hp) || target.hp <= 0 || owner.conditions?.includes('incapacitated') || owner.grappleUncertain || s.reactionUsed.includes(ownerId) || s.movement?.disengaged) throw new Error('Esta oportunidad sin armas no está disponible.');
+    const distance = combatDistance(owner,target,grid), next = route.path[route.next];
+    if (combatDistance(owner,{...target,x:next%30*grid,y:Math.floor(next/30)*grid},grid) <= 1.50001) throw new Error('El siguiente paso no abandona el alcance sin armas.');
+    const sight = this.sight?.(ownerId,target.id);
+    if (sight?.visible === false || sight?.lineOfEffect === false || sight?.visible !== true && review.canSee !== true || sight?.lineOfEffect !== true && review.lineOfEffect !== true) throw new Error('Confirma la visión personal y la línea de efecto.');
+    const declaration = prepareUnarmedEffect(option,stats,ownerId,target.id,{ownerSize:review.ownerSize,targetSize:review.targetSize,freeHand:review.freeHand,distance});
+    if (owner.unarmed.bonus !== declaration.dc - 8) throw new Error('Las estadísticas de la ficha han cambiado.');
+    const handled = handleRouteWindow(route,windowId,ownerId);
+    this.state.set({...s,route:handled,unarmed:declaration,reactionUsed:[...s.reactionUsed,ownerId]}); this.commit();
+  }
+  private unarmedSituation(review: { canSee?: boolean; lineOfEffect?: boolean }) {
+    const s = this.state(), declaration = s.unarmed, owner = declaration && this.find(declaration.ownerId), target = declaration && this.find(declaration.targetId), grid = this.movementBoard?.grid ?? 51.2;
+    if (!declaration || s.pending || s.queue.length || this.saving() || this.invalid !== undefined || !owner || !target || !recordedUnarmedSpace(owner) || !recordedUnarmedSpace(target) || !Number.isFinite(grid) || grid <= 0 || !Number.isFinite(owner.hp) || !Number.isFinite(target.hp) || owner.hp <= 0 || target.hp <= 0 || owner.conditions?.includes('incapacitated') || owner.grappleUncertain || owner.unarmed?.source !== 'rule:basic-unarmed-2024' || owner.unarmed.bonus !== declaration.dc - 8 || combatDistance(owner,target,grid) > declaration.range + .00001) throw new Error('La situación del efecto ha cambiado; revísala o cancela sin recuperar la reacción.');
+    const route = s.route, current = route && (route.next ? route.path[route.next-1] : route.origin);
+    if (!route?.window || route.window.step !== route.next || !s.started || route.moverId !== declaration.targetId || s.turnId !== route.moverId || this.activeId() !== route.moverId || !route.window.handled.includes(owner.id) || !s.reactionUsed.includes(owner.id) || current === undefined || Math.abs(target.x-current%30*grid)>.00001 || Math.abs(target.y-Math.floor(current/30)*grid)>.00001) throw new Error('La ventana o posición del efecto ha cambiado.');
+    const next = route.path[route.next];
+    if (combatDistance(owner,{...target,x:next%30*grid,y:Math.floor(next/30)*grid},grid) <= declaration.range + .00001) throw new Error('El siguiente paso ya no abandona el alcance; revisa o cancela la decisión.');
+    const sight = this.sight?.(owner.id,target.id);
+    if (sight?.visible === false || sight?.lineOfEffect === false || sight?.visible !== true && review.canSee !== true || sight?.lineOfEffect !== true && review.lineOfEffect !== true) throw new Error('Confirma de nuevo la visión personal y la línea de efecto.');
+    return { s, declaration, owner, target, route };
+  }
+  rollUnarmedOpportunity(ability: UnarmedSaveAbility, modifier: number | undefined,
+    facts: { restrained: boolean; advantage: boolean; disadvantage: boolean }, review: { canSee?: boolean; lineOfEffect?: boolean } = {}): void {
+    const { s, declaration, target } = this.unarmedSituation(review);
+    if (target.conditions?.includes('restrained') && !facts.restrained) throw new Error('El objetivo está restringido: revisa la salvación.');
+    const resolved = resolveUnarmedSave(declaration,ability,modifier,this.die,facts);
+    this.state.set({...s,unarmed:resolved}); this.commit();
+  }
+  finishUnarmedGrapple(effectsConfirmed: boolean, review: { canSee?: boolean; lineOfEffect?: boolean } = {}): void {
+    if (this.state().unarmed?.effect !== 'grapple') throw new Error('Esta decisión no es un agarre.');
+    this.finishUnarmedOpportunity(effectsConfirmed,undefined,review);
+  }
+  /** Guarda posición/condición/vínculo y decisión juntos; una salvación superada no aplica efecto. */
+  finishUnarmedOpportunity(effectsConfirmed: boolean, to?: { x: number; y: number }, review: { canSee?: boolean; lineOfEffect?: boolean } = {}): void {
+    const { s, declaration, owner, target } = this.unarmedSituation(review);
+    if (!effectsConfirmed || !declaration.save) throw new Error('Confirma la salvación y los efectos sin armas.');
+    const failed = !declaration.save.success;
+    if (failed && declaration.effect === 'grapple' && (s.grapples?.length ?? 0) >= 500) throw new Error('Se alcanzó la capacidad de agarres guardados; conserva una copia y revisa su historial antes de aplicar otro.');
+    if (failed && declaration.effect === 'push') { const problem = unarmedPushProblem(owner,target,to,this.movementBoard?.grid); if (problem) throw new Error(problem); }
+    if (failed && declaration.effect !== 'grapple' && !this.movementBoard?.unarmed) throw new Error('El tablero debe confirmar el efecto y su geometría antes de aplicarlo.');
+    const link = failed && declaration.effect === 'grapple' ? grappleFromDecision(declaration,crypto.randomUUID()) : undefined;
+    if (link && s.grapples?.some(existing=>existing.id===link.id)) throw new Error('Identificador de agarre ya usado.');
+    let undo: (()=>void) | undefined;
+    try {
+      this.state.set({...s,unarmed:undefined,...(failed && declaration.effect === 'push'?{route:undefined}:{}),...(link?{grapples:[...(s.grapples??[]),link]}:{}),
+        log:this.log(declaration.save.success?'Salvación superada: el efecto sin armas no se aplica.':declaration.effect==='grapple'?'Agarre aplicado: velocidad 0 y desventaja al atacar a otras criaturas.':declaration.effect==='push'?'Empujón aplicado sin gastar movimiento ni provocar oportunidades; se interrumpe el recorrido anterior.':'Objetivo tumbado; revisa el coste del recorrido antes de continuar.',s.log)});
+      if (failed && declaration.effect !== 'grapple') undo = this.movementBoard!.unarmed!(declaration,to);
+      this.commit();
+    } catch(error) { this.state.set(s); undo?.(); throw error; }
+  }
+  releaseGrapple(id: string): void {
+    const s = this.state(), link = s.grapples?.find(link=>link.id===id);
+    if (!link || link.ended || s.pending || s.unarmed || s.queue.length || this.saving() || this.invalid !== undefined) throw new Error('Resuelve primero las decisiones pendientes.');
+    this.state.set({...s,grapples:s.grapples!.map(link=>link.id===id?{...link,ended:true}:link),log:this.log('Dirección confirma el fin del agarre; se conserva el gasto del turno.',s.log)}); this.commit();
+  }
+  cancelUnarmedOpportunity(): void {
+    const s = this.state();
+    if (!s.unarmed || this.saving() || this.invalid !== undefined || s.pending || s.queue.length) throw new Error('No hay una decisión sin armas que cancelar.');
+    this.state.set({...s,unarmed:undefined,log:this.log('Decisión sin armas cancelada por dirección; la reacción gastada se conserva.',s.log)}); this.commit();
+  }
   private next(hp?: { id: string; hp: number }): void {
     const [job, ...queue] = this.state().queue;
     if (!job) { this.state.update((s) => ({ ...s, pending: undefined, queue: [], areaCast: undefined })); this.commit(hp); return; }
@@ -215,7 +394,7 @@ export class VttCombat {
     const save = !casting && job.action.resolution === 'save' ? this.attackRoll(target.saves[job.action.saveAbility!], false, job.action.saveAbility === 'dexterity' && !!target.conditions?.includes('restrained')) : undefined;
     const factor = (save && save.total >= job.action.dc! ? job.action.halfOnSave ? 0.5 : 0 : 1) * context.damageFactor;
     const damage = casting ? [] : this.rollDamage(job.action, roll);
-    const pending: CombatPending = { context: { ...context }, phase: response ? 'response' : casting ? 'casting' : 'defense', attackerId: actor.id, targetId: target.id, action: job.action, roll, save,
+    const pending: CombatPending = { ...(job.opportunity ? { opportunity: true } : {}), context: { ...context }, phase: response ? 'response' : casting ? 'casting' : 'defense', attackerId: actor.id, targetId: target.id, action: job.action, roll, save,
       baseAc: target.armorClass + context.armorAdjustment, extraAc: 0, damage, factor, reduction: 0,
       cancelled: false, redirected: false, manual: !!job.action.effectOnly || !!job.action.manualEffects || !!this.state().areaCast?.manual, effectsConfirmed: false, reactions: [] };
     this.state.update((s) => ({ ...s, pending, queue })); this.commit(hp);
@@ -251,7 +430,7 @@ export class VttCombat {
         if (reaction.trigger === 'damage' && this.damage(p) <= 0) continue;
         if (reaction.trigger === 'miss' && (!p.roll || this.hit(p))) continue;
         if (normalizeCombat(reaction.name) === 'escudo' && (this.state().armorEffects[target.id] ?? 0) >= 5) continue;
-        result.push({ owner, reaction, problem: reactionProblem(reaction) ?? this.costProblem(owner, reaction.cost, reaction.spellLevel) ?? (this.available(owner, reaction.cost) < (reaction.cost?.amount ?? 0) ? 'Recurso agotado' : undefined) });
+        result.push({ owner, reaction, problem: (owner.grappleUncertain && reaction.effect === 'counter' ? 'Confirma el agarre del reactor antes de gastar una respuesta ofensiva.' : undefined) ?? reactionProblem(reaction) ?? this.costProblem(owner, reaction.cost, reaction.spellLevel) ?? (this.available(owner, reaction.cost) < (reaction.cost?.amount ?? 0) ? 'Recurso agotado' : undefined) });
       }
     }
     return result;
@@ -321,7 +500,7 @@ export class VttCombat {
     const damage = manual ? manualDamage! : this.damage(p);
     const attack = p.roll ? `d20 [${p.roll.dice.join(', ')}]${signed(p.roll.bonus)} = ${p.roll.total}; CA ${this.armor(p)}${p.roll.natural === 20 ? ' (crítico)' : ''}` : p.save ? `salvación ${p.save.natural}${signed(p.save.bonus)} = ${p.save.total}; CD ${p.action.dc}` : 'impacto automático';
     const dice = p.damage.map((d) => `${d.type}: [${d.dice.join(', ')}]${signed(d.bonus)} = ${d.rolled}`).join('; ');
-    const message = `${this.find(p.attackerId)?.name ?? p.attackerId} → ${target.name}, ${p.action.name}: ${attack}. ${this.hit(p) ? 'Impacto' : 'Fallo'}. ${dice}. Daño final ${damage}. ${p.reactions.join(' ')} ${manualNote}`;
+    const message = `${p.opportunity ? 'Oportunidad · ' : ''}${this.find(p.attackerId)?.name ?? p.attackerId} → ${target.name}, ${p.action.name}: ${attack}. ${this.hit(p) ? 'Impacto' : 'Fallo'}. ${dice}. Daño final ${damage}. ${p.reactions.join(' ')} ${manualNote}`;
     const messages = this.narrate?.({ attackerId: p.attackerId, targetId: p.targetId, hit: this.hit(p), damage }) ?? [];
     this.state.update((s) => ({ ...s, pending: undefined, log: this.log(message, s.log),
       ...(messages.length ? { narrative: [...(s.narrative ?? []), { id: crypto.randomUUID(), messages }].slice(-200) } : {}) }));
@@ -408,12 +587,14 @@ export class VttCombat {
   }
   private log(text: string, previous: string[]): string[] { return [...previous, text].slice(-200); }
 }
+function recordedUnarmedSpace(actor: Combatant): boolean { return [actor.x,actor.y,actor.size].every(Number.isFinite) && actor.size > 0; }
 function signed(value: number): string { return value >= 0 ? ` + ${value}` : ` - ${Math.abs(value)}`; }
 function isMagicMissile(action: CombatAction): boolean { return action.resolution === 'automatic' && ['proyectil magico', 'misil magico'].includes(normalizeCombat(action.name)); }
 export function validState(value: unknown): value is CombatState {
   if (!value || typeof value !== 'object') return false;
   const s = value as CombatState;
   if (s.movement !== undefined && (!s.movement || !Number.isFinite(s.movement.spent) || s.movement.spent < 0 || s.movement.spent > 100000 || !Number.isInteger(s.movement.dashes) || s.movement.dashes < 0 || s.movement.dashes > 2 || typeof s.movement.disengaged !== 'boolean' || (s.movement.action !== undefined && !['attack', 'spell', 'dash', 'disengage'].includes(s.movement.action)) || (s.movement.bonus !== undefined && !['dash', 'disengage'].includes(s.movement.bonus)) || s.movement.dashes !== Number(s.movement.action === 'dash') + Number(s.movement.bonus === 'dash') || s.movement.disengaged !== (s.movement.action === 'disengage' || s.movement.bonus === 'disengage'))) return false;
+  if (s.route !== undefined && (!validTurnRoute(s.route) || !s.started || s.turnId !== s.route.moverId || !s.movement || Math.abs(s.movement.spent - routeSpent(s.route)) > .00001 || !!s.areaCast)) return false;
   if (s.narrative !== undefined && (!Array.isArray(s.narrative) || s.narrative.length > 200 || s.narrative.some((event) =>
     !event || typeof event.id !== 'string' || !Array.isArray(event.messages) || event.messages.some((message) =>
       !message || typeof message.observerId !== 'string' || !Array.isArray(message.audience) || message.audience.some((id) => typeof id !== 'string') ||
@@ -425,8 +606,12 @@ export function validState(value: unknown): value is CombatState {
   if (Object.values(s.armorEffects).some((v) => !Number.isFinite(v) || v < 0) || Object.values(s.resources).some((pool) => !pool || Object.values(pool).some((v) => !Number.isInteger(v) || v < 0 || v > 999))) return false;
   if (s.queue.some((q) => !q || typeof q.attackerId !== 'string' || typeof q.targetId !== 'string' || !q.action || actionProblem(q.action) || q.context !== undefined && !validTargetContext(q.context))) return false;
   if (s.queue.length > 400 || s.log.length > 200) return false;
+  if (s.unarmed !== undefined && (!validUnarmedDecision(s.unarmed) || !s.started || !s.route?.window || s.route.moverId !== s.unarmed.targetId || s.route.window.step !== s.route.next || !s.route.window.handled.includes(s.unarmed.ownerId) || !s.reactionUsed.includes(s.unarmed.ownerId) || !!s.pending || !!s.areaCast || s.queue.length > 0)) return false;
+  if (s.grapples !== undefined && (!Array.isArray(s.grapples) || s.grapples.length > 500 || !Array.from(s.grapples).every(validGrappleLink) || new Set(s.grapples.map(link=>link.id)).size !== s.grapples.length)) return false;
   if (s.areaCast !== undefined && (!s.areaCast || !validAreaPoint(s.areaCast.origin) || (s.areaCast.manual !== undefined && typeof s.areaCast.manual !== 'boolean') || (s.areaCast.damage !== undefined && (!Array.isArray(s.areaCast.damage) || s.areaCast.damage.some(d => !d || typeof d.type !== 'string' || !Number.isFinite(d.rolled) || d.rolled < 0 || !Number.isFinite(d.bonus) || !Array.isArray(d.dice) || d.dice.some(n => !Number.isInteger(n) || n < 1 || n > 100)))))) return false;
+  if (s.queue.some(q => q.opportunity !== undefined && (typeof q.opportunity !== 'boolean' || q.opportunity && (!q.reactionAttack || q.action.kind !== 'melee' || q.action.resolution !== 'attack' || q.action.area || q.action.targets !== 1)))) return false;
   const p = s.pending;
+  if (p?.opportunity !== undefined && (typeof p.opportunity !== 'boolean' || p.opportunity && (p.action?.kind !== 'melee' || p.action?.resolution !== 'attack' || p.action.area || p.action.targets !== 1))) return false;
   if ((p?.action?.area || s.queue.some(q => q.action?.area)) && !s.areaCast) return false;
   if (p && (typeof p.attackerId !== 'string' || typeof p.targetId !== 'string' || !p.action || actionProblem(p.action) || !Number.isFinite(p.baseAc) || !Number.isFinite(p.extraAc) || !Number.isFinite(p.factor) || !Number.isFinite(p.reduction) || !Array.isArray(p.reactions) || !Array.isArray(p.damage) || p.damage.some((d) => !Number.isFinite(d.rolled) || !Number.isFinite(d.bonus) || !Array.isArray(d.dice)) || (p.roll && (!Number.isFinite(p.roll.total) || !Number.isInteger(p.roll.natural) || p.roll.natural < 1 || p.roll.natural > 20 || !Array.isArray(p.roll.dice))) || (p.save && !Number.isFinite(p.save.total)))) return false;
   if (p && p.manualRequested !== undefined && typeof p.manualRequested !== 'boolean') return false;
